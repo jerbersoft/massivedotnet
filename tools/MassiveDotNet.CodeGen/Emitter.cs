@@ -111,7 +111,22 @@ internal sealed class Emitter(Spec spec, Map map)
 
     private string EmitEnvelopes()
     {
-        bool anyPaginated = map.Endpoints.Any(e => Spec.IsPaginated(spec.Operation(e.OperationId)));
+        // Hoisted for the reason EmitModel hoists its members: the file's usings depend on the
+        // types it emits, so those have to be resolved before the first line is written.
+        List<(MapEndpoint Endpoint, SpecOperation Operation, bool Paginated, List<(SpecProperty Property, string Type)> Members)> envelopes =
+            [.. map.Endpoints.Select(endpoint =>
+            {
+                SpecOperation operation = spec.Operation(endpoint.OperationId);
+
+                List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
+                    .Select(property => (
+                        property,
+                        property.Name == endpoint.Result.Property
+                            ? $"{endpoint.Result.Model}[]?"
+                            : NullableEnvelopeType(property)))];
+
+                return (endpoint, operation, Spec.IsPaginated(operation), members);
+            })];
 
         CodeWriter writer = new();
         writer.Line(Header);
@@ -119,21 +134,26 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line("using System.Text.Json.Serialization;");
 
         // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
-        if (anyPaginated)
+        // Exists is order-independent, so rule 6 holds.
+        if (envelopes.Exists(e => e.Paginated))
         {
             writer.Line("using MassiveDotNet.Http;");
         }
 
         writer.Line("using MassiveDotNet.Rest.Models;");
+
+        // An envelope can name a NodaTime type in its own right: the open/close operations declare
+        // a format: date property at the top level of their response, which binds to LocalDate.
+        if (envelopes.Exists(e => e.Members.Exists(m => NamesNodaTime(m.Type))))
+        {
+            writer.Line("using NodaTime;");
+        }
+
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
 
-        foreach (MapEndpoint endpoint in map.Endpoints)
+        foreach ((MapEndpoint endpoint, SpecOperation operation, bool paginated, List<(SpecProperty Property, string Type)> members) in envelopes)
         {
-            SpecOperation operation = spec.Operation(endpoint.OperationId);
-            List<SpecProperty> properties = Spec.Properties(Spec.SuccessSchema(operation));
-            bool paginated = Spec.IsPaginated(operation);
-
             writer.Line();
             writer.Doc("summary", $"The response envelope returned by {operation.Path}.");
 
@@ -145,7 +165,7 @@ internal sealed class Emitter(Spec spec, Map map)
             {
                 bool first = true;
 
-                foreach (SpecProperty property in properties)
+                foreach ((SpecProperty property, string type) in members)
                 {
                     if (!first)
                     {
@@ -153,10 +173,6 @@ internal sealed class Emitter(Spec spec, Map map)
                     }
 
                     first = false;
-
-                    string type = property.Name == endpoint.Result.Property
-                        ? $"{endpoint.Result.Model}[]?"
-                        : NullableEnvelopeType(property);
 
                     writer.Doc("summary", Prose.Clean(property.Description));
                     writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
@@ -432,9 +448,30 @@ internal sealed class Emitter(Spec spec, Map map)
         }
     }
 
+    /// <summary>The NodaTime types the generator can emit, per the vocabulary table in CLAUDE.md.</summary>
+    private static readonly HashSet<string> NodaTimeTypes = new(StringComparer.Ordinal)
+    {
+        "Instant",
+        "LocalDate",
+        "LocalDateTime",
+        "ZonedDateTime",
+        "Duration",
+    };
+
+    /// <summary>Separators that split an emitted type name into the identifiers it names.</summary>
+    private static readonly char[] TypeNameSeparators = ['<', '>', ',', ' ', '?', '[', ']'];
+
     /// <summary>Whether a C# type name needs <c>using NodaTime;</c> in the file that declares it.</summary>
+    /// <remarks>
+    /// Matches whole identifiers rather than substrings, in both directions. A generic argument
+    /// counts, so <c>RangeFilter&lt;LocalDate&gt;?</c> is caught; a type merely containing one of
+    /// these names as a substring does not, since an unused using is itself a build failure
+    /// under IDE0005.
+    /// </remarks>
+    /// <param name="type">An emitted type name, nullable annotation and generic arguments included.</param>
+    /// <returns><see langword="true"/> when the type names a NodaTime type.</returns>
     private static bool NamesNodaTime(string type) =>
-        type.Contains("LocalDate", StringComparison.Ordinal) || type.Contains("Instant", StringComparison.Ordinal);
+        Array.Exists(type.Split(TypeNameSeparators, StringSplitOptions.RemoveEmptyEntries), NodaTimeTypes.Contains);
 
     private static void EmitGuards(CodeWriter writer, List<Argument> arguments)
     {

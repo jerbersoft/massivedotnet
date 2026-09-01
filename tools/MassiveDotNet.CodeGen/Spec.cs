@@ -43,15 +43,28 @@ internal sealed record ComparatorGroup(string BaseName, IReadOnlySet<string> Suf
     };
 
     /// <summary>The sentence appended to the field's description, naming the forms it accepts.</summary>
-    public string DocSentence(string operationId) => FilterType(operationId) switch
+    /// <param name="operationId">The operation the group belongs to, named in any diagnostic.</param>
+    /// <returns>One sentence describing the forms the generated parameter accepts.</returns>
+    /// <exception cref="InvalidOperationException">The filter type has no sentence of its own.</exception>
+    public string DocSentence(string operationId)
     {
-        "RangeFilter" => "Accepts an exact value or a range.",
-        "SetFilter" => HasExactForm
-            ? "Accepts an exact value or a set of values."
-            : "Accepts one or more values.",
-        "Filter" => "Accepts an exact value, a range, or a set of values.",
-        _ => "Matches arrays containing the value, any of the values, or all of the values.",
-    };
+        string filter = FilterType(operationId);
+
+        // Every arm is named. A fifth filter type must bring its own sentence rather than
+        // inheriting the array filter's by falling through a default nobody would notice.
+        return filter switch
+        {
+            "RangeFilter" => "Accepts an exact value or a range.",
+            "SetFilter" => HasExactForm
+                ? "Accepts an exact value or a set of values."
+                : "Accepts one or more values.",
+            "Filter" => "Accepts an exact value, a range, or a set of values.",
+            "ArrayFilter" => "Matches arrays containing the value, any of the values, or all of the values.",
+            _ => throw new InvalidOperationException(
+                $"Operation '{operationId}' resolves '{BaseName}' to filter type '{filter}', which has no "
+                + "sentence describing the forms it accepts. Add one to DocSentence."),
+        };
+    }
 
     private string Key => string.Join(' ', Suffixes.Order(StringComparer.Ordinal));
 }
@@ -144,9 +157,9 @@ internal sealed class Spec
 
     /// <summary>
     /// Collapses an operation's parameters into slots. Comparator variants such as
-    /// <c>ticker.gte</c> fold into one group keyed by their base name, placed where the base was
-    /// declared, or where the first variant was when the description declares no base. Everything
-    /// else passes through unchanged.
+    /// <c>ticker.gte</c> fold into one group keyed by their base name, placed where the group's
+    /// first member was declared and sourced from the base field whenever the description declares
+    /// one. Everything else passes through unchanged.
     /// </summary>
     /// <remarks>
     /// Only the six known suffixes count. The SEC filings endpoint declares nested field paths
@@ -171,7 +184,13 @@ internal sealed class Spec
             }
         }
 
-        HashSet<string> declaredNames = new(parameters.Select(p => p.Name), StringComparer.Ordinal);
+        Dictionary<string, SpecParameter> byName = new(StringComparer.Ordinal);
+
+        foreach (SpecParameter parameter in parameters)
+        {
+            byName.TryAdd(parameter.Name, parameter);
+        }
+
         HashSet<string> placed = new(StringComparer.Ordinal);
         List<ParameterSlot> slots = [];
 
@@ -191,12 +210,29 @@ internal sealed class Spec
                 continue;
             }
 
-            slots.Add(new ParameterSlot(key, parameter, new ComparatorGroup(key, suffixes, declaredNames.Contains(key))));
+            // The base field carries the prose, the schema, and the required flag, and it is not
+            // necessarily declared first: /v3/snapshot/indices declares ticker.any_of ahead of
+            // ticker. Looking the base up rather than taking whichever member was encountered
+            // first is what makes the slot's documented invariant true. Placement is unaffected --
+            // the group still stands where its first member was declared.
+            bool hasExactForm = byName.TryGetValue(key, out SpecParameter? baseParameter);
+
+            slots.Add(new ParameterSlot(
+                key,
+                baseParameter ?? parameter,
+                new ComparatorGroup(key, suffixes, hasExactForm)));
         }
 
         return slots;
     }
 
+    /// <summary>Splits a comparator variant into the field it filters and the suffix it declares.</summary>
+    /// <param name="name">A declared parameter name, such as <c>ticker.gte</c>.</param>
+    /// <returns>
+    /// The base name and suffix, or <see langword="null"/> when the name carries no dot or its last
+    /// segment is not one of the six known comparator suffixes -- which is how a nested field path
+    /// such as <c>entities.company_data.name</c> stays a plain parameter.
+    /// </returns>
     private static (string BaseName, string Suffix)? SplitComparator(string name)
     {
         int dot = name.LastIndexOf('.');
