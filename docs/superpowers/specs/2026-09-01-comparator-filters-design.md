@@ -288,6 +288,23 @@ It is right for a `long` timestamp, which costs nothing to hold, but System.Text
 `string` for a wire string regardless, so the raw-plus-computed form costs more than parsing in
 the converter, and it doubles every date property on every reference model.
 
+### D-F10 · Schema-required reference properties carry the C# `required` modifier
+
+A model property the schema marks required gets the C# `required` modifier when its resolved type
+is a reference type — `string`, an array, or another mapped `class` model, `Dividend.DistributionType`
+being the first case — while struct models and other value types are exempt, since a value type
+already has a non-null default and needs nothing. The alternative is `= null!`, which pretends a
+value exists before one is read, or a nullable `string?`, which pretends the schema allows absence;
+either compiles, but only `required` states the fact the schema is actually promising, and without
+it the missing assignment is CS8618 under this repository's warnings-as-errors build. At runtime,
+System.Text.Json's source generation honours `required` and throws `JsonException` when the member
+is absent from the payload, which `MassiveHttpTransport` wraps into `MassiveApiException` like any
+other deserialization failure — pinned by
+`StocksDividendsTests.AResponseMissingASchemaRequiredFieldIsRejected`. Response envelopes keep every
+property nullable regardless of the schema's own required list, because the generated `Send*`
+methods reach the result array through null-conditional navigation; that asymmetry is intentional
+and is not to be "fixed" by extending this rule to envelopes.
+
 ## Scope
 
 This PR lands the mechanism and proves it on one endpoint.
