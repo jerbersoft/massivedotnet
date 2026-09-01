@@ -322,11 +322,14 @@ public ref struct RequestUriBuilder
     }
 
     /// <summary>
-    /// Formats one element. <c>typeof(T)</c> is a constant for each generic instantiation, so the
-    /// JIT and the Native AOT compiler keep exactly one branch and <see cref="Unsafe.As{TFrom, TTo}(ref TFrom)"/>
-    /// reinterprets without boxing. The set is closed on purpose: the generator refuses any
-    /// other element type before it reaches here, so the fallback is unreachable from generated
-    /// code and exists only to fail loudly for hand-written callers.
+    /// Formats one element. <c>typeof(T)</c> is a constant for each generic instantiation, so for
+    /// a value-type <typeparamref name="T"/> the JIT and the Native AOT compiler fold this to the
+    /// one matching branch, with <see cref="Unsafe.As{TFrom, TTo}(ref TFrom)"/> reinterpreting
+    /// without boxing; the shared canonical body for the reference-type instantiation
+    /// (<typeparamref name="T"/> = <see cref="string"/>) still pays one runtime type-handle
+    /// comparison, cheap because that branch is checked first. The set is closed on purpose: the
+    /// generator refuses any other element type before it reaches here, so the fallback is
+    /// unreachable from generated code and exists only to fail loudly for hand-written callers.
     /// </summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="value">The value to format and append.</param>
@@ -356,7 +359,10 @@ public ref struct RequestUriBuilder
         }
         else if (typeof(T) == typeof(DateOrTimestamp))
         {
-            _builder.Append(Unsafe.As<T, DateOrTimestamp>(ref value).ToString());
+            // Unlike LocalDate, this literal is caller-supplied (DateOrTimestamp.FromLiteral
+            // accepts any non-whitespace string), so it must be escaped like any other untrusted
+            // value or it could inject a second query parameter.
+            _builder.Append(Uri.EscapeDataString(Unsafe.As<T, DateOrTimestamp>(ref value).ToString()));
         }
         else
         {

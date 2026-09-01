@@ -96,6 +96,24 @@ public sealed class FilterRenderingTests
     }
 
     [Fact]
+    public void DateOrTimestampLiteralsArePercentEscapedLikeAnyOtherCallerSuppliedValue()
+    {
+        // DateOrTimestamp.FromLiteral accepts any non-whitespace string and ToString() returns it
+        // unchanged, so an unescaped render would let a crafted literal inject a second query
+        // parameter. Uri.EscapeDataString is the identity on ordinary dates and timestamps, so
+        // this does not change EveryElementTypeRendersItsWireForm's assertions.
+        Assert.Equal(
+            "/x?f.gte=2026-01-01%26limit%3D50000",
+            RenderRange<DateOrTimestamp>(RangeFilter.Gte<DateOrTimestamp>("2026-01-01&limit=50000")));
+    }
+
+    [Fact]
+    public void AnElementTypeOutsideTheClosedSetThrows()
+    {
+        Assert.Throws<NotSupportedException>(() => RenderRange<decimal>(RangeFilter.Gt(1m)));
+    }
+
+    [Fact]
     public void NullAndUnsetFiltersRenderNothing()
     {
         Assert.Equal("/x", RenderRange<string>(null));
