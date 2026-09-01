@@ -627,7 +627,7 @@ Then insert these three members immediately after the existing `GetAsync<T>` met
             }
 
             // The previous page becomes garbage here: nothing accumulates across the traversal.
-            next = envelope.NextUrl is { } nextUrl ? ResolveCursor(nextUrl).ToString() : null;
+            next = envelope.NextUrl is { } nextUrl ? ResolveCursor(nextUrl).AbsoluteUri : null;
         }
     }
 
@@ -656,14 +656,31 @@ Then insert these three members immediately after the existing `GetAsync<T>` met
                 + "the cursor's origin is checked against it before the API key is sent.");
         }
 
-        if (!cursor.IsAbsoluteUri)
+        // Resolve to an absolute URI before checking anything about its origin. A network-path
+        // reference such as "//evil.example/x" fails Uri.IsAbsoluteUri -- RFC 3986 treats it as
+        // relative -- yet combining it with a base still lets it supply its own authority, so a
+        // check gated on "is this cursor absolute" never runs for exactly the shape it most needs
+        // to catch. Comparing origins only after resolution closes that gap: there is one
+        // comparison, and it always sees the authority the request will actually be sent to.
+        // The TryCreate(base, cursor, out) overload also reports a malformed combination (for
+        // example "///evil.example/x") by returning false rather than throwing, so a cursor that
+        // is syntactically relative but cannot be combined with the base still surfaces as the
+        // documented MassiveApiException instead of an unhandled UriFormatException.
+        Uri resolved;
+        if (cursor.IsAbsoluteUri)
         {
-            return new Uri(baseAddress, cursor);
+            resolved = cursor;
+        }
+        else if (!Uri.TryCreate(baseAddress, cursor, out resolved!))
+        {
+            throw new MassiveApiException(
+                HttpStatusCode.OK,
+                "The server returned a 'next_url' value that is not a valid URI.");
         }
 
         bool sameOrigin = Uri.Compare(
             baseAddress,
-            cursor,
+            resolved,
             UriComponents.SchemeAndServer,
             UriFormat.UriEscaped,
             StringComparison.OrdinalIgnoreCase) == 0;
@@ -673,16 +690,23 @@ Then insert these three members immediately after the existing `GetAsync<T>` met
             throw new MassiveApiException(
                 HttpStatusCode.OK,
                 $"The server returned a 'next_url' pointing at "
-                + $"'{cursor.GetLeftPart(UriPartial.Authority)}', which is not the configured base "
+                + $"'{resolved.GetLeftPart(UriPartial.Authority)}', which is not the configured base "
                 + $"address '{baseAddress.GetLeftPart(UriPartial.Authority)}'. The cursor was not "
                 + "followed, so the API key was not sent to that host.");
         }
 
-        return cursor;
+        return resolved;
     }
 ```
 
 Note on the status code: `HttpStatusCode.OK` is correct rather than odd. The response *was* successful; what failed is the SDK's trust check on its body. The existing `JsonException` handler in `GetAsync` already throws `MassiveApiException` carrying a success status for the same reason.
+
+The original two-branch form here (an early `return new Uri(baseAddress, cursor)` for any
+non-absolute cursor, only afterward checking origin on cursors that were already absolute) let a
+protocol-relative cursor such as `//evil.example/x` bypass the origin check entirely, because such
+a cursor reports `IsAbsoluteUri == false` yet still resolves to the foreign host once combined
+with the base; this was caught in review and corrected to the single-check-after-resolution shape
+shown above before Task 2 was merged.
 
 - [ ] **Step 6: Run the tests to verify they pass**
 

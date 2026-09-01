@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using NodaTime;
@@ -130,6 +131,135 @@ public sealed class MassiveHttpTransport : IDisposable
                 $"The response body from '{requestUri}' could not be deserialized as {typeof(T).Name}.",
                 innerException: ex);
         }
+    }
+
+    /// <summary>
+    /// Issues a GET request and then follows the response's <c>next_url</c> cursor, yielding every
+    /// item from every page.
+    /// </summary>
+    /// <typeparam name="TEnvelope">The paged response envelope type.</typeparam>
+    /// <typeparam name="TItem">The result item type.</typeparam>
+    /// <param name="requestUri">The first page's URI, relative to the configured base address.</param>
+    /// <param name="typeInfo">Source-generated metadata describing <typeparamref name="TEnvelope"/>.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every item across every page, in the order the server returned them.</returns>
+    /// <remarks>
+    /// Exactly one page is in flight at a time: the next request is issued only once the previous
+    /// page has been fully consumed, so a caller who stops early stops the traffic too.
+    /// </remarks>
+    /// <exception cref="MassiveApiException">
+    /// The server responded with an error status, or returned a cursor pointing outside the
+    /// configured base address.
+    /// </exception>
+    public IAsyncEnumerable<TItem> EnumerateAsync<TEnvelope, TItem>(
+        string requestUri,
+        JsonTypeInfo<TEnvelope> typeInfo,
+        CancellationToken cancellationToken = default)
+        where TEnvelope : class, IPagedEnvelope<TItem>
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestUri);
+        ArgumentNullException.ThrowIfNull(typeInfo);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Validation happens here rather than in the iterator below, so a bad argument throws at
+        // the call site instead of being deferred until someone starts enumerating.
+        return EnumerateCoreAsync<TEnvelope, TItem>(requestUri, typeInfo, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<TItem> EnumerateCoreAsync<TEnvelope, TItem>(
+        string requestUri,
+        JsonTypeInfo<TEnvelope> typeInfo,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+        where TEnvelope : class, IPagedEnvelope<TItem>
+    {
+        string? next = requestUri;
+
+        while (next is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            TEnvelope? envelope = await GetAsync(next, typeInfo, cancellationToken).ConfigureAwait(false);
+
+            if (envelope is null)
+            {
+                yield break;
+            }
+
+            foreach (TItem item in envelope.Results ?? [])
+            {
+                yield return item;
+            }
+
+            // The previous page becomes garbage here: nothing accumulates across the traversal.
+            next = envelope.NextUrl is { } nextUrl ? ResolveCursor(nextUrl).AbsoluteUri : null;
+        }
+    }
+
+    /// <summary>
+    /// Validates a server-supplied cursor and resolves it to an absolute URI.
+    /// </summary>
+    /// <remarks>
+    /// The cursor is compared, never rebuilt: some endpoints move state into the path rather than
+    /// the query string, so reconstructing it from the original arguments silently restarts the
+    /// traversal. The origin check exists because the SDK re-attaches the API key to every page,
+    /// and <c>next_url</c> is a URL chosen by the response body.
+    /// </remarks>
+    private Uri ResolveCursor(string nextUrl)
+    {
+        if (!Uri.TryCreate(nextUrl, UriKind.RelativeOrAbsolute, out Uri? cursor))
+        {
+            throw new MassiveApiException(
+                HttpStatusCode.OK,
+                "The server returned a 'next_url' value that is not a valid URI.");
+        }
+
+        if (_httpClient.BaseAddress is not { } baseAddress)
+        {
+            throw new InvalidOperationException(
+                "Following a pagination cursor requires HttpClient.BaseAddress to be set, because "
+                + "the cursor's origin is checked against it before the API key is sent.");
+        }
+
+        // Resolve to an absolute URI before checking anything about its origin. A network-path
+        // reference such as "//evil.example/x" fails Uri.IsAbsoluteUri -- RFC 3986 treats it as
+        // relative -- yet combining it with a base still lets it supply its own authority, so a
+        // check gated on "is this cursor absolute" never runs for exactly the shape it most needs
+        // to catch. Comparing origins only after resolution closes that gap: there is one
+        // comparison, and it always sees the authority the request will actually be sent to.
+        // The TryCreate(base, cursor, out) overload also reports a malformed combination (for
+        // example "///evil.example/x") by returning false rather than throwing, so a cursor that
+        // is syntactically relative but cannot be combined with the base still surfaces as the
+        // documented MassiveApiException instead of an unhandled UriFormatException.
+        Uri resolved;
+        if (cursor.IsAbsoluteUri)
+        {
+            resolved = cursor;
+        }
+        else if (!Uri.TryCreate(baseAddress, cursor, out resolved!))
+        {
+            throw new MassiveApiException(
+                HttpStatusCode.OK,
+                "The server returned a 'next_url' value that is not a valid URI.");
+        }
+
+        bool sameOrigin = Uri.Compare(
+            baseAddress,
+            resolved,
+            UriComponents.SchemeAndServer,
+            UriFormat.UriEscaped,
+            StringComparison.OrdinalIgnoreCase) == 0;
+
+        if (!sameOrigin)
+        {
+            throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The server returned a 'next_url' pointing at "
+                + $"'{resolved.GetLeftPart(UriPartial.Authority)}', which is not the configured base "
+                + $"address '{baseAddress.GetLeftPart(UriPartial.Authority)}'. The cursor was not "
+                + "followed, so the API key was not sent to that host.");
+        }
+
+        return resolved;
     }
 
     /// <inheritdoc />
