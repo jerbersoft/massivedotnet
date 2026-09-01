@@ -1,5 +1,25 @@
 # REST Pagination Implementation Plan
 
+> **Historical artifact — the committed code is authoritative.**
+>
+> This plan records how the work was *planned* on 2026-09-01, before the task reviews that
+> followed. It inlines a copy of the implementation, so it cannot be kept current without rotting
+> again, and it has deliberately not been back-ported. **Where this document and the committed code
+> differ, the code wins.** Read `src/`, `tools/`, and the design spec for what shipped; read this
+> for the sequencing and the reasoning behind it.
+>
+> Two divergences are known:
+>
+> 1. **Task 3's `EmitEndpoint` block is superseded.** As written it gives both generated methods an
+>    identical `<summary>`, *replaces* the map's `<remarks>` rather than combining with them, omits
+>    the caveat that `limit` sizes a page rather than the traversal, and assigns a `string?` to a
+>    `string` — which does not compile under `TreatWarningsAsErrors`. The shipped version is in
+>    `tools/MassiveDotNet.CodeGen/Emitter.cs`. Relatedly, `Naming.Enumerate` now *throws* on a
+>    method name that is not `List`-prefixed instead of prefixing whatever it was handed.
+> 2. **"Streaming" is no longer the word for pagination.** The Conventions section of `CLAUDE.md`
+>    reserves "Stream" for WebSockets and directs pagination prose to the `Enumerate`/`List`
+>    vocabulary. The two occurrences below predate that rule.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let callers walk every page of a paginated Massive endpoint with `await foreach`, without ever rebuilding a cursor or sending the API key off-origin.

@@ -151,8 +151,24 @@ to constitution rule 11.
 |---|---|
 | Absolute, same scheme + host + port as `BaseAddress` | Follow verbatim |
 | Absolute, different origin | Throw `MassiveApiException`; the key is never sent |
-| Relative | Resolve against `BaseAddress`, follow |
+| Relative | Resolve against `BaseAddress`, then apply the **same origin check to the resolved URI**; follow only if it passes |
+| Relative but uncombinable with the base (`///evil.example/x`) | Throw `MassiveApiException` — the documented failure for a bad cursor, not a raw `UriFormatException` |
+| Blank (`""` or whitespace) | Not a cursor. End the traversal. |
 | Any form, but `BaseAddress` is `null` | Throw `InvalidOperationException` — validation is impossible, so do not guess |
+
+**Resolution precedes validation, and the order is load-bearing.** A network-path reference such as
+`//evil.example/x` is *relative* per RFC 3986 — `Uri.IsAbsoluteUri` reports `false` for it — yet it
+supplies its own authority, so resolving it against `https://api.massive.com/` yields
+`https://evil.example/x`. A check gated on "is this cursor absolute?" therefore never runs for
+exactly the shape it most needs to catch, and the API key travels to a host the response body
+named. Resolving first collapses every shape to one absolute URI, and the single origin comparison
+then always sees the authority the request will actually be sent to.
+
+The blank cursor is the mirror-image trap. `""` also resolves — to the base address itself — so it
+*passes* the origin check and re-requests the first page indefinitely, yielding duplicates and
+burning quota. An empty string is not a URL, and `"next_url": ""` is a common way to say "no next
+page", so it ends the traversal rather than being followed. `MassivePage<T>.HasMore` uses the same
+test, so the single-page and traversing surfaces never disagree about one response.
 
 This is a comparison, not a reconstruction. The path and query are copied untouched, which the
 rewritten `from` segment in "What the wire actually does" makes mandatory.

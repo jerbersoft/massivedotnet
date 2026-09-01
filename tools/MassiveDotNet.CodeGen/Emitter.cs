@@ -207,12 +207,23 @@ internal sealed class Emitter(Spec spec, Map map)
         List<SpecParameter> parameters = spec.Parameters(operation);
         bool paginated = Spec.IsPaginated(operation);
 
+        // A request identifier is not universal: the futures AggregatesV1 envelope declares only
+        // next_url, results, and status, so emitting response?.RequestId unconditionally would not
+        // compile for it. The question asked is exactly the one that matters -- will the emitted
+        // envelope have a RequestId property -- and Exists is order-independent, so rule 6 holds.
+        bool hasRequestId = paginated
+            && Spec.Properties(Spec.SuccessSchema(operation))
+                .Exists(p => Naming.Pascal(p.Name) == "RequestId");
+
         List<Argument> arguments = [.. parameters
             .Select(p => Argument.Create(p, endpoint.Parameters.GetValueOrDefault(p.Name)))
             .OrderByDescending(a => a.Required)];
 
         string model = endpoint.Result.Model;
         string returnType = paginated ? $"MassivePage<{model}>" : $"{model}[]";
+        // Derived once: it is what both generated methods cross-reference, and deriving it is
+        // what rejects a paginated endpoint whose mapped method is not List-prefixed.
+        string enumerate = paginated ? Naming.Enumerate(endpoint.Method, endpoint.OperationId) : string.Empty;
         string callArguments = string.Join(", ", arguments.Select(a => a.Identifier));
         // Nullable because Prose.Clean returns null for blank prose; Doc skips blank content.
         string? summary = endpoint.Summary ?? Prose.Clean(Summary(operation));
@@ -258,7 +269,7 @@ internal sealed class Emitter(Spec spec, Map map)
             writer.Doc("exception", "The server responded with an error status.", "cref=\"MassiveApiException\"");
 
             List<string> enumerateSignature = Signature(
-                $"public IAsyncEnumerable<{model}> {Naming.Enumerate(endpoint.Method)}Async",
+                $"public IAsyncEnumerable<{model}> {enumerate}Async",
                 [.. arguments.Select(a => a.Declaration), "CancellationToken cancellationToken = default"]);
 
             using (writer.Block(enumerateSignature))
@@ -273,7 +284,21 @@ internal sealed class Emitter(Spec spec, Map map)
         }
 
         writer.Doc("summary", summary, preserveMarkup: preserve);
-        writer.Doc("remarks", endpoint.Remarks, preserveMarkup: true);
+
+        // List is the more discoverable of the two names, so it is the one whose reader is most
+        // likely not to know the other exists. The cross-reference points both ways.
+        string? listRemarks = endpoint.Remarks;
+
+        if (paginated)
+        {
+            string pointer =
+                $"Returns the first page only. Use <see cref=\"{enumerate}Async\"/> "
+                + "to walk every page without handling cursors yourself.";
+
+            listRemarks = listRemarks is null ? pointer : $"{pointer} {listRemarks}";
+        }
+
+        writer.Doc("remarks", listRemarks, preserveMarkup: true);
 
         EmitParameterDocs(writer, arguments, "A token to cancel the request.");
 
@@ -331,10 +356,20 @@ internal sealed class Emitter(Spec spec, Map map)
 
             if (paginated)
             {
+                // Emitted, not just reasoned about here: a reader of the generated file meets
+                // a whitespace test on a URL and deserves to know it is load-bearing.
+                writer.Line("// A blank next_url is not a cursor. EnumerateAsync stops on one, so this");
+                writer.Line("// reports the same thing rather than promising a page that is never fetched.");
+
+                if (!hasRequestId)
+                {
+                    writer.Line("// This operation's envelope declares no request_id, so there is none to report.");
+                }
+
                 writer.Line($"return new MassivePage<{model}>(");
                 writer.Line($"    response?.{Naming.Pascal(endpoint.Result.Property)},");
-                writer.Line("    response?.NextUrl is not null,");
-                writer.Line("    response?.RequestId);");
+                writer.Line("    !string.IsNullOrWhiteSpace(response?.NextUrl),");
+                writer.Line(hasRequestId ? "    response?.RequestId);" : "    requestId: null);");
             }
             else
             {

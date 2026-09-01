@@ -76,9 +76,10 @@ public readonly partial struct StocksGroup
 
     /// <summary>Retrieves aggregate bars for a stock over a custom date range and time interval in Eastern Time.</summary>
     /// <remarks>
-    /// Covers pre-market, regular, and after-hours sessions. Set <paramref name="multiplier"/> and
-    /// <paramref name="timespan"/> together to size each bar, for example 5 and <see
-    /// cref="AggregateTimespan.Minute"/> for five-minute bars.
+    /// Returns the first page only. Use <see cref="EnumerateAggregatesAsync"/> to walk every page
+    /// without handling cursors yourself. Covers pre-market, regular, and after-hours sessions. Set
+    /// <paramref name="multiplier"/> and <paramref name="timespan"/> together to size each bar, for
+    /// example 5 and <see cref="AggregateTimespan.Minute"/> for five-minute bars.
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="multiplier">The size of the timespan multiplier.</param>
@@ -159,9 +160,11 @@ public readonly partial struct StocksGroup
             .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksAggregatesResponse, cancellationToken)
             .ConfigureAwait(false);
 
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
         return new MassivePage<Agg>(
             response?.Results,
-            response?.NextUrl is not null,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
 }

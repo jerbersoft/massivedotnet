@@ -15,6 +15,14 @@ namespace MassiveDotNet;
 /// SDK validates and follows internally; there is no public API that accepts one back, so
 /// surfacing it would offer callers a value they could not use.
 /// </para>
+/// <para>
+/// Equality is the compiler-synthesized record equality, which compares <see cref="Results"/> by
+/// reference rather than by content: two pages holding equal but distinct arrays are not equal,
+/// and a page constructed from <see langword="null"/> is not equal to one constructed from an
+/// empty array even though both expose an empty <see cref="Results"/>. That is unavoidable for a
+/// record holding an array; compare <see cref="Results"/> directly when the contents are what you
+/// mean to compare.
+/// </para>
 /// </remarks>
 public readonly record struct MassivePage<T>
 {
@@ -44,6 +52,8 @@ public readonly record struct MassivePage<T>
 
     /// <summary>
     /// The server-assigned request identifier. Include this when contacting Massive support.
+    /// <see langword="null"/> when the endpoint does not return one: a few paginated envelopes
+    /// declare no <c>request_id</c> at all, so there is nothing to surface for them.
     /// </summary>
     public string? RequestId { get; }
 }

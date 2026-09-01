@@ -144,12 +144,30 @@ public sealed class MassiveHttpTransport : IDisposable
     /// <param name="cancellationToken">A token to cancel the traversal.</param>
     /// <returns>Every item across every page, in the order the server returned them.</returns>
     /// <remarks>
+    /// <para>
     /// Exactly one page is in flight at a time: the next request is issued only once the previous
     /// page has been fully consumed, so a caller who stops early stops the traffic too.
+    /// </para>
+    /// <para>
+    /// Cancellation is observed at page boundaries. The token is checked before each request, so a
+    /// cancelled traversal issues no further request, but the items already deserialized from the
+    /// page in hand are still yielded before the cancellation surfaces. Stopping mid-page is what
+    /// <c>break</c> is for, and costs nothing on the traversals that never cancel.
+    /// </para>
     /// </remarks>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="requestUri"/> or <paramref name="typeInfo"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="requestUri"/> is empty or whitespace.</exception>
+    /// <exception cref="ObjectDisposedException">This transport has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// A cursor was returned but the underlying client has no base address, so the cursor's origin
+    /// cannot be checked. Raised while enumerating rather than from this call, since it depends on
+    /// what the server sends back.
+    /// </exception>
     /// <exception cref="MassiveApiException">
-    /// The server responded with an error status, or returned a cursor pointing outside the
-    /// configured base address.
+    /// The server responded with an error status, or returned a cursor that is not a usable URI or
+    /// points outside the configured base address.
     /// </exception>
     public IAsyncEnumerable<TItem> EnumerateAsync<TEnvelope, TItem>(
         string requestUri,
@@ -191,7 +209,17 @@ public sealed class MassiveHttpTransport : IDisposable
             }
 
             // The previous page becomes garbage here: nothing accumulates across the traversal.
-            next = envelope.NextUrl is { } nextUrl ? ResolveCursor(nextUrl).AbsoluteUri : null;
+            //
+            // A blank cursor ends the traversal, deliberately and not as a side effect of
+            // IsNullOrWhiteSpace being convenient. An empty or whitespace next_url is not a URL,
+            // yet it parses as a *relative* one, and resolving it against the base address yields
+            // the base address itself -- which passes the origin check and re-requests the first
+            // page, forever, yielding duplicates and burning quota. `"next_url": ""` is also a
+            // common way for a service to say "no next page", so the empty string is honoured as
+            // the absence it means rather than followed as the URL it is not.
+            next = string.IsNullOrWhiteSpace(envelope.NextUrl)
+                ? null
+                : ResolveCursor(envelope.NextUrl).AbsoluteUri;
         }
     }
 

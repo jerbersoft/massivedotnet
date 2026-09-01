@@ -74,6 +74,68 @@ public sealed class CursorTraversalTests
         Assert.Equal(2, handler.Requests.Count);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task StopsRatherThanLoopingWhenTheCursorIsBlank(string blank)
+    {
+        // Ending the traversal on a blank cursor is deliberate, not an accident of
+        // IsNullOrWhiteSpace being handy. A blank next_url still parses as a relative URI, and
+        // resolving it against the base address yields the base address itself -- which passes
+        // the origin check and re-requests the first page, forever, yielding duplicates and
+        // burning quota. `"next_url": ""` is also a common way for a service to say "no next
+        // page", so it is honoured as the absence it means.
+        PagingStubHandler handler = new(Page(1, blank));
+
+        using MassiveHttpTransport transport = Create(handler);
+
+        List<int> seen = [];
+        await foreach (int value in transport.EnumerateAsync<FakePage, int>(
+            StartUri, TestJsonContext.Default.FakePage, Ct))
+        {
+            seen.Add(value);
+
+            // Bounded so a regression fails the assertions below rather than hanging the suite:
+            // the stub serves its last page forever, so a looping traversal never terminates.
+            if (seen.Count > 10)
+            {
+                break;
+            }
+        }
+
+        Assert.Equal([1, 2], seen);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task RefusesToFollowACursorWhenThereIsNoBaseAddressToCheckItAgainst()
+    {
+        // Specified by D-P5 and documented on EnumerateAsync: with no base address there is
+        // nothing to compare the cursor's origin against, so the SDK refuses rather than guessing
+        // and sending the key wherever the response body points. The opening request has to be
+        // absolute to reach this at all -- a relative one fails inside HttpClient before any
+        // cursor is seen, which is why the traversal below does not start from StartUri.
+        PagingStubHandler handler = new(Page(1, Cursor("a")), Page(3, nextUrl: null));
+
+        MassiveAuthenticationHandler authentication =
+            new("test-key", MassiveAuthenticationScheme.BearerToken) { InnerHandler = handler };
+
+        using HttpClient httpClient = new(authentication);
+        using MassiveHttpTransport transport = new(httpClient);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (int _ in transport.EnumerateAsync<FakePage, int>(
+                "https://api.massive.com/v3/reference/things?limit=2",
+                TestJsonContext.Default.FakePage,
+                Ct))
+            {
+            }
+        });
+
+        Assert.Single(handler.Requests);
+    }
+
     [Fact]
     public async Task FollowsTheCursorVerbatimRatherThanRebuildingIt()
     {
