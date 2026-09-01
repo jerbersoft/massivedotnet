@@ -42,6 +42,26 @@
           "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here."
         }
       }
+    },
+
+    "Dividend": {
+      "summary": "A cash dividend distribution: its declaration, ex-dividend, record, and pay dates, the amount, and the factors that normalise historical prices for it.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4). Dates are calendar dates with no time or zone, hence <see cref=\"NodaTime.LocalDate\"/>.",
+      "schema": { "operationId": "get_stocks_v1_dividends", "pointer": "results/items" },
+      "properties": {
+        "ticker":                       { "name": "Ticker" },
+        "ex_dividend_date":             { "name": "ExDividendDate" },
+        "declaration_date":             { "name": "DeclarationDate" },
+        "record_date":                  { "name": "RecordDate" },
+        "pay_date":                     { "name": "PayDate" },
+        "cash_amount":                  { "name": "CashAmount" },
+        "split_adjusted_cash_amount":   { "name": "SplitAdjustedCashAmount" },
+        "historical_adjustment_factor": { "name": "HistoricalAdjustmentFactor" },
+        "currency":                     { "name": "Currency" },
+        "frequency":                    { "name": "Frequency" },
+        "distribution_type":            { "name": "DistributionType" },
+        "id":                           { "name": "Id" }
+      }
     }
   },
 
@@ -62,6 +82,22 @@
         "adjusted":     { "name": "adjusted" },
         "sort":         { "name": "sort", "type": "SortOrder" },
         "limit":        { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_dividends",
+      "group": "Stocks",
+      "method": "ListDividends",
+      "summary": "Retrieves cash dividend distributions for US stocks, with declaration, ex-dividend, record, and pay dates.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality, a <see cref=\"RangeFilter\"/> factory for a range, or <see cref=\"SetFilter\"/> for a set of values.",
+      "result": { "kind": "array", "model": "Dividend", "property": "results" },
+      "parameters": {
+        "ticker":            { "name": "ticker" },
+        "ex_dividend_date":  { "name": "exDividendDate", "type": "LocalDate" },
+        "frequency":         { "name": "frequency" },
+        "distribution_type": { "name": "distributionType" },
+        "limit":             { "name": "limit" },
+        "sort":              { "name": "sort" }
       }
     }
   ]
