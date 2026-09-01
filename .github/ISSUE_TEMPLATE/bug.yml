@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in the SDK behaves incorrectly.
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: endpoint
+    attributes:
+      label: Endpoint or API surface
+      description: The SDK method or REST path involved, if applicable.
+      placeholder: client.Stocks.ListAggregatesAsync / /v2/aggs/ticker/...
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smallest code sample that shows the problem.
+      render: csharp
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: MassiveDotNet.Rest 1.0.0
+  - type: dropdown
+    id: aot
+    attributes:
+      label: Does this only occur under Native AOT or trimming?
+      options: ["No", "Yes — Native AOT", "Yes — trimming", "Not tested"]
