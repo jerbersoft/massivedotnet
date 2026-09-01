@@ -99,10 +99,19 @@ internal sealed class Emitter(Spec spec, Map map)
 
     private string EmitEnvelopes()
     {
+        bool anyPaginated = map.Endpoints.Any(e => Spec.IsPaginated(spec.Operation(e.OperationId)));
+
         CodeWriter writer = new();
         writer.Line(Header);
         writer.Line();
         writer.Line("using System.Text.Json.Serialization;");
+
+        // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
+        if (anyPaginated)
+        {
+            writer.Line("using MassiveDotNet.Http;");
+        }
+
         writer.Line("using MassiveDotNet.Rest.Models;");
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
@@ -111,11 +120,16 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             SpecOperation operation = spec.Operation(endpoint.OperationId);
             List<SpecProperty> properties = Spec.Properties(Spec.SuccessSchema(operation));
+            bool paginated = Spec.IsPaginated(operation);
 
             writer.Line();
             writer.Doc("summary", $"The response envelope returned by {operation.Path}.");
 
-            using (writer.Block($"internal sealed class {EnvelopeName(endpoint)}"))
+            string declaration = paginated
+                ? $"internal sealed class {EnvelopeName(endpoint)} : IPagedEnvelope<{endpoint.Result.Model}>"
+                : $"internal sealed class {EnvelopeName(endpoint)}";
+
+            using (writer.Block(declaration))
             {
                 bool first = true;
 
@@ -135,6 +149,18 @@ internal sealed class Emitter(Spec spec, Map map)
                     writer.Doc("summary", Prose.Clean(property.Description));
                     writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
                     writer.Line($"public {type} {Naming.Pascal(property.Name)} {{ get; init; }}");
+                }
+
+                // The interface names the results property `Results`. When the endpoint's result
+                // property maps to some other name, satisfy it explicitly rather than renaming
+                // the public property away from the wire shape.
+                string resultsProperty = Naming.Pascal(endpoint.Result.Property);
+
+                if (paginated && resultsProperty != "Results")
+                {
+                    writer.Line();
+                    writer.Line(
+                        $"{endpoint.Result.Model}[]? IPagedEnvelope<{endpoint.Result.Model}>.Results => {resultsProperty};");
                 }
             }
         }
@@ -179,26 +205,83 @@ internal sealed class Emitter(Spec spec, Map map)
     {
         SpecOperation operation = spec.Operation(endpoint.OperationId);
         List<SpecParameter> parameters = spec.Parameters(operation);
+        bool paginated = Spec.IsPaginated(operation);
 
         List<Argument> arguments = [.. parameters
             .Select(p => Argument.Create(p, endpoint.Parameters.GetValueOrDefault(p.Name)))
             .OrderByDescending(a => a.Required)];
 
-        string returnType = $"{endpoint.Result.Model}[]";
+        string model = endpoint.Result.Model;
+        string returnType = paginated ? $"MassivePage<{model}>" : $"{model}[]";
         string callArguments = string.Join(", ", arguments.Select(a => a.Identifier));
+        // Nullable because Prose.Clean returns null for blank prose; Doc skips blank content.
+        string? summary = endpoint.Summary ?? Prose.Clean(Summary(operation));
+        bool preserve = endpoint.Summary is not null;
 
-        writer.Doc("summary", endpoint.Summary ?? Prose.Clean(Summary(operation)), preserveMarkup: endpoint.Summary is not null);
-        writer.Doc("remarks", endpoint.Remarks, preserveMarkup: true);
-
-        foreach (Argument argument in arguments)
+        if (paginated)
         {
-            writer.Doc("param", argument.Description, $"name=\"{argument.Identifier}\"");
+            // The two entry points share an endpoint but not a shape, so the enumerating one names
+            // its own nature rather than repeating the summary verbatim: identical summaries are
+            // indistinguishable in IntelliSense, where remarks are not shown.
+            writer.Doc(
+                "summary",
+                AppendClause(summary, "enumerating every page as a single lazy sequence."),
+                preserveMarkup: preserve);
+
+            string remarks =
+                "Walks every page, requesting the next only once the previous one has been consumed. "
+                + $"Use <see cref=\"{endpoint.Method}Async\"/> to retrieve a single page instead.";
+
+            // Emitted only where the endpoint declares the parameter, since not every paginated
+            // operation has one. Exists is order-independent, so rule 6 holds.
+            if (arguments.Exists(a => a.Identifier == "limit"))
+            {
+                remarks += " <paramref name=\"limit\"/> sizes each page rather than the traversal, so "
+                    + "lowering it issues more requests rather than returning fewer items; bound the "
+                    + "sequence with <c>Take</c> instead.";
+            }
+
+            // Added to, never replaced: the map carries what the spec cannot, so dropping its
+            // remarks here would lose prose that no regeneration could recover.
+            if (endpoint.Remarks is { } authored)
+            {
+                remarks = $"{remarks} {authored}";
+            }
+
+            writer.Doc("remarks", remarks, preserveMarkup: true);
+
+            EmitParameterDocs(writer, arguments, "A token to cancel the traversal.");
+            writer.Doc(
+                "returns",
+                $"Every <c>{endpoint.Result.Property}</c> item across every page.",
+                preserveMarkup: true);
+            writer.Doc("exception", "The server responded with an error status.", "cref=\"MassiveApiException\"");
+
+            List<string> enumerateSignature = Signature(
+                $"public IAsyncEnumerable<{model}> {Naming.Enumerate(endpoint.Method)}Async",
+                [.. arguments.Select(a => a.Declaration), "CancellationToken cancellationToken = default"]);
+
+            using (writer.Block(enumerateSignature))
+            {
+                EmitGuards(writer, arguments);
+                writer.Line($"string requestUri = Build{endpoint.Method}Uri({callArguments});");
+                writer.Line($"return _transport.EnumerateAsync<{EnvelopeName(endpoint)}, {model}>(");
+                writer.Line($"    requestUri, MassiveRestJsonContext.Default.{EnvelopeName(endpoint)}, cancellationToken);");
+            }
+
+            writer.Line();
         }
 
-        writer.Doc("param", "A token to cancel the request.", "name=\"cancellationToken\"");
+        writer.Doc("summary", summary, preserveMarkup: preserve);
+        writer.Doc("remarks", endpoint.Remarks, preserveMarkup: true);
+
+        EmitParameterDocs(writer, arguments, "A token to cancel the request.");
+
         writer.Doc(
             "returns",
-            $"The <c>{endpoint.Result.Property}</c> array from the response, empty when the server returned none.",
+            paginated
+                ? $"A single page of <c>{endpoint.Result.Property}</c>, reporting whether more exist."
+                : $"The <c>{endpoint.Result.Property}</c> array from the response, empty when the server returned none.",
             preserveMarkup: true);
         writer.Doc("exception", "The server responded with an error status.", "cref=\"MassiveApiException\"");
 
@@ -208,11 +291,7 @@ internal sealed class Emitter(Spec spec, Map map)
 
         using (writer.Block(signature))
         {
-            foreach (Argument argument in arguments.Where(a => a is { Required: true, CSharpType: "string" }))
-            {
-                writer.Line($"ArgumentException.ThrowIfNullOrWhiteSpace({argument.Identifier});");
-            }
-
+            EmitGuards(writer, arguments);
             writer.Line($"string requestUri = Build{endpoint.Method}Uri({callArguments});");
             writer.Line($"return Send{endpoint.Method}Async(requestUri, cancellationToken);");
         }
@@ -249,8 +328,37 @@ internal sealed class Emitter(Spec spec, Map map)
             writer.Line($"    .GetAsync(requestUri, MassiveRestJsonContext.Default.{EnvelopeName(endpoint)}, cancellationToken)");
             writer.Line("    .ConfigureAwait(false);");
             writer.Line();
-            writer.Line($"return response?.{Naming.Pascal(endpoint.Result.Property)} ?? [];");
+
+            if (paginated)
+            {
+                writer.Line($"return new MassivePage<{model}>(");
+                writer.Line($"    response?.{Naming.Pascal(endpoint.Result.Property)},");
+                writer.Line("    response?.NextUrl is not null,");
+                writer.Line("    response?.RequestId);");
+            }
+            else
+            {
+                writer.Line($"return response?.{Naming.Pascal(endpoint.Result.Property)} ?? [];");
+            }
         }
+    }
+
+    private static void EmitGuards(CodeWriter writer, List<Argument> arguments)
+    {
+        foreach (Argument argument in arguments.Where(a => a is { Required: true, CSharpType: "string" }))
+        {
+            writer.Line($"ArgumentException.ThrowIfNullOrWhiteSpace({argument.Identifier});");
+        }
+    }
+
+    private static void EmitParameterDocs(CodeWriter writer, List<Argument> arguments, string cancellationDescription)
+    {
+        foreach (Argument argument in arguments)
+        {
+            writer.Doc("param", argument.Description, $"name=\"{argument.Identifier}\"");
+        }
+
+        writer.Doc("param", cancellationDescription, "name=\"cancellationToken\"");
     }
 
     private static void EmitPath(CodeWriter writer, string path, List<Argument> arguments)
@@ -329,6 +437,15 @@ internal sealed class Emitter(Spec spec, Map map)
         operation.Operation.TryGetProperty("summary", out JsonElement summary)
             ? summary.GetString() ?? operation.OperationId
             : operation.OperationId;
+
+    /// <summary>
+    /// Appends a clause to a sentence so the result reads as one sentence, whether or not the
+    /// source prose already ended in terminal punctuation.
+    /// </summary>
+    private static string? AppendClause(string? sentence, string clause) =>
+        string.IsNullOrWhiteSpace(sentence)
+            ? null
+            : $"{sentence.TrimEnd().TrimEnd('.', '!', '?')}, {clause}";
 
     private static string DefaultPropertyType(SpecProperty property)
     {

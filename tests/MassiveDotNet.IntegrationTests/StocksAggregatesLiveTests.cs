@@ -22,8 +22,8 @@ public sealed class StocksAggregatesLiveTests : LiveApiTest
     [Fact]
     public async Task ReturnsDailyBarsForAKnownTicker()
     {
-        Agg[] bars = await Client.Stocks.ListAggregatesAsync(
-            "AAPL", 1, AggregateTimespan.Day, WindowStart, WindowEnd, cancellationToken: Ct);
+        Agg[] bars = (await Client.Stocks.ListAggregatesAsync(
+            "AAPL", 1, AggregateTimespan.Day, WindowStart, WindowEnd, cancellationToken: Ct)).Results;
 
         Assert.NotEmpty(bars);
 
@@ -42,8 +42,8 @@ public sealed class StocksAggregatesLiveTests : LiveApiTest
     [Fact]
     public async Task HonoursTheLimitParameter()
     {
-        Agg[] bars = await Client.Stocks.ListAggregatesAsync(
-            "MSFT", 1, AggregateTimespan.Day, WindowStart, WindowEnd, limit: 2, cancellationToken: Ct);
+        Agg[] bars = (await Client.Stocks.ListAggregatesAsync(
+            "MSFT", 1, AggregateTimespan.Day, WindowStart, WindowEnd, limit: 2, cancellationToken: Ct)).Results;
 
         Assert.True(bars.Length <= 2, $"Expected at most 2 bars, got {bars.Length}.");
     }
@@ -53,8 +53,8 @@ public sealed class StocksAggregatesLiveTests : LiveApiTest
     {
         // Confirms the service answers 200-with-no-results rather than an error status, which is
         // what the SDK's "empty array" contract assumes.
-        Agg[] bars = await Client.Stocks.ListAggregatesAsync(
-            "ZZZZNOTAREALTICKER", 1, AggregateTimespan.Day, WindowStart, WindowEnd, cancellationToken: Ct);
+        Agg[] bars = (await Client.Stocks.ListAggregatesAsync(
+            "ZZZZNOTAREALTICKER", 1, AggregateTimespan.Day, WindowStart, WindowEnd, cancellationToken: Ct)).Results;
 
         Assert.Empty(bars);
     }

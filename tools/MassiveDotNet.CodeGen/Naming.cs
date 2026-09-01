@@ -20,4 +20,17 @@ internal static class Naming
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// The enumerating counterpart of a method name: <c>ListAggregates</c> becomes
+    /// <c>EnumerateAggregates</c>.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the BCL's own distinction between <c>Directory.GetFiles</c> and
+    /// <c>Directory.EnumerateFiles</c> -- a materialized result versus a lazy sequence.
+    /// </remarks>
+    public static string Enumerate(string method) =>
+        method.StartsWith("List", StringComparison.Ordinal)
+            ? $"Enumerate{method["List".Length..]}"
+            : $"Enumerate{method}";
 }

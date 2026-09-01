@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
 
 namespace MassiveDotNet.Rest.Serialization;
@@ -19,7 +20,7 @@ namespace MassiveDotNet.Rest.Serialization;
 /// The response envelope returned by
 /// /v2/aggs/ticker/{stocksTicker}/range/{multiplier}/{timespan}/{from}/{to}.
 /// </summary>
-internal sealed class GetStocksAggregatesResponse
+internal sealed class GetStocksAggregatesResponse : IPagedEnvelope<Agg>
 {
     /// <summary>The exchange symbol that this item is traded under.</summary>
     [JsonPropertyName("ticker")]

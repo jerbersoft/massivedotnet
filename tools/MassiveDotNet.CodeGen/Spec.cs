@@ -98,6 +98,17 @@ internal sealed class Spec
             .GetProperty("schema");
 
     /// <summary>
+    /// Whether an operation's success envelope carries a <c>next_url</c> cursor.
+    /// </summary>
+    /// <remarks>
+    /// Read from the description rather than declared in the map, so it cannot drift: if Massive
+    /// starts paginating an endpoint that previously did not, the next spec sync grows the
+    /// enumeration surface without anyone having to notice.
+    /// </remarks>
+    public static bool IsPaginated(SpecOperation operation) =>
+        Properties(SuccessSchema(operation)).Exists(p => p.Name == "next_url");
+
+    /// <summary>
     /// Flattens an object schema, merging every <c>allOf</c> branch. No operation in the
     /// description uses <c>$ref</c> for its response, and 27 compose their envelope from
     /// several branches, so merging is required before properties can be read.

@@ -17,14 +17,14 @@ HttpClient httpClient = new(handler) { BaseAddress = MassiveEndpoints.Production
 using MassiveHttpTransport transport = new(httpClient);
 using MassiveRestClient client = new(transport);
 
-Agg[] bars = await client.Stocks.ListAggregatesAsync(
+Agg[] bars = (await client.Stocks.ListAggregatesAsync(
     "AAPL",
     1,
     AggregateTimespan.Day,
     new LocalDate(2020, 1, 1),
     new LocalDate(2020, 1, 10),
     adjusted: true,
-    sort: SortOrder.Ascending);
+    sort: SortOrder.Ascending)).Results;
 
 Console.WriteLine($"request : {handler.LastRequestUri}");
 Console.WriteLine($"bars    : {bars.Length}");
