@@ -37,7 +37,9 @@ public sealed class MassiveHttpTransport : IDisposable
             InnerHandler = new SocketsHttpHandler
             {
                 AutomaticDecompression = DecompressionMethods.All,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+                // SocketsHttpHandler traffics in TimeSpan; the value is produced from a
+                // Duration so the BCL type is never named here (constitution rule 12).
+                PooledConnectionLifetime = Duration.FromMinutes(2).ToTimeSpan(),
             },
         };
 
@@ -166,12 +168,12 @@ public sealed class MassiveHttpTransport : IDisposable
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            TimeSpan? delta = response.Headers.RetryAfter?.Delta;
+            // Retry-After yields a TimeSpan; pattern matching converts it without naming the type.
+            Duration? retryAfter = response.Headers.RetryAfter?.Delta is { } delta
+                ? Duration.FromTimeSpan(delta)
+                : null;
 
-            return new MassiveRateLimitExceededException(
-                message,
-                delta is { } value ? Duration.FromTimeSpan(value) : null,
-                payload?.RequestId);
+            return new MassiveRateLimitExceededException(message, retryAfter, payload?.RequestId);
         }
 
         return new MassiveApiException(response.StatusCode, message, payload?.RequestId);

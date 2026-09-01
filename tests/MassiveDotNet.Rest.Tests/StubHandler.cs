@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using NodaTime;
 
 namespace MassiveDotNet.Rest.Tests;
 
@@ -14,7 +15,7 @@ internal sealed class StubHandler(HttpStatusCode status, string body) : HttpMess
 
     public string? LastAuthorization { get; private set; }
 
-    public TimeSpan? RetryAfter { get; init; }
+    public Duration? RetryAfter { get; init; }
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -30,7 +31,8 @@ internal sealed class StubHandler(HttpStatusCode status, string body) : HttpMess
 
         if (RetryAfter is { } retryAfter)
         {
-            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(retryAfter);
+            response.Headers.RetryAfter =
+                new System.Net.Http.Headers.RetryConditionHeaderValue(retryAfter.ToTimeSpan());
         }
 
         return Task.FromResult(response);
