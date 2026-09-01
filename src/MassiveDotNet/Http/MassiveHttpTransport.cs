@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using NodaTime;
 
 namespace MassiveDotNet.Http;
 
@@ -43,7 +44,8 @@ public sealed class MassiveHttpTransport : IDisposable
         _httpClient = new HttpClient(authentication, disposeHandler: true)
         {
             BaseAddress = options.BaseAddress,
-            Timeout = options.Timeout,
+            // HttpClient is a BCL API, so the domain Duration converts here at the boundary.
+            Timeout = options.Timeout.ToTimeSpan(),
         };
 
         if (!string.IsNullOrWhiteSpace(options.UserAgent))
@@ -164,9 +166,11 @@ public sealed class MassiveHttpTransport : IDisposable
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
+            TimeSpan? delta = response.Headers.RetryAfter?.Delta;
+
             return new MassiveRateLimitExceededException(
                 message,
-                response.Headers.RetryAfter?.Delta,
+                delta is { } value ? Duration.FromTimeSpan(value) : null,
                 payload?.RequestId);
         }
 

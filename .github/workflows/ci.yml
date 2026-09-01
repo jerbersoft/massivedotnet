@@ -66,11 +66,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Constitution rule 7: the core package takes no external dependencies.
-      - name: Core has no package references
+      # Constitution rule 7: NodaTime is the only dependency core may take.
+      - name: Core references only NodaTime
         run: |
-          if grep -q 'PackageReference' src/MassiveDotNet/MassiveDotNet.csproj; then
-            echo "::error::MassiveDotNet (core) must not reference external packages."
+          unexpected=$(grep -oE 'PackageReference Include="[^"]+"' src/MassiveDotNet/MassiveDotNet.csproj \
+            | sed -E 's/.*Include="([^"]+)".*/\1/' | grep -v '^NodaTime$' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::MassiveDotNet (core) may only reference NodaTime. Found:"
+            echo "$unexpected"
             exit 1
           fi
 

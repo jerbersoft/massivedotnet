@@ -1,3 +1,5 @@
+using NodaTime;
+
 namespace MassiveDotNet;
 
 /// <summary>
@@ -30,7 +32,7 @@ public sealed class MassiveClientOptions
     /// <summary>
     /// The per-request timeout. Defaults to 100 seconds.
     /// </summary>
-    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(100);
+    public Duration Timeout { get; set; } = Duration.FromSeconds(100);
 
     /// <summary>
     /// An optional product token appended to the <c>User-Agent</c> header.

@@ -36,6 +36,11 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
             "DateOrTimestamp" =>
                 new TypeBinding(type, "AppendPathSegment", "ToString()"),
 
+            // NodaTime types are the SDK's temporal vocabulary (constitution rule 12).
+            // Their wire forms are fixed literals, so they need no percent-escaping.
+            "LocalDate" or "Instant" =>
+                new TypeBinding(type, "AppendPathLiteral", "ToWireValue()"),
+
             // Numeric segments use the builder's numeric overloads, which format in place.
             "int" or "long" =>
                 new TypeBinding(type, "AppendPathSegment", null),

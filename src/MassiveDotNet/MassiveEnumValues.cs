@@ -1,3 +1,6 @@
+using NodaTime;
+using NodaTime.Text;
+
 namespace MassiveDotNet;
 
 /// <summary>
@@ -52,4 +55,21 @@ public static class MassiveEnumValues
         MarketType.Futures => "futures",
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
     };
+
+    /// <summary>Returns the wire representation of a calendar date.</summary>
+    /// <param name="value">The date to convert.</param>
+    /// <returns>The date in ISO <c>YYYY-MM-DD</c> form.</returns>
+    public static string ToWireValue(this LocalDate value) => LocalDatePattern.Iso.Format(value);
+
+    /// <summary>Returns the wire representation of an instant, as Unix milliseconds.</summary>
+    /// <param name="value">The instant to convert.</param>
+    /// <returns>Milliseconds since the Unix epoch.</returns>
+    public static string ToWireValue(this Instant value) =>
+        value.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Returns the wire representation of an instant, as Unix nanoseconds.</summary>
+    /// <param name="value">The instant to convert.</param>
+    /// <returns>Nanoseconds since the Unix epoch, used by the tick-level endpoints.</returns>
+    public static string ToWireValueNanoseconds(this Instant value) =>
+        value.ToUnixTimeTicks().ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

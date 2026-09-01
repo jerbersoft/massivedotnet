@@ -4,6 +4,8 @@ using MassiveDotNet;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest;
 using MassiveDotNet.Rest.Models;
+using NodaTime;
+using NodaTime.Text;
 
 // Exercises the full request-building and deserialization path with no network, so that
 // `dotnet publish` proves the SDK is Native AOT clean. Reflection-based serialization is
@@ -19,8 +21,8 @@ Agg[] bars = await client.Stocks.ListAggregatesAsync(
     "AAPL",
     1,
     AggregateTimespan.Day,
-    new DateOnly(2020, 1, 1),
-    new DateOnly(2020, 1, 10),
+    new LocalDate(2020, 1, 1),
+    new LocalDate(2020, 1, 10),
     adjusted: true,
     sort: SortOrder.Ascending);
 
@@ -30,7 +32,7 @@ Console.WriteLine($"bars    : {bars.Length}");
 foreach (Agg bar in bars)
 {
     Console.WriteLine(
-        $"  {bar.Timestamp:yyyy-MM-dd}  O {bar.Open,9:F4}  H {bar.High,9:F4}  "
+        $"  {LocalDatePattern.Iso.Format(bar.Timestamp.InUtc().Date)}  O {bar.Open,9:F4}  H {bar.High,9:F4}  "
         + $"L {bar.Low,9:F4}  C {bar.Close,9:F4}  V {bar.Volume,12:N0}");
 }
 

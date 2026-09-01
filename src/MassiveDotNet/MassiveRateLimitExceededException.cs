@@ -1,4 +1,5 @@
 using System.Net;
+using NodaTime;
 
 namespace MassiveDotNet;
 
@@ -13,7 +14,7 @@ public sealed class MassiveRateLimitExceededException : MassiveApiException
     /// <param name="requestId">The server-assigned request identifier, when present.</param>
     public MassiveRateLimitExceededException(
         string message,
-        TimeSpan? retryAfter = null,
+        Duration? retryAfter = null,
         string? requestId = null)
         : base(HttpStatusCode.TooManyRequests, message, requestId)
     {
@@ -24,5 +25,5 @@ public sealed class MassiveRateLimitExceededException : MassiveApiException
     /// How long the server asked the caller to wait before retrying, when it supplied a
     /// <c>Retry-After</c> header.
     /// </summary>
-    public TimeSpan? RetryAfter { get; }
+    public Duration? RetryAfter { get; }
 }
