@@ -27,7 +27,7 @@ and does not belong in this section.
 | 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project. | CI build |
 | 10 | Every public member carries XML documentation. | `GenerateDocumentationFile` + warnings-as-errors (CS1591) |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
-| 12 | **NodaTime is the SDK's only temporal vocabulary.** Every date, time, instant, and duration uses `Instant`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, or `Duration`. BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, and `TimeSpan` must not be **named anywhere in the repository's source** — not in public API, not in private members, not in locals, not in static calls. Where a BCL API signature itself traffics in `TimeSpan` (`HttpClient.Timeout`, `SocketsHttpHandler.PooledConnectionLifetime`, the `Retry-After` header), produce or consume the value inline through `Duration.ToTimeSpan()` or `Duration.FromTimeSpan()`, so the type is never written down. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
+| 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
 
 ---
 
@@ -103,6 +103,112 @@ dotnet publish samples/MassiveDotNet.AotSmokeTest -r <rid> -c Release          #
 
 ---
 
+## Temporal types
+
+Market data is unforgiving about temporal ambiguity. An aggregate window is Eastern Time, a tick
+timestamp is epoch nanoseconds, a dividend's ex-date is a calendar date carrying no time or zone at
+all, and a trading session crosses DST boundaries twice a year. `DateTime` collapses all of these
+into one type whose meaning depends on a `Kind` flag that is trivially lost across a serialization
+boundary. NodaTime keeps them distinct types, so the wrong one does not compile.
+
+### Vocabulary
+
+| Domain concept | Type | Example in this SDK |
+|----------------|------|---------------------|
+| A moment on the global timeline | `Instant` | `Agg.Timestamp`, trade and quote SIP timestamps |
+| A calendar date with no time or zone | `LocalDate` | Ex-dividend date, split execution date, IPO date |
+| A wall-clock time in a named zone | `ZonedDateTime` | Session open and close in `America/New_York` |
+| A date and time with no zone attached | `LocalDateTime` | Rare; prefer `Instant` or `ZonedDateTime` |
+| An elapsed amount of time | `Duration` | `MassiveClientOptions.Timeout`, `RetryAfter` |
+| The current moment | `IClock` / `SystemClock.Instance` | Never `DateTime.UtcNow` — an injected clock is also testable |
+
+On wire DTOs, store the raw epoch value as a `long` and expose the NodaTime type as a computed
+property (decision D5), so the conversion is paid only when the value is actually read:
+
+```csharp
+[JsonPropertyName("t")]
+public long TimestampMilliseconds { get; init; }
+
+[JsonIgnore]
+public Instant Timestamp => Instant.FromUnixTimeMilliseconds(TimestampMilliseconds);
+```
+
+### The BCL boundary
+
+Rule 12 cannot mean "no `TimeSpan` value ever exists at runtime". Several BCL APIs have `TimeSpan`
+in their signatures, and no SDK can change that. What the rule *does* mean is that the type is
+**never named in our source** — no declarations, no typed locals, no static calls like
+`TimeSpan.FromMinutes`. Every crossing is an inline conversion through NodaTime's own methods.
+
+The distinction is not cosmetic. A `TimeSpan` in a private field or a local is how the next one
+ends up in a public signature; forbidding the name removes the gradient.
+
+**Producing** a value for a BCL API — convert at the call site:
+
+```csharp
+// correct: the type is never named
+handler.PooledConnectionLifetime = Duration.FromMinutes(2).ToTimeSpan();
+httpClient.Timeout = options.Timeout.ToTimeSpan();
+
+// wrong: names the type, and drops the domain type on the floor
+handler.PooledConnectionLifetime = TimeSpan.FromMinutes(2);
+```
+
+**Consuming** a value from a BCL API — pattern match, so the temporary is implicitly typed:
+
+```csharp
+// correct: `delta` is inferred, never written down
+Duration? retryAfter = response.Headers.RetryAfter?.Delta is { } delta
+    ? Duration.FromTimeSpan(delta)
+    : null;
+
+// wrong: a typed local, invisible to reflection but caught by the source scan
+TimeSpan? delta = response.Headers.RetryAfter?.Delta;
+```
+
+### Known boundary points
+
+Every place the SDK touches a BCL temporal signature. Extend this table when a new one appears.
+
+| API | Direction | Pattern | Where |
+|-----|-----------|---------|-------|
+| `HttpClient.Timeout` | produce | `options.Timeout.ToTimeSpan()` | `MassiveHttpTransport` ctor |
+| `SocketsHttpHandler.PooledConnectionLifetime` | produce | `Duration.FromMinutes(2).ToTimeSpan()` | `MassiveHttpTransport` ctor |
+| `RetryConditionHeaderValue.Delta` | consume | pattern match, then `Duration.FromTimeSpan` | `MassiveHttpTransport.CreateExceptionAsync` |
+| `RetryConditionHeaderValue(TimeSpan)` | produce | `retryAfter.ToTimeSpan()` | `StubHandler` (tests) |
+
+Anticipated, for work not yet written:
+
+| API | Arrives with | Pattern |
+|-----|--------------|---------|
+| `Task.Delay` | retry backoff (#5) | `Task.Delay(backoff.ToTimeSpan(), ct)` |
+| `System.Threading.RateLimiting` window and period options | rate limiting (#5) | `window.ToTimeSpan()` on the options object |
+| `CancellationTokenSource.CancelAfter` | per-call deadlines | `cts.CancelAfter(deadline.ToTimeSpan())` |
+| `ClientWebSocketOptions.KeepAliveInterval` | WebSockets (#20) | `keepAlive.ToTimeSpan()` |
+| SigV4 `x-amz-date` signing timestamp | flat files (#22) | `clock.GetCurrentInstant()` formatted with an `InstantPattern`; never `DateTime.UtcNow` |
+
+### How this is enforced
+
+`TemporalTypeTests` runs two independent layers, because neither is sufficient alone:
+
+1. **Reflection** over the exported surface of both shipped assemblies — properties, fields,
+   methods, operators, and constructors. Operators are deliberately included: an implicit
+   conversion from a BCL type would reintroduce it into the public API.
+2. **A source scan** over `src`, `tests`, `samples`, and `tools`. Reflection cannot see local
+   variables or static calls, so this catches what layer 1 structurally cannot. It strips comments,
+   string literals (raw and verbatim included), and character literals before matching, preserving
+   newlines so reported line numbers stay accurate.
+
+Naming a forbidden type in a **comment is fine** — the scan strips them — which is why the boundary
+sites in `MassiveHttpTransport` can explain themselves in prose.
+
+`TemporalTypeTests.cs` is the only file exempt from the scan, since expressing the rule requires
+naming the types. Two further tests guard the scanner itself: one asserts it flags an offending
+declaration, the other that it ignores the same identifiers inside comments and literals, so it
+cannot pass merely because its stripping ate the input.
+
+---
+
 ## Conventions
 
 - **Naming**: groups are `{Asset}Group`; methods are verb-first and `Async`-suffixed
@@ -110,12 +216,7 @@ dotnet publish samples/MassiveDotNet.AotSmokeTest -r <rid> -c Release          #
   always defaulted.
 - **Nullability**: enabled everywhere. Optional query parameters are nullable and omitted from the
   request when `null` — never sent as empty.
-- **Temporal**: an *instant* is `Instant`; a calendar date with no time or zone is `LocalDate`; a
-  wall-clock time in a named zone is `ZonedDateTime`; an elapsed amount is `Duration`. Store raw
-  epoch values on wire DTOs and expose the NodaTime type as a computed property (D5), so conversion
-  is paid only when read. Never name a BCL temporal type (rule 12): at a BCL call site write
-  `Duration.FromMinutes(2).ToTimeSpan()`, and consume one with a pattern match
-  (`x?.Delta is { } d ? Duration.FromTimeSpan(d) : null`) rather than a typed local.
+- **Temporal**: see [Temporal types](#temporal-types). Rule 12 is strict and machine-checked.
 - **Allocation**: build request URIs through `RequestUriBuilder`, never `UriBuilder` or a
   `Dictionary`. Deserialize from the response stream; never buffer a body into a string first.
 - **Comments**: explain *why*, not *what*. The generator's output is read by humans in review, so

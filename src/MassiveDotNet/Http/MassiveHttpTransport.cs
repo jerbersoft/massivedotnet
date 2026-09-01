@@ -10,9 +10,19 @@ namespace MassiveDotNet.Http;
 /// using source-generated metadata.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Responses are read with <see cref="HttpCompletionOption.ResponseHeadersRead"/> and
 /// deserialized straight off the network stream, so a large payload is never buffered into
 /// an intermediate string or byte array.
+/// </para>
+/// <para>
+/// This type sits on the SDK's only BCL temporal boundary. <c>HttpClient</c>,
+/// <c>SocketsHttpHandler</c>, and the <c>Retry-After</c> header all traffic in TimeSpan, which
+/// no SDK can change. Constitution rule 12 therefore forbids <em>naming</em> the BCL type rather
+/// than pretending it does not exist: every crossing below is an inline conversion through
+/// NodaTime, so no BCL temporal type is ever declared. See the "Temporal types" section of
+/// CLAUDE.md for the full policy and the table of known boundary points.
+/// </para>
 /// </remarks>
 public sealed class MassiveHttpTransport : IDisposable
 {
@@ -37,8 +47,9 @@ public sealed class MassiveHttpTransport : IDisposable
             InnerHandler = new SocketsHttpHandler
             {
                 AutomaticDecompression = DecompressionMethods.All,
-                // SocketsHttpHandler traffics in TimeSpan; the value is produced from a
-                // Duration so the BCL type is never named here (constitution rule 12).
+                // Boundary crossing (produce): converted inline from a Duration, so the
+                // BCL type is never named. Two minutes keeps connections fresh enough to
+                // follow DNS changes without re-establishing TLS on every request.
                 PooledConnectionLifetime = Duration.FromMinutes(2).ToTimeSpan(),
             },
         };
@@ -46,7 +57,7 @@ public sealed class MassiveHttpTransport : IDisposable
         _httpClient = new HttpClient(authentication, disposeHandler: true)
         {
             BaseAddress = options.BaseAddress,
-            // HttpClient is a BCL API, so the domain Duration converts here at the boundary.
+            // Boundary crossing (produce): the domain Duration converts here and nowhere above.
             Timeout = options.Timeout.ToTimeSpan(),
         };
 
@@ -168,7 +179,13 @@ public sealed class MassiveHttpTransport : IDisposable
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            // Retry-After yields a TimeSpan; pattern matching converts it without naming the type.
+            // Boundary crossing (consume): the pattern match leaves `delta` implicitly typed,
+            // so the BCL type is never written down. A typed local here would compile and pass
+            // reflection-based checks, and is caught only by the source scan in TemporalTypeTests.
+            //
+            // Delta is null when the server sent an HTTP-date rather than a delta-seconds value;
+            // that is surfaced as no retry hint rather than a computed one, since converting it
+            // would require trusting the client clock against the server's.
             Duration? retryAfter = response.Headers.RetryAfter?.Delta is { } delta
                 ? Duration.FromTimeSpan(delta)
                 : null;

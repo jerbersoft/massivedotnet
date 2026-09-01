@@ -30,8 +30,14 @@ public sealed class MassiveClientOptions
     public MassiveAuthenticationScheme AuthenticationScheme { get; set; } = MassiveAuthenticationScheme.BearerToken;
 
     /// <summary>
-    /// The per-request timeout. Defaults to 100 seconds.
+    /// The per-request timeout. Defaults to 100 seconds, matching <c>HttpClient</c>'s own default.
     /// </summary>
+    /// <remarks>
+    /// A NodaTime <see cref="Duration"/> rather than a BCL TimeSpan, per constitution rule 12.
+    /// It is converted at the <c>HttpClient</c> boundary inside <c>MassiveHttpTransport</c>, and
+    /// is ignored when the transport is constructed over a caller-supplied <c>HttpClient</c>,
+    /// since that client carries its own timeout.
+    /// </remarks>
     public Duration Timeout { get; set; } = Duration.FromSeconds(100);
 
     /// <summary>
