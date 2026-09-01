@@ -102,7 +102,9 @@ internal sealed class Emitter(Spec spec, Map map)
 
                 writer.Doc("summary", summary);
                 writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
-                writer.Line($"public {type} {name} {{ get; init; }}");
+
+                string modifier = NeedsRequiredModifier(property.Required, type) ? "required " : "";
+                writer.Line($"public {modifier}{type} {name} {{ get; init; }}");
             }
         }
 
@@ -472,6 +474,30 @@ internal sealed class Emitter(Spec spec, Map map)
     /// <returns><see langword="true"/> when the type names a NodaTime type.</returns>
     private static bool NamesNodaTime(string type) =>
         Array.Exists(type.Split(TypeNameSeparators, StringSplitOptions.RemoveEmptyEntries), NodaTimeTypes.Contains);
+
+    /// <summary>
+    /// Whether a schema-required property needs the C# <c>required</c> modifier to satisfy
+    /// nullable reference analysis.
+    /// </summary>
+    /// <remarks>
+    /// A required value type (<c>double</c>, <c>long</c>, <c>bool</c>, an enum, or a NodaTime
+    /// value type such as <c>LocalDate</c>) already has a non-null default and needs nothing.
+    /// A required reference type (<c>string</c>, an array, or another mapped model) does not: the
+    /// compiler-synthesized constructor exits without assigning it, which is CS8618 under this
+    /// repository's warnings-as-errors build. The schema calling the field required is the fact
+    /// being encoded -- <c>required</c> states it honestly, rather than an initializer such as
+    /// <c>= null!</c> that pretends a value exists before one is read, or a nullable annotation
+    /// that pretends the field might be absent when the schema says it never is. Reference-ness is
+    /// read from the resolved type string alone (ends with <c>[]</c>, equals <c>string</c>, or
+    /// names another model in the map), so the check is order-independent and rule 6 holds.
+    /// </remarks>
+    /// <param name="required">Whether the schema declares the property required.</param>
+    /// <param name="type">The property's resolved C# type, nullable annotation included.</param>
+    /// <returns><see langword="true"/> when the property needs the <c>required</c> modifier.</returns>
+    private bool NeedsRequiredModifier(bool required, string type) =>
+        required
+        && !type.EndsWith('?')
+        && (type == "string" || type.EndsWith("[]") || map.Models.Exists(m => m.Name == type));
 
     private static void EmitGuards(CodeWriter writer, List<Argument> arguments)
     {
