@@ -225,8 +225,8 @@ public readonly partial struct StocksGroup
         CancellationToken cancellationToken = default)
     {
         string requestUri = BuildListDividendsUri(ticker, exDividendDate, frequency, distributionType, limit, sort);
-        return _transport.EnumerateAsync<get_stocks_v1_dividendsResponse, Dividend>(
-            requestUri, MassiveRestJsonContext.Default.get_stocks_v1_dividendsResponse, cancellationToken);
+        return _transport.EnumerateAsync<GetStocksV1DividendsResponse, Dividend>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1DividendsResponse, cancellationToken);
     }
 
     /// <summary>
@@ -310,8 +310,8 @@ public readonly partial struct StocksGroup
 
     private async Task<MassivePage<Dividend>> SendListDividendsAsync(string requestUri, CancellationToken cancellationToken)
     {
-        get_stocks_v1_dividendsResponse? response = await _transport
-            .GetAsync(requestUri, MassiveRestJsonContext.Default.get_stocks_v1_dividendsResponse, cancellationToken)
+        GetStocksV1DividendsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1DividendsResponse, cancellationToken)
             .ConfigureAwait(false);
 
         // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
