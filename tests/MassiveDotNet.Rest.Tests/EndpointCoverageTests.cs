@@ -34,10 +34,27 @@ public sealed class EndpointCoverageTests
     {
         using JsonDocument map = LoadMap();
 
-        List<string> qualified = [.. map.RootElement
-            .GetProperty("endpoints")
-            .EnumerateArray()
-            .Select(e => $"{e.GetProperty("group").GetString()}.{e.GetProperty("method").GetString()}")];
+        List<string> qualified = [];
+
+        foreach (JsonElement endpoint in map.RootElement.GetProperty("endpoints").EnumerateArray())
+        {
+            string group = endpoint.GetProperty("group").GetString()!;
+            string method = endpoint.GetProperty("method").GetString()!;
+
+            qualified.Add($"{group}.{method}");
+
+            // A paginated endpoint also emits an Enumerate counterpart, derived by dropping the
+            // List prefix, so two map methods can collide on a name that neither of them spells
+            // out. Projecting the derived name here reports that as a named failing test rather
+            // than as a duplicate-member compiler error in generated code. Every List-prefixed
+            // method is projected, not only the paginated ones: since the generator refuses to
+            // derive an Enumerate name from anything else, that is a superset of what it emits,
+            // and a collision on a name it might emit is worth failing on either way.
+            if (method.StartsWith("List", StringComparison.Ordinal))
+            {
+                qualified.Add($"{group}.Enumerate{method["List".Length..]}");
+            }
+        }
 
         string[] duplicates = [.. qualified
             .GroupBy(name => name, StringComparer.Ordinal)

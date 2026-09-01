@@ -18,11 +18,68 @@ namespace MassiveDotNet.Rest;
 
 public readonly partial struct StocksGroup
 {
+    /// <summary>
+    /// Retrieves aggregate bars for a stock over a custom date range and time interval in Eastern Time,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListAggregatesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Covers pre-market, regular, and
+    /// after-hours sessions. Set <paramref name="multiplier"/> and <paramref name="timespan"/> together
+    /// to size each bar, for example 5 and <see cref="AggregateTimespan.Minute"/> for five-minute bars.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="multiplier">The size of the timespan multiplier.</param>
+    /// <param name="timespan">The size of the time window.</param>
+    /// <param name="from">
+    /// The start of the aggregate time window. Either a date with the format YYYY-MM-DD or a
+    /// millisecond timestamp.
+    /// </param>
+    /// <param name="to">
+    /// The end of the aggregate time window. Either a date with the format YYYY-MM-DD or a millisecond
+    /// timestamp.
+    /// </param>
+    /// <param name="adjusted">
+    /// Whether or not the results are adjusted for splits. By default, results are adjusted. Set this
+    /// to false to get results that are NOT adjusted for splits.
+    /// </param>
+    /// <param name="sort">
+    /// Sort the results by timestamp. asc will return results in ascending order (oldest at the top),
+    /// desc will return results in descending order (newest at the top).
+    /// </param>
+    /// <param name="limit">
+    /// Limits the number of base aggregates queried to create the aggregate results. Max 50000 and
+    /// Default 5000. Read more about how limit is used to calculate aggregate results in our article on
+    /// Aggregate Data API Improvements.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Agg> EnumerateAggregatesAsync(
+        string ticker,
+        int multiplier,
+        AggregateTimespan timespan,
+        DateOrTimestamp from,
+        DateOrTimestamp to,
+        bool? adjusted = null,
+        SortOrder? sort = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListAggregatesUri(ticker, multiplier, timespan, from, to, adjusted, sort, limit);
+        return _transport.EnumerateAsync<GetStocksAggregatesResponse, Agg>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksAggregatesResponse, cancellationToken);
+    }
+
     /// <summary>Retrieves aggregate bars for a stock over a custom date range and time interval in Eastern Time.</summary>
     /// <remarks>
-    /// Covers pre-market, regular, and after-hours sessions. Set <paramref name="multiplier"/> and
-    /// <paramref name="timespan"/> together to size each bar, for example 5 and <see
-    /// cref="AggregateTimespan.Minute"/> for five-minute bars.
+    /// Returns the first page only. Use <see cref="EnumerateAggregatesAsync"/> to walk every page
+    /// without handling cursors yourself. Covers pre-market, regular, and after-hours sessions. Set
+    /// <paramref name="multiplier"/> and <paramref name="timespan"/> together to size each bar, for
+    /// example 5 and <see cref="AggregateTimespan.Minute"/> for five-minute bars.
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="multiplier">The size of the timespan multiplier.</param>
@@ -49,9 +106,9 @@ public readonly partial struct StocksGroup
     /// Aggregate Data API Improvements.
     /// </param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
-    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
     /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
-    public Task<Agg[]> ListAggregatesAsync(
+    public Task<MassivePage<Agg>> ListAggregatesAsync(
         string ticker,
         int multiplier,
         AggregateTimespan timespan,
@@ -97,12 +154,17 @@ public readonly partial struct StocksGroup
         return builder.ToUriString();
     }
 
-    private async Task<Agg[]> SendListAggregatesAsync(string requestUri, CancellationToken cancellationToken)
+    private async Task<MassivePage<Agg>> SendListAggregatesAsync(string requestUri, CancellationToken cancellationToken)
     {
         GetStocksAggregatesResponse? response = await _transport
             .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksAggregatesResponse, cancellationToken)
             .ConfigureAwait(false);
 
-        return response?.Results ?? [];
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Agg>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
     }
 }

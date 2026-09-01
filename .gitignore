@@ -14,3 +14,6 @@ TestResults/
 !.env.example
 *.user.props
 appsettings.Development.json
+
+# Subagent-driven development scratch (ledger, briefs, review packages)
+.superpowers/

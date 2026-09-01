@@ -124,15 +124,16 @@ public sealed class StocksAggregatesTests
         StubHandler handler = new(Fixtures.StocksAggregates);
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
 
-        Agg[] bars;
+        MassivePage<Agg> page;
 
         using (client)
         using (transport)
         {
-            bars = await client.Stocks.ListAggregatesAsync(
+            page = await client.Stocks.ListAggregatesAsync(
                 "AAPL", 1, AggregateTimespan.Day, "2020-01-01", "2020-01-10", cancellationToken: Ct);
         }
 
+        Agg[] bars = page.Results;
         Assert.Equal(2, bars.Length);
 
         Agg first = bars[0];
@@ -152,15 +153,16 @@ public sealed class StocksAggregatesTests
         StubHandler handler = new(Fixtures.StocksAggregates);
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
 
-        Agg[] bars;
+        MassivePage<Agg> page;
 
         using (client)
         using (transport)
         {
-            bars = await client.Stocks.ListAggregatesAsync(
+            page = await client.Stocks.ListAggregatesAsync(
                 "AAPL", 1, AggregateTimespan.Day, "2020-01-01", "2020-01-10", cancellationToken: Ct);
         }
 
+        Agg[] bars = page.Results;
         Assert.False(bars[0].IsOtc);
     }
 
@@ -170,15 +172,16 @@ public sealed class StocksAggregatesTests
         StubHandler handler = new(Fixtures.StocksAggregates);
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
 
-        Agg[] bars;
+        MassivePage<Agg> page;
 
         using (client)
         using (transport)
         {
-            bars = await client.Stocks.ListAggregatesAsync(
+            page = await client.Stocks.ListAggregatesAsync(
                 "AAPL", 1, AggregateTimespan.Day, "2020-01-01", "2020-01-10", cancellationToken: Ct);
         }
 
+        Agg[] bars = page.Results;
         Assert.Equal(
             Instant.FromUnixTimeMilliseconds(1577941200000),
             bars[0].Timestamp);
@@ -190,16 +193,16 @@ public sealed class StocksAggregatesTests
         StubHandler handler = new("""{"status":"OK","request_id":"abc","resultsCount":0,"queryCount":0,"adjusted":true,"ticker":"AAPL"}""");
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
 
-        Agg[] bars;
+        MassivePage<Agg> page;
 
         using (client)
         using (transport)
         {
-            bars = await client.Stocks.ListAggregatesAsync(
+            page = await client.Stocks.ListAggregatesAsync(
                 "AAPL", 1, AggregateTimespan.Day, "2020-01-01", "2020-01-10", cancellationToken: Ct);
         }
 
-        Assert.Empty(bars);
+        Assert.Empty(page.Results);
     }
 
     [Fact]
@@ -283,5 +286,27 @@ public sealed class StocksAggregatesTests
         }
 
         Assert.Equal("Bearer test-key", handler.LastAuthorization);
+    }
+
+    [Fact]
+    public async Task ReportsThatMorePagesExistWhenTheSampleCarriesACursor()
+    {
+        // The published sample carries a next_url. Before pagination the SDK deserialized
+        // that field and threw it away, so a caller could not tell a complete result from
+        // a truncated one.
+        StubHandler handler = new(Fixtures.StocksAggregates);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        MassivePage<Agg> page;
+
+        using (client)
+        using (transport)
+        {
+            page = await client.Stocks.ListAggregatesAsync(
+                "AAPL", 1, AggregateTimespan.Day, "2020-01-01", "2020-01-10", cancellationToken: Ct);
+        }
+
+        Assert.True(page.HasMore);
+        Assert.Equal("6a7e466379af0a71039d60cc78e72282", page.RequestId);
     }
 }
