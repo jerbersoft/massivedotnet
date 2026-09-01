@@ -1,0 +1,16 @@
+bin/
+obj/
+artifacts/
+*.user
+.vs/
+.idea/
+.DS_Store
+BenchmarkDotNet.Artifacts/
+TestResults/
+
+# Secrets: never commit API keys or S3 credentials.
+.env
+.env.*
+!.env.example
+*.user.props
+appsettings.Development.json

@@ -1,0 +1,45 @@
+name: Endpoint coverage
+description: Add or correct coverage for a Massive REST endpoint.
+labels: ["type:endpoint"]
+body:
+  - type: input
+    id: operation
+    attributes:
+      label: Operation ID
+      description: As it appears in specs/openapi.json.
+      placeholder: GetStocksAggregates
+    validations:
+      required: true
+  - type: input
+    id: path
+    attributes:
+      label: Path
+      placeholder: /v2/aggs/ticker/{stocksTicker}/range/{multiplier}/{timespan}/{from}/{to}
+    validations:
+      required: true
+  - type: dropdown
+    id: group
+    attributes:
+      label: Target group
+      options:
+        - Stocks
+        - Options
+        - Crypto
+        - Forex
+        - Indices
+        - Futures
+        - Reference
+        - Financials
+        - Benzinga
+        - EtfGlobal
+        - Fed
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: >
+        Anything the OpenAPI description does not capture — asset-class ownership on a shared
+        route, comparator parameter groupings, ticker format, or an unusual response envelope.

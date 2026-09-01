@@ -1,0 +1,119 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    name: build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore MassiveDotNet.slnx
+
+      # Constitution rule 9: builds are warning-free.
+      - name: Build
+        run: dotnet build MassiveDotNet.slnx --no-restore -c Release
+
+      # Constitution rule 1: endpoint coverage is a contract test, not a promise.
+      - name: Test
+        run: dotnet test MassiveDotNet.slnx --no-build -c Release --verbosity normal
+
+  generated-code:
+    name: generated code is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Constitution rules 5 and 6: generated files are never hand-edited, and the
+      # generator is deterministic. Regenerating must produce no diff.
+      - name: Regenerate
+        run: dotnet run --project tools/MassiveDotNet.CodeGen
+
+      - name: Assert no diff
+        run: |
+          if ! git diff --exit-code --stat -- src/; then
+            echo "::error::Generated code is stale or was hand-edited."
+            echo "Run 'dotnet run --project tools/MassiveDotNet.CodeGen' and commit the result."
+            exit 1
+          fi
+
+  dependencies:
+    name: dependency boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Constitution rule 7: the core package takes no external dependencies.
+      - name: Core has no package references
+        run: |
+          if grep -q 'PackageReference' src/MassiveDotNet/MassiveDotNet.csproj; then
+            echo "::error::MassiveDotNet (core) must not reference external packages."
+            exit 1
+          fi
+
+      # Constitution rule 8: the DI stack is confined to the extensions package.
+      - name: Microsoft.Extensions is confined to the DI package
+        run: |
+          offenders=$(grep -rl 'Microsoft\.Extensions' --include='*.csproj' src/ \
+            | grep -v 'MassiveDotNet.Extensions.DependencyInjection' || true)
+          if [ -n "$offenders" ]; then
+            echo "::error::Microsoft.Extensions.* may only be referenced by the DI package. Found in:"
+            echo "$offenders"
+            exit 1
+          fi
+
+  native-aot:
+    name: native aot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install AOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Constitution rules 3 and 4. The sample project sets
+      # JsonSerializerIsReflectionEnabledByDefault=false, so any reflection fallback fails here.
+      # TrimmerSingleWarn=false reports every warning rather than collapsing them per assembly.
+      - name: Publish
+        run: |
+          dotnet publish samples/MassiveDotNet.AotSmokeTest \
+            -r linux-x64 -c Release 2>&1 | tee aot.log
+
+          # Match MSBuild's warning format specifically: a bare /warning/ would also
+          # match the "0 Warning(s)" summary line and fail every clean build.
+          if grep -qE ': (warning|error) (IL|AOT|Trim)?[0-9]{4}' aot.log; then
+            echo "::error::Native AOT publish produced trim or AOT warnings."
+            grep -E ': (warning|error) ' aot.log
+            exit 1
+          fi
+
+      # Publishing clean is necessary but not sufficient: run it and check it works.
+      - name: Run
+        run: ./samples/MassiveDotNet.AotSmokeTest/bin/Release/net10.0/linux-x64/publish/MassiveDotNet.AotSmokeTest

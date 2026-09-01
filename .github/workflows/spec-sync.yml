@@ -1,0 +1,114 @@
+name: spec-sync
+
+# Massive regenerates its OpenAPI description continuously. This job notices changes and
+# opens a PR, so upstream API drift arrives as a reviewable diff rather than a surprise.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: check upstream spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Fetch and normalize
+        run: |
+          curl -fsSL https://api.massive.com/openapi -o /tmp/openapi.raw.json
+
+          # Upstream key ordering is unstable (constitution D10). Normalizing keeps the diff
+          # limited to genuine API changes instead of 20k lines of reordering.
+          python3 -c "
+          import json
+          spec = json.load(open('/tmp/openapi.raw.json'))
+          json.dump(spec, open('specs/openapi.json', 'w'), indent=2, sort_keys=True)
+          "
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- specs/openapi.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No upstream changes."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- specs/openapi.json
+          fi
+
+      - name: Summarize operation changes
+        if: steps.diff.outputs.changed == 'true'
+        id: summary
+        run: |
+          git show HEAD:specs/openapi.json > /tmp/previous.json
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          def operations(path):
+              spec = json.load(open(path))
+              return {
+                  item['get']['operationId']: name
+                  for name, item in spec['paths'].items()
+                  if 'get' in item and 'operationId' in item['get']
+              }
+
+          before, after = operations('/tmp/previous.json'), operations('specs/openapi.json')
+          added, removed = set(after) - set(before), set(before) - set(after)
+
+          print(f"## Spec sync\n\n{len(before)} -> {len(after)} operations\n")
+          for label, ids, source in (("Added", added, after), ("Removed", removed, before)):
+              if ids:
+                  print(f"### {label} ({len(ids)})\n")
+                  for i in sorted(ids):
+                      print(f"- `{i}` — `{source[i]}`")
+                  print()
+          PY
+
+      - name: Regenerate and verify
+        if: steps.diff.outputs.changed == 'true'
+        # A spec change can invalidate the generated code. Surface that in the PR rather
+        # than letting it fail later on someone else's branch.
+        continue-on-error: true
+        run: |
+          dotnet run --project tools/MassiveDotNet.CodeGen
+          dotnet build MassiveDotNet.slnx -c Release
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="spec-sync/$(date -u +%Y-%m-%d)"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Branch $branch already exists; nothing to do."
+            exit 0
+          fi
+
+          git checkout -b "$branch"
+          git add specs/openapi.json src/
+          git commit -m "chore: sync OpenAPI description from api.massive.com"
+          git push origin "$branch"
+
+          gh pr create \
+            --title "chore: sync OpenAPI description ($(date -u +%Y-%m-%d))" \
+            --body "Automated sync from \`https://api.massive.com/openapi\`.
+
+          Generated code has been refreshed alongside the spec. Review the operation summary in
+          the workflow run, then check whether \`specs/endpoints.map.json\` needs new rows for any
+          added operations — coverage is enforced by \`EndpointCoverageTests\`." \
+            --label "area:codegen" \
+            --base master \
+            --head "$branch"
