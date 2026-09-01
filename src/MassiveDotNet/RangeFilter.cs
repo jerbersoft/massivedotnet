@@ -22,6 +22,13 @@ public readonly struct RangeFilter<T>
     private readonly T _upper;
     private readonly FilterMode _mode;
 
+    /// <summary>
+    /// Constructs a filter directly from its parts; callers reach this through the factories
+    /// and the implicit conversion.
+    /// </summary>
+    /// <param name="lower">The lower bound, or the value for an equality filter.</param>
+    /// <param name="upper">The upper bound.</param>
+    /// <param name="mode">Which comparator forms are set.</param>
     internal RangeFilter(T lower, T upper, FilterMode mode)
     {
         _lower = lower;
@@ -69,13 +76,11 @@ public readonly struct RangeFilter<T>
     /// <summary>Converts a value to an equality filter: <c>field=value</c>.</summary>
     /// <param name="value">The exact value to match.</param>
     /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
-#pragma warning disable CA1000 // Do not declare static members on generic types
     public static implicit operator RangeFilter<T>(T value)
     {
         FilterGuard.ThrowIfNull(value, nameof(value));
         return new RangeFilter<T>(value, default!, FilterMode.Equal);
     }
-#pragma warning restore CA1000 // Do not declare static members on generic types
 
     private RangeFilter<T> WithLower(T value, FilterMode bound)
     {
