@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MassiveDotNet.IntegrationTests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      These tests call the live Massive API and require a key. They are committed so the SDK can be
+      exercised against the real service, but CI never runs them: see constitution rule 13. The
+      project is deliberately kept in the solution so that it still COMPILES in CI, which is what
+      catches public API drift.
+    -->
+    <RequiresLiveCredentials>true</RequiresLiveCredentials>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -7,6 +7,7 @@
     <Project Path="src/MassiveDotNet/MassiveDotNet.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MassiveDotNet.IntegrationTests/MassiveDotNet.IntegrationTests.csproj" />
     <Project Path="tests/MassiveDotNet.Rest.Tests/MassiveDotNet.Rest.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
