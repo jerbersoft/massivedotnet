@@ -243,7 +243,7 @@ public sealed class StocksAggregatesTests
     {
         StubHandler handler = new(HttpStatusCode.TooManyRequests, """{"status":"ERROR","error":"Too many requests"}""")
         {
-            RetryAfter = TimeSpan.FromSeconds(30),
+            RetryAfter = Duration.FromSeconds(30),
         };
 
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);

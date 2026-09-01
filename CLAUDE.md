@@ -27,7 +27,7 @@ and does not belong in this section.
 | 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project. | CI build |
 | 10 | Every public member carries XML documentation. | `GenerateDocumentationFile` + warnings-as-errors (CS1591) |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
-| 12 | **NodaTime is the SDK's temporal vocabulary.** Every date, time, instant, and duration in the public API uses `Instant`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, or `Duration`. BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, and `TimeSpan` are permitted **only** in non-public code, and only where a BCL API signature forces them (for example `HttpClient.Timeout` or the `Retry-After` header). Convert at that boundary, never above it. | `TemporalTypeTests` — build fails |
+| 12 | **NodaTime is the SDK's only temporal vocabulary.** Every date, time, instant, and duration uses `Instant`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, or `Duration`. BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, and `TimeSpan` must not be **named anywhere in the repository's source** — not in public API, not in private members, not in locals, not in static calls. Where a BCL API signature itself traffics in `TimeSpan` (`HttpClient.Timeout`, `SocketsHttpHandler.PooledConnectionLifetime`, the `Retry-After` header), produce or consume the value inline through `Duration.ToTimeSpan()` or `Duration.FromTimeSpan()`, so the type is never written down. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
 
 ---
 
@@ -48,7 +48,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D8 | Packages: `MassiveDotNet` (core) · `.Rest` · `.WebSocket` · `.FlatFiles` · `.Extensions.DependencyInjection`. | REST consumers never pull streaming or S3 code; core stays dependency-free (rules 7–8). |
 | D9 | Vendor datasets (Benzinga, ETF Global, Fed, TMX, Fable — 28 operations) ship in `.Rest` like any other endpoint. | They are ordinary REST operations; entitlement is the server's concern, not the SDK's. |
 | D10 | `specs/openapi.json` is normalized (sorted keys, 2-space indent) before committing. | Upstream key ordering is unstable; without this every nightly refresh is a meaningless 20k-line diff. |
-| D12 | NodaTime replaces BCL date and time types throughout the public API, and is the single external dependency permitted in core. | Market data is unforgiving about temporal ambiguity: bars are Eastern Time, tick timestamps are epoch nanoseconds, corporate actions are calendar dates with no time or zone, and sessions cross DST boundaries. `DateTime` conflates all of these behind one type whose meaning depends on an easily-lost `Kind` flag, and `DateOnly` cannot express a zone at all. NodaTime makes the distinction between an instant, a local date, and a zoned time unrepresentable-if-wrong rather than merely documented. Verified Native AOT clean at 3.3.3, including TZDB zone resolution, so it costs nothing against rules 3 and 4. |
+| D12 | NodaTime replaces BCL date and time types throughout the public API, and is the single external dependency permitted in core. | Market data is unforgiving about temporal ambiguity: bars are Eastern Time, tick timestamps are epoch nanoseconds, corporate actions are calendar dates with no time or zone, and sessions cross DST boundaries. `DateTime` conflates all of these behind one type whose meaning depends on an easily-lost `Kind` flag, and `DateOnly` cannot express a zone at all. NodaTime makes the distinction between an instant, a local date, and a zoned time unrepresentable-if-wrong rather than merely documented. Verified Native AOT clean at 3.3.3, including TZDB zone resolution, so it costs nothing against rules 3 and 4. The rule is strict rather than public-surface-only because a BCL type in a private field or local is the seed of the next one in a signature; the only sanctioned contact is an inline conversion at a BCL call site, which names no type. |
 | D11 | The endpoint catalog served by the Massive MCP server is a **build-time** input to the map only. It is never a runtime dependency, and never a test fixture source for wire formats. | Its `call_api` flattens JSON into DataFrames, so it cannot represent the wire envelope. Its docs *do* carry asset-class ownership and comparator groupings the OpenAPI description lacks. |
 
 ---
@@ -113,7 +113,9 @@ dotnet publish samples/MassiveDotNet.AotSmokeTest -r <rid> -c Release          #
 - **Temporal**: an *instant* is `Instant`; a calendar date with no time or zone is `LocalDate`; a
   wall-clock time in a named zone is `ZonedDateTime`; an elapsed amount is `Duration`. Store raw
   epoch values on wire DTOs and expose the NodaTime type as a computed property (D5), so conversion
-  is paid only when read.
+  is paid only when read. Never name a BCL temporal type (rule 12): at a BCL call site write
+  `Duration.FromMinutes(2).ToTimeSpan()`, and consume one with a pattern match
+  (`x?.Delta is { } d ? Duration.FromTimeSpan(d) : null`) rather than a typed local.
 - **Allocation**: build request URIs through `RequestUriBuilder`, never `UriBuilder` or a
   `Dictionary`. Deserialize from the response stream; never buffer a body into a string first.
 - **Comments**: explain *why*, not *what*. The generator's output is read by humans in review, so
