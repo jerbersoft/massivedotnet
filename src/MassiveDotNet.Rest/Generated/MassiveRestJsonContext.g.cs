@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Serialization;
 
@@ -18,5 +19,10 @@ namespace MassiveDotNet.Rest.Serialization;
 /// Source-generated serialization metadata for every REST response envelope. Using a context rather
 /// than reflection keeps the SDK Native AOT compatible.
 /// </summary>
+/// <remarks>
+/// Calendar dates are read by <see cref="LocalDateJsonConverter"/>, registered here once so no
+/// model property needs its own attribute.
+/// </remarks>
+[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter) })]
 [JsonSerializable(typeof(GetStocksAggregatesResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

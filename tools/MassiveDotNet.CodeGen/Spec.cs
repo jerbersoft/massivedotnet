@@ -16,6 +16,57 @@ internal sealed record SpecParameter(
 /// <summary>A property of a (possibly composed) OpenAPI object schema.</summary>
 internal sealed record SpecProperty(string Name, bool Required, string? Description, JsonElement Schema);
 
+/// <summary>The comparator variants a field declares, such as <c>gt gte lt lte any_of</c>.</summary>
+/// <param name="BaseName">The wire name of the field, for example <c>ticker</c>.</param>
+/// <param name="Suffixes">The suffixes declared, drawn from <c>gt gte lt lte any_of all_of</c>.</param>
+/// <param name="HasExactForm">
+/// Whether the operation also declares the plain <c>field</c> parameter. One operation in the
+/// description does not (<c>/v1/summaries</c> declares only <c>ticker.any_of</c>).
+/// </param>
+internal sealed record ComparatorGroup(string BaseName, IReadOnlySet<string> Suffixes, bool HasExactForm)
+{
+    /// <summary>
+    /// The filter type the exact suffix set maps to. Any other set fails generation: a new
+    /// combination needs a filter type designed for it, and this is what makes a spec sync that
+    /// introduces an unknown suffix fail loudly rather than emit something plausible.
+    /// </summary>
+    public string FilterType(string operationId) => Key switch
+    {
+        "gt gte lt lte" => "RangeFilter",
+        "any_of" => "SetFilter",
+        "any_of gt gte lt lte" => "Filter",
+        "all_of any_of" => "ArrayFilter",
+        _ => throw new InvalidOperationException(
+            $"Operation '{operationId}' declares comparators [{Key}] on '{BaseName}', which is not a "
+            + "recognised shape. Known shapes: [gt gte lt lte], [any_of], [any_of gt gte lt lte], "
+            + "[all_of any_of]. A new combination needs a filter type designed for it, not a guess."),
+    };
+
+    /// <summary>The sentence appended to the field's description, naming the forms it accepts.</summary>
+    public string DocSentence(string operationId) => FilterType(operationId) switch
+    {
+        "RangeFilter" => "Accepts an exact value or a range.",
+        "SetFilter" => HasExactForm
+            ? "Accepts an exact value or a set of values."
+            : "Accepts one or more values.",
+        "Filter" => "Accepts an exact value, a range, or a set of values.",
+        _ => "Matches arrays containing the value, any of the values, or all of the values.",
+    };
+
+    private string Key => string.Join(' ', Suffixes.Order(StringComparer.Ordinal));
+}
+
+/// <summary>
+/// One generated parameter: a plain spec parameter, or a comparator group standing in for several.
+/// </summary>
+/// <param name="WireName">The parameter name, or the group's base name. Map rows are keyed by this.</param>
+/// <param name="Parameter">
+/// The spec parameter that supplies the schema and prose: the plain parameter itself, the
+/// group's base field, or its first variant when the description declares no base.
+/// </param>
+/// <param name="Group">The comparator group, or <see langword="null"/> for a plain parameter.</param>
+internal sealed record ParameterSlot(string WireName, SpecParameter Parameter, ComparatorGroup? Group);
+
 /// <summary>Reads the OpenAPI description and resolves its composed, anonymous schemas.</summary>
 internal sealed class Spec
 {
@@ -86,6 +137,78 @@ internal sealed class Spec
         }
 
         return results;
+    }
+
+    private static readonly HashSet<string> ComparatorSuffixes =
+        new(StringComparer.Ordinal) { "gt", "gte", "lt", "lte", "any_of", "all_of" };
+
+    /// <summary>
+    /// Collapses an operation's parameters into slots. Comparator variants such as
+    /// <c>ticker.gte</c> fold into one group keyed by their base name, placed where the base was
+    /// declared, or where the first variant was when the description declares no base. Everything
+    /// else passes through unchanged.
+    /// </summary>
+    /// <remarks>
+    /// Only the six known suffixes count. The SEC filings endpoint declares nested field paths
+    /// such as <c>entities.company_data.name</c>, which contain a dot but are not comparators and
+    /// must stay plain parameters.
+    /// </remarks>
+    public static List<ParameterSlot> Slots(List<SpecParameter> parameters)
+    {
+        Dictionary<string, HashSet<string>> suffixesByBase = new(StringComparer.Ordinal);
+
+        foreach (SpecParameter parameter in parameters)
+        {
+            if (SplitComparator(parameter.Name) is (string baseName, string suffix))
+            {
+                if (!suffixesByBase.TryGetValue(baseName, out HashSet<string>? suffixes))
+                {
+                    suffixes = new HashSet<string>(StringComparer.Ordinal);
+                    suffixesByBase[baseName] = suffixes;
+                }
+
+                suffixes.Add(suffix);
+            }
+        }
+
+        HashSet<string> declaredNames = new(parameters.Select(p => p.Name), StringComparer.Ordinal);
+        HashSet<string> placed = new(StringComparer.Ordinal);
+        List<ParameterSlot> slots = [];
+
+        foreach (SpecParameter parameter in parameters)
+        {
+            string key = SplitComparator(parameter.Name) is (string baseName, _) ? baseName : parameter.Name;
+
+            if (!suffixesByBase.TryGetValue(key, out HashSet<string>? suffixes))
+            {
+                slots.Add(new ParameterSlot(parameter.Name, parameter, Group: null));
+                continue;
+            }
+
+            // A later variant of a group that is already in place.
+            if (!placed.Add(key))
+            {
+                continue;
+            }
+
+            slots.Add(new ParameterSlot(key, parameter, new ComparatorGroup(key, suffixes, declaredNames.Contains(key))));
+        }
+
+        return slots;
+    }
+
+    private static (string BaseName, string Suffix)? SplitComparator(string name)
+    {
+        int dot = name.LastIndexOf('.');
+
+        if (dot <= 0)
+        {
+            return null;
+        }
+
+        string suffix = name[(dot + 1)..];
+
+        return ComparatorSuffixes.Contains(suffix) ? (name[..dot], suffix) : null;
     }
 
     /// <summary>Returns the JSON schema of an operation's 200 response.</summary>
