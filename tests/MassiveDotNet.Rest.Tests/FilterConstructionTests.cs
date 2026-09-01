@@ -59,4 +59,58 @@ public sealed class FilterConstructionTests
         // and the server rejects an empty range on its own.
         _ = RangeFilter.Between(2L, 1L);
     }
+
+    [Fact]
+    public void SetFactoriesRejectAnEmptySet()
+    {
+        Assert.Throws<ArgumentException>(() => SetFilter.AnyOf<string>());
+        Assert.Throws<ArgumentException>(() => ArrayFilter.AnyOf<string>());
+        Assert.Throws<ArgumentException>(() => ArrayFilter.AllOf<string>());
+    }
+
+    [Fact]
+    public void SetFactoriesRejectANullArray()
+    {
+        Assert.Throws<ArgumentNullException>(() => SetFilter.AnyOf<string>(null!));
+        Assert.Throws<ArgumentNullException>(() => ArrayFilter.AllOf<string>(null!));
+    }
+
+    [Fact]
+    public void SetFactoriesRejectANullElement()
+    {
+        Assert.Throws<ArgumentException>(() => SetFilter.AnyOf("AAPL", null!));
+        Assert.Throws<ArgumentException>(() => ArrayFilter.AnyOf("AAPL", null!));
+    }
+
+    [Fact]
+    public void SetAndArrayEqualityConversionsRejectNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => (SetFilter<string>)(string)null!);
+        Assert.Throws<ArgumentNullException>(() => (ArrayFilter<string>)(string)null!);
+        Assert.Throws<ArgumentNullException>(() => (Filter<string>)(string)null!);
+        Assert.Throws<ArgumentNullException>(() => ArrayFilter.Contains<string>(null!));
+    }
+
+    [Fact]
+    public void FilterAcceptsARangeASetOrAValueByConversion()
+    {
+        // Compiles, and none of these throw: Filter<T> is only ever built by conversion.
+        Filter<long> fromValue = 5L;
+        Filter<long> fromRange = RangeFilter.Between(1L, 9L);
+        Filter<long> fromSet = SetFilter.AnyOf(1L, 2L);
+
+        _ = fromValue;
+        _ = fromRange;
+        _ = fromSet;
+    }
+
+    [Fact]
+    public void ArrayFilterAcceptsASetByConversion()
+    {
+        ArrayFilter<string> fromSet = SetFilter.AnyOf("AAPL", "MSFT");
+        ArrayFilter<string> fromValue = "AAPL";
+
+        _ = fromSet;
+        _ = fromValue;
+    }
 }
