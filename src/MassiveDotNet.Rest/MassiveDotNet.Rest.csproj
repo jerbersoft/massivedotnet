@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MassiveDotNet.Rest</RootNamespace>
+    <PackageId>MassiveDotNet.Rest</PackageId>
+    <Description>REST client for the Massive (formerly Polygon.io) market data platform, covering stocks, options, indices, forex, crypto, futures, and reference data.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MassiveDotNet/MassiveDotNet.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MassiveDotNet.CodeGen</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- Build-time tool only; never shipped, so AOT and trimming rules do not apply. -->
+  </PropertyGroup>
+
+</Project>

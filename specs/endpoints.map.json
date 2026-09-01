@@ -1,0 +1,68 @@
+{
+  "//": [
+    "Curated mapping from Massive OpenAPI operations to the MassiveDotNet public API.",
+    "",
+    "This file carries only the knowledge the OpenAPI description does NOT contain:",
+    "  * which asset class owns a route (41 operations share 10 routes, distinguished",
+    "    only by the *name* of their path parameter)",
+    "  * which SDK group and method name an operation surfaces as",
+    "  * .NET-friendly parameter names and strong types",
+    "  * property names for anonymous result schemas (no operation uses $ref)",
+    "",
+    "Everything else -- paths, parameter lists, requiredness, enum members, nullability --",
+    "is read from specs/openapi.json at generation time so it cannot drift.",
+    "",
+    "Sources: specs/openapi.json (shape) and the Massive endpoint catalog (intent)."
+  ],
+
+  "groups": {
+    "Stocks": {
+      "summary": "Endpoints covering US equities: aggregates, trades, quotes, snapshots, and technical indicators."
+    }
+  },
+
+  "models": {
+    "Agg": {
+      "kind": "struct",
+      "summary": "A single aggregate bar: open, high, low, close, and volume for one time window.",
+      "remarks": "Aggregates are built only from qualifying trades. A window with no eligible trades produces no bar, so gaps in a series indicate an absence of trading activity rather than missing data.",
+      "schema": { "operationId": "GetStocksAggregates", "pointer": "results/items" },
+      "properties": {
+        "o":   { "name": "Open",   "type": "double" },
+        "h":   { "name": "High",   "type": "double" },
+        "l":   { "name": "Low",    "type": "double" },
+        "c":   { "name": "Close",  "type": "double" },
+        "v":   { "name": "Volume", "type": "double" },
+        "vw":  { "name": "VolumeWeightedAveragePrice", "type": "double?" },
+        "t":   { "name": "TimestampMilliseconds", "type": "long" },
+        "n":   { "name": "TransactionCount", "type": "long?" },
+        "otc": {
+          "name": "IsOtc",
+          "type": "bool",
+          "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here."
+        }
+      }
+    }
+  },
+
+  "endpoints": [
+    {
+      "operationId": "GetStocksAggregates",
+      "group": "Stocks",
+      "method": "ListAggregates",
+      "summary": "Retrieves aggregate bars for a stock over a custom date range and time interval in Eastern Time.",
+      "remarks": "Covers pre-market, regular, and after-hours sessions. Set <paramref name=\"multiplier\"/> and <paramref name=\"timespan\"/> together to size each bar, for example 5 and <see cref=\"AggregateTimespan.Minute\"/> for five-minute bars.",
+      "result": { "kind": "array", "model": "Agg", "property": "results" },
+      "parameters": {
+        "stocksTicker": { "name": "ticker" },
+        "multiplier":   { "name": "multiplier" },
+        "timespan":     { "name": "timespan", "type": "AggregateTimespan" },
+        "from":         { "name": "from", "type": "DateOrTimestamp" },
+        "to":           { "name": "to",   "type": "DateOrTimestamp" },
+        "adjusted":     { "name": "adjusted" },
+        "sort":         { "name": "sort", "type": "SortOrder" },
+        "limit":        { "name": "limit" }
+      }
+    }
+  ]
+}
