@@ -43,11 +43,10 @@ public sealed class StocksDividendsTests
         // hits the implicit T -> Filter<T> conversion directly, since C# only lifts a
         // user-defined conversion for a nullable value-type source. It must produce the plain
         // URL with no query, like any other omitted optional parameter, not throw
-        // ArgumentNullException for a parameter name ("value") the caller never wrote.
-        //
-        // The `!` below only silences the compiler's static nullable check -- this project
-        // builds with warnings as errors, which an ordinary consumer project need not -- it does
-        // not change the runtime value: `ticker` is still null when the operator runs.
+        // ArgumentNullException for a parameter name ("value") the caller never wrote. The
+        // conversion operator's parameter is annotated `T?`, so this plain `string?` local
+        // needs no null-forgiving operator to compile -- the signature itself now states what
+        // the operator does.
         string? ticker = null;
 
         StubHandler handler = new(Fixtures.StocksDividends);
@@ -56,7 +55,7 @@ public sealed class StocksDividendsTests
         using (client)
         using (transport)
         {
-            await client.Stocks.ListDividendsAsync(ticker: ticker!, cancellationToken: Ct);
+            await client.Stocks.ListDividendsAsync(ticker: ticker, cancellationToken: Ct);
         }
 
         Assert.Equal("https://api.massive.com/stocks/v1/dividends", handler.LastRequestUri?.ToString());

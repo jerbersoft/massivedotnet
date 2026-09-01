@@ -48,13 +48,16 @@ public readonly struct ArrayFilter<T>
     /// </param>
     /// <remarks>
     /// Checks for <see langword="null"/> itself rather than delegating straight to
-    /// <see cref="ArrayFilter.Contains{T}(T)"/>: C# lifts a user-defined conversion only when its
-    /// source is a nullable <em>value</em> type, so for a reference-type <typeparamref name="T"/>
-    /// the compiler calls this operator directly with <see langword="null"/> rather than skipping
-    /// it. Treating that as unset instead of forwarding into a factory that throws
-    /// <see cref="ArgumentNullException"/> matches every other optional parameter in this SDK.
+    /// <see cref="ArrayFilter.Contains{T}(T)"/>, which throws. The parameter is annotated
+    /// <c>T?</c> rather than <c>T</c>; for this unconstrained type parameter that is
+    /// annotation-only, so a reference-type <typeparamref name="T"/> may be null while a
+    /// value-type <typeparamref name="T"/> is unaffected -- there is no
+    /// <see cref="Nullable{T}"/> wrapping. The annotation states what this operator actually
+    /// does: a null reference, such as a <c>string? ticker = null</c> variable passed where a
+    /// filter is expected, converts to an unset filter instead of throwing
+    /// <see cref="ArgumentNullException"/> for a parameter (<c>value</c>) the caller never wrote.
     /// </remarks>
-    public static implicit operator ArrayFilter<T>(T value) =>
+    public static implicit operator ArrayFilter<T>(T? value) =>
         value is null ? default : ArrayFilter.Contains(value);
 
     /// <summary>

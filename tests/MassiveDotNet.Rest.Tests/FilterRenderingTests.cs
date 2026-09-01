@@ -139,20 +139,18 @@ public sealed class FilterRenderingTests
     {
         // Exercises the T -> X<T> implicit conversion with a genuine null *reference* assigned
         // to each filter-typed variable -- the same shape as a generated method whose parameter
-        // is one of these four types receiving a null `string?` argument. This is what proves
-        // the conversion produces an unset filter rather than throwing: FilterConstructionTests
-        // can only assert that the conversion does not throw, since Mode is internal and this
-        // assembly has no InternalsVisibleTo grant to read it directly.
-        //
-        // The `!` below only silences the compiler's static nullable check -- this project
-        // builds with warnings as errors, which an ordinary consumer project need not -- it does
-        // not change the runtime value: `ticker` is still null when each operator runs.
+        // is one of these four types receiving a null `string?` argument. Each operator's
+        // parameter is annotated `T?`, so a plain `string?` local needs no null-forgiving
+        // operator here: the signature itself now states what the operator does. This is what
+        // proves the conversion produces an unset filter rather than throwing:
+        // FilterConstructionTests can only assert that the conversion does not throw, since
+        // Mode is internal and this assembly has no InternalsVisibleTo grant to read it directly.
         string? ticker = null;
 
-        RangeFilter<string>? rangeFilter = ticker!;
-        SetFilter<string>? setFilter = ticker!;
-        Filter<string>? filterFilter = ticker!;
-        ArrayFilter<string>? arrayFilter = ticker!;
+        RangeFilter<string>? rangeFilter = ticker;
+        SetFilter<string>? setFilter = ticker;
+        Filter<string>? filterFilter = ticker;
+        ArrayFilter<string>? arrayFilter = ticker;
 
         Assert.Equal("/x", RenderRange(rangeFilter));
         Assert.Equal("/x", RenderSet(setFilter));

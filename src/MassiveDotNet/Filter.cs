@@ -53,14 +53,16 @@ public readonly struct Filter<T>
     /// renders nothing.
     /// </param>
     /// <remarks>
-    /// C# lifts a user-defined conversion only when its source is a nullable <em>value</em> type;
-    /// for a reference-type <typeparamref name="T"/> the compiler calls this operator directly
-    /// with <see langword="null"/> rather than skipping it, so a null reference variable would
-    /// otherwise throw <see cref="ArgumentNullException"/> naming a parameter (<c>value</c>) the
-    /// caller never wrote. Treating <see langword="null"/> as unset instead matches every other
-    /// optional parameter in this SDK.
+    /// The parameter is annotated <c>T?</c> rather than <c>T</c>. For this unconstrained type
+    /// parameter that is annotation-only: a reference-type <typeparamref name="T"/> may be null,
+    /// while a value-type <typeparamref name="T"/> is unaffected -- there is no
+    /// <see cref="Nullable{T}"/> wrapping. The annotation states what this operator actually
+    /// does: a null reference, such as a <c>string? ticker = null</c> variable passed where a
+    /// filter is expected, converts to an unset filter instead of throwing
+    /// <see cref="ArgumentNullException"/> naming a parameter (<c>value</c>) the caller never
+    /// wrote, matching every other optional parameter in this SDK.
     /// </remarks>
-    public static implicit operator Filter<T>(T value) =>
+    public static implicit operator Filter<T>(T? value) =>
         value is null ? default : new Filter<T>(value, default!, null, FilterMode.Equal);
 
     /// <summary>Converts a range filter, unchanged.</summary>

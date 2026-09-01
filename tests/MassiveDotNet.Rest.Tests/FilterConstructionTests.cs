@@ -22,10 +22,15 @@ public sealed class FilterConstructionTests
         // for a reference-type T the compiler calls this operator directly with null rather
         // than skipping it. The operator must treat that as "omit the parameter", like every
         // other optional argument, instead of throwing for a parameter name (`value`) the
-        // caller never wrote. FilterRenderingTests.NullReferenceConversionsRenderNothing is
-        // what proves the resulting filter is actually unset: Mode is internal, and this
+        // caller never wrote. The parameter is annotated `T?`, so a plain `string?` local
+        // converts with no null-forgiving operator needed -- the signature itself now states
+        // what the operator does. FilterRenderingTests.NullReferenceConversionsRenderNothing
+        // is what proves the resulting filter is actually unset: Mode is internal, and this
         // assembly has no InternalsVisibleTo grant to read it directly.
-        _ = (RangeFilter<string>)(string)null!;
+        string? ticker = null;
+        RangeFilter<string> filter = ticker;
+
+        _ = filter;
     }
 
     [Fact]
@@ -93,11 +98,19 @@ public sealed class FilterConstructionTests
     public void SetArrayAndFilterEqualityConversionsFromANullReferenceDoNotThrow()
     {
         // Same reasoning as EqualityConversionFromANullReferenceDoesNotThrow, for the other
-        // three filter types. ArrayFilter.Contains(null) still throws deliberately: only the
-        // implicit conversion, not the explicit factory, treats a null reference as unset.
-        _ = (SetFilter<string>)(string)null!;
-        _ = (ArrayFilter<string>)(string)null!;
-        _ = (Filter<string>)(string)null!;
+        // three filter types. Each parameter is annotated `T?`, so the plain `string?` local
+        // needs no null-forgiving operator. ArrayFilter.Contains(null) still throws
+        // deliberately: only the implicit conversion, not the explicit factory, treats a null
+        // reference as unset.
+        string? ticker = null;
+
+        SetFilter<string> setFilter = ticker;
+        ArrayFilter<string> arrayFilter = ticker;
+        Filter<string> filterFilter = ticker;
+
+        _ = setFilter;
+        _ = arrayFilter;
+        _ = filterFilter;
 
         Assert.Throws<ArgumentNullException>(() => ArrayFilter.Contains<string>(null!));
     }
