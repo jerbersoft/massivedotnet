@@ -16,9 +16,16 @@ public sealed class FilterConstructionTests
     }
 
     [Fact]
-    public void EqualityConversionRejectsNull()
+    public void EqualityConversionFromANullReferenceDoesNotThrow()
     {
-        Assert.Throws<ArgumentNullException>(() => (RangeFilter<string>)(string)null!);
+        // C# lifts a user-defined conversion only when its source is a nullable *value* type;
+        // for a reference-type T the compiler calls this operator directly with null rather
+        // than skipping it. The operator must treat that as "omit the parameter", like every
+        // other optional argument, instead of throwing for a parameter name (`value`) the
+        // caller never wrote. FilterRenderingTests.NullReferenceConversionsRenderNothing is
+        // what proves the resulting filter is actually unset: Mode is internal, and this
+        // assembly has no InternalsVisibleTo grant to read it directly.
+        _ = (RangeFilter<string>)(string)null!;
     }
 
     [Fact]
@@ -83,11 +90,15 @@ public sealed class FilterConstructionTests
     }
 
     [Fact]
-    public void SetAndArrayEqualityConversionsRejectNull()
+    public void SetArrayAndFilterEqualityConversionsFromANullReferenceDoNotThrow()
     {
-        Assert.Throws<ArgumentNullException>(() => (SetFilter<string>)(string)null!);
-        Assert.Throws<ArgumentNullException>(() => (ArrayFilter<string>)(string)null!);
-        Assert.Throws<ArgumentNullException>(() => (Filter<string>)(string)null!);
+        // Same reasoning as EqualityConversionFromANullReferenceDoesNotThrow, for the other
+        // three filter types. ArrayFilter.Contains(null) still throws deliberately: only the
+        // implicit conversion, not the explicit factory, treats a null reference as unset.
+        _ = (SetFilter<string>)(string)null!;
+        _ = (ArrayFilter<string>)(string)null!;
+        _ = (Filter<string>)(string)null!;
+
         Assert.Throws<ArgumentNullException>(() => ArrayFilter.Contains<string>(null!));
     }
 

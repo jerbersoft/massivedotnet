@@ -74,13 +74,21 @@ public readonly struct RangeFilter<T>
     public RangeFilter<T> Lte(T value) => WithUpper(value, FilterMode.Lte);
 
     /// <summary>Converts a value to an equality filter: <c>field=value</c>.</summary>
-    /// <param name="value">The exact value to match.</param>
-    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
-    public static implicit operator RangeFilter<T>(T value)
-    {
-        FilterGuard.ThrowIfNull(value, nameof(value));
-        return new RangeFilter<T>(value, default!, FilterMode.Equal);
-    }
+    /// <param name="value">
+    /// The exact value to match, or <see langword="null"/> to produce an unset filter that
+    /// renders nothing.
+    /// </param>
+    /// <remarks>
+    /// C# lifts a user-defined conversion only when its source is a nullable <em>value</em> type;
+    /// for a reference-type <typeparamref name="T"/> the compiler calls this operator directly
+    /// with <see langword="null"/> rather than skipping it, so <c>string? ticker = null;
+    /// client.Stocks.ListDividendsAsync(ticker: ticker)</c> would otherwise throw
+    /// <see cref="ArgumentNullException"/> naming a parameter (<c>value</c>) the caller never
+    /// wrote. Treating <see langword="null"/> as unset instead matches every other optional
+    /// parameter in this SDK.
+    /// </remarks>
+    public static implicit operator RangeFilter<T>(T value) =>
+        value is null ? default : new RangeFilter<T>(value, default!, FilterMode.Equal);
 
     private RangeFilter<T> WithLower(T value, FilterMode bound)
     {

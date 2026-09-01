@@ -81,22 +81,47 @@ internal ref struct ValueStringBuilder
         _position += written;
     }
 
-    /// <summary>Appends the shortest round-trippable invariant representation of a double.</summary>
+    /// <summary>
+    /// Appends the shortest round-trippable invariant representation of a double, percent-escaping
+    /// a positive exponent's sign.
+    /// </summary>
     /// <param name="value">The value to append.</param>
     /// <remarks>
+    /// <para>
     /// The provider is named explicitly: a query string is not user-facing text, and
     /// <c>0,5</c> under a comma-decimal culture would be a silent wrong request.
+    /// </para>
+    /// <para>
+    /// Shortest round-trip formatting can also emit a raw <c>+</c> for a positive exponent, for
+    /// example <c>1E+17</c>, and most servers decode a literal <c>+</c> in a query string as a
+    /// space. It is percent-escaped to <c>%2B</c> here -- the only character invariant-culture
+    /// double formatting can produce that needs escaping; digits, <c>-</c>, <c>.</c>, and
+    /// <c>E</c> are already URI-safe. Formatting into a small stack buffer first, then copying
+    /// into the growable one, keeps this allocation-free.
+    /// </para>
     /// </remarks>
     public void Append(double value)
     {
-        if (!value.TryFormat(_chars[_position..], out int written, format: default, provider: CultureInfo.InvariantCulture))
+        Span<char> scratch = stackalloc char[32];
+        bool ok = value.TryFormat(scratch, out int written, format: default, provider: CultureInfo.InvariantCulture);
+        Debug.Assert(ok, "Shortest round-trip formatting of a double should always fit in 32 characters.");
+
+        ReadOnlySpan<char> formatted = scratch[..written];
+        int start = 0;
+
+        for (int i = 0; i < formatted.Length; i++)
         {
-            Grow(32);
-            bool ok = value.TryFormat(_chars[_position..], out written, format: default, provider: CultureInfo.InvariantCulture);
-            Debug.Assert(ok, "Formatting a double into a freshly grown buffer should always succeed.");
+            if (formatted[i] != '+')
+            {
+                continue;
+            }
+
+            Append(formatted[start..i]);
+            Append("%2B");
+            start = i + 1;
         }
 
-        _position += written;
+        Append(formatted[start..]);
     }
 
     /// <summary>Materializes the accumulated text and returns any pooled buffer.</summary>

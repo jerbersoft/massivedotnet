@@ -40,13 +40,20 @@ public readonly struct SetFilter<T>
     internal FilterMode Mode => _mode;
 
     /// <summary>Converts a value to an equality filter: <c>field=value</c>.</summary>
-    /// <param name="value">The exact value to match.</param>
-    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
-    public static implicit operator SetFilter<T>(T value)
-    {
-        FilterGuard.ThrowIfNull(value, nameof(value));
-        return new SetFilter<T>(value, null, FilterMode.Equal);
-    }
+    /// <param name="value">
+    /// The exact value to match, or <see langword="null"/> to produce an unset filter that
+    /// renders nothing.
+    /// </param>
+    /// <remarks>
+    /// C# lifts a user-defined conversion only when its source is a nullable <em>value</em> type;
+    /// for a reference-type <typeparamref name="T"/> the compiler calls this operator directly
+    /// with <see langword="null"/> rather than skipping it, so a null reference variable would
+    /// otherwise throw <see cref="ArgumentNullException"/> naming a parameter (<c>value</c>) the
+    /// caller never wrote. Treating <see langword="null"/> as unset instead matches every other
+    /// optional parameter in this SDK.
+    /// </remarks>
+    public static implicit operator SetFilter<T>(T value) =>
+        value is null ? default : new SetFilter<T>(value, null, FilterMode.Equal);
 }
 
 /// <summary>

@@ -37,6 +37,32 @@ public sealed class StocksDividendsTests
     }
 
     [Fact]
+    public async Task ANullTickerVariableOmitsTheFilterRatherThanThrowing()
+    {
+        // ticker is a null *reference* variable, not a `null` literal: this is the shape that
+        // hits the implicit T -> Filter<T> conversion directly, since C# only lifts a
+        // user-defined conversion for a nullable value-type source. It must produce the plain
+        // URL with no query, like any other omitted optional parameter, not throw
+        // ArgumentNullException for a parameter name ("value") the caller never wrote.
+        //
+        // The `!` below only silences the compiler's static nullable check -- this project
+        // builds with warnings as errors, which an ordinary consumer project need not -- it does
+        // not change the runtime value: `ticker` is still null when the operator runs.
+        string? ticker = null;
+
+        StubHandler handler = new(Fixtures.StocksDividends);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        using (client)
+        using (transport)
+        {
+            await client.Stocks.ListDividendsAsync(ticker: ticker!, cancellationToken: Ct);
+        }
+
+        Assert.Equal("https://api.massive.com/stocks/v1/dividends", handler.LastRequestUri?.ToString());
+    }
+
+    [Fact]
     public async Task RendersEqualityRangeAndSetFiltersInDeclarationOrder()
     {
         StubHandler handler = new(Fixtures.StocksDividends);

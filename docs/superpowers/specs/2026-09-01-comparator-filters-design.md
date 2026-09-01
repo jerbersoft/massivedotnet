@@ -27,13 +27,17 @@ Measured on `specs/openapi.json` on 2026-09-01, not inferred from the prose.
 |---|---|
 | Which suffixes exist? | `gt`, `gte`, `lt`, `lte` (254 each), `any_of` (150), `all_of` (10). |
 | Is every variant an optional query parameter? | **Yes.** None is required, and no base field that carries comparators is required either, so every filter parameter can default to `null`. |
-| Does a variant's type ever differ from its base field's? | No, in all 286 field groups. |
-| Where is a variant declared? | Immediately after its base field. Groups are contiguous. |
+| Does a variant's type ever differ from its base field's? | Yes, in 9 of 286 field groups: every `.any_of` variant in the Benzinga earnings/guidance and short-interest/short-volume operations is declared `string` over an `integer` or `number` base. |
+| Where is a variant declared? | Usually immediately after its base field, but not always: 45 of 286 groups are not contiguous. For example, `/v3/reference/dividends` declares `ticker` at index 0 and its variants at indices 8-11. |
 | Does every group have a plain base field? | All but one: `/v1/summaries` declares `ticker.any_of` and no `ticker`. |
 | Are all dotted names comparators? | **No.** `/v1/reference/sec/filings` declares nested field paths such as `entities.company_data.name` and `entities.company_data.name.search`. Grouping must key on a suffix allowlist, not on the presence of a dot. |
 | Which suffix combinations occur? | Exactly four, tabulated below. |
 | What element types occur? | `string` in 192 groups, `number` in 38, `integer`/`int64` in 15, `string`/`date` in 8, and a `oneOf` of date-time and date in 4 (news `published_utc`). Many `string` groups are temporal by name: `timestamp`, `date`, `filing_date`, `last_updated`. |
 | Does the catalog (D11) know groupings the spec does not? | No. On the three endpoints compared, the catalog's "Supports .gt/.gte/.lt/.lte/.any_of" notes match the spec's parameter lists exactly. |
+
+Neither a variant's type nor its position can be trusted, which is why `Spec.Slots` keys grouping on
+the base field's name and reads the element type and prose from that field by name, never from a
+variant or from declaration order.
 
 | Suffix set | Field groups | Meaning |
 |---|---|---|
@@ -140,6 +144,14 @@ null element throws `ArgumentException`; chaining a bound onto a side already se
 equality, throws `InvalidOperationException`. `Between` does not check that `lower <= upper`. The
 check would need a comparison constraint that `string` cannot honour sensibly, and the server
 rejects an empty range on its own.
+
+One exception: the implicit `T` → filter conversion treats a null *reference* as an unset filter
+rather than throwing, because C# lifts a user-defined conversion only for a nullable value-type
+source, so for a reference-type `T` the operator receives `null` directly instead of being
+skipped. Throwing `ArgumentNullException` there would name a parameter (`value`) the caller never
+wrote, so an unset filter instead matches the SDK's convention that a null optional argument means
+omit it. The factories above and the chained bounds still throw: only the conversion treats null
+as absence.
 
 Known wart, accepted: `RangeFilter.Gt(1)` infers `RangeFilter<int>`, so a `long` field needs
 `1L` and a `double` field `1.0`. The compiler error names both types, and widening conversions

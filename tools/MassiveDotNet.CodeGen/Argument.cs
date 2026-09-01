@@ -26,9 +26,9 @@ internal sealed record Argument(
 
     public string PathExpression => Binding.PathExpression(Identifier);
 
-    public string QueryExpression => Required
+    public string QueryExpression => (Required
         ? Binding.PathExpression(Identifier)
-        : Binding.QueryExpression(Identifier) + QueryCallSuffix;
+        : Binding.QueryExpression(Identifier)) + QueryCallSuffix;
 
     public string PathAppendMethod => Binding.PathAppendMethod;
 
@@ -50,6 +50,19 @@ internal sealed record Argument(
             throw new InvalidOperationException(
                 $"Operation '{operationId}' requires '{group.BaseName}', which also carries comparators. "
                 + "Required filter parameters are not supported; this needs a design, not a default.");
+        }
+
+        // Only an any_of-only group can lack a plain field (D-F8): equality then travels as a
+        // one-element any_of, which is what AppendQuery's SetFilter overload's hasExactForm
+        // parameter exists to select. No other filter overload has that fallback, so a future
+        // spec sync that drops the plain field from a range or range-and-set group would
+        // otherwise generate cleanly and only fail with CS1739 inside the emitted .g.cs.
+        if (!group.HasExactForm && group.FilterType(operationId) != "SetFilter")
+        {
+            throw new InvalidOperationException(
+                $"Operation '{operationId}' declares '{group.BaseName}' with no plain field, but its "
+                + $"comparators resolve to {group.FilterType(operationId)}<T>, not SetFilter<T>. Only an "
+                + "any_of-only group may lack a plain form; this needs a design, not a guess.");
         }
 
         // The variants' own descriptions are boilerplate ("Range by ticker."), so the base field's

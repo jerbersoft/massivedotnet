@@ -89,6 +89,14 @@ public sealed class FilterRenderingTests
     }
 
     [Fact]
+    public void APositiveExponentEscapesThePlusSign()
+    {
+        // Shortest round-trip formatting emits a raw `+` for a large enough magnitude
+        // (`1E+17`), and most servers decode a literal `+` in a query string as a space.
+        Assert.Equal("/x?f.gte=1E%2B17", RenderRange<double>(RangeFilter.Gte(1E17)));
+    }
+
+    [Fact]
     public void StringElementsArePercentEscaped()
     {
         Assert.Equal("/x?f=BRK%2FB", RenderRange<string>("BRK/B"));
@@ -124,6 +132,32 @@ public sealed class FilterRenderingTests
         Assert.Equal("/x", RenderFilter<string>(default(Filter<string>)));
         Assert.Equal("/x", RenderArray<string>(null));
         Assert.Equal("/x", RenderArray<string>(default(ArrayFilter<string>)));
+    }
+
+    [Fact]
+    public void NullReferenceConversionsRenderNothing()
+    {
+        // Exercises the T -> X<T> implicit conversion with a genuine null *reference* assigned
+        // to each filter-typed variable -- the same shape as a generated method whose parameter
+        // is one of these four types receiving a null `string?` argument. This is what proves
+        // the conversion produces an unset filter rather than throwing: FilterConstructionTests
+        // can only assert that the conversion does not throw, since Mode is internal and this
+        // assembly has no InternalsVisibleTo grant to read it directly.
+        //
+        // The `!` below only silences the compiler's static nullable check -- this project
+        // builds with warnings as errors, which an ordinary consumer project need not -- it does
+        // not change the runtime value: `ticker` is still null when each operator runs.
+        string? ticker = null;
+
+        RangeFilter<string>? rangeFilter = ticker!;
+        SetFilter<string>? setFilter = ticker!;
+        Filter<string>? filterFilter = ticker!;
+        ArrayFilter<string>? arrayFilter = ticker!;
+
+        Assert.Equal("/x", RenderRange(rangeFilter));
+        Assert.Equal("/x", RenderSet(setFilter));
+        Assert.Equal("/x", RenderFilter(filterFilter));
+        Assert.Equal("/x", RenderArray(arrayFilter));
     }
 
     [Fact]
@@ -180,5 +214,15 @@ public sealed class FilterRenderingTests
         builder.AppendQuery("e", (double?)null);
 
         Assert.Equal("/x?d=0.25", builder.ToUriString());
+    }
+
+    [Fact]
+    public void PlainDoubleParameterEscapesAPositiveExponentsPlusSign()
+    {
+        RequestUriBuilder builder = new(stackalloc char[128]);
+        builder.AppendPathLiteral("/x");
+        builder.AppendQuery("d", (double?)1E17);
+
+        Assert.Equal("/x?d=1E%2B17", builder.ToUriString());
     }
 }

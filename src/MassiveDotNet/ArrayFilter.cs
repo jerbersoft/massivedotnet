@@ -42,9 +42,20 @@ public readonly struct ArrayFilter<T>
     internal FilterMode Mode => _mode;
 
     /// <summary>Converts a value to a contains filter: <c>field=value</c>.</summary>
-    /// <param name="value">The value the array must contain.</param>
-    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
-    public static implicit operator ArrayFilter<T>(T value) => ArrayFilter.Contains(value);
+    /// <param name="value">
+    /// The value the array must contain, or <see langword="null"/> to produce an unset filter
+    /// that renders nothing.
+    /// </param>
+    /// <remarks>
+    /// Checks for <see langword="null"/> itself rather than delegating straight to
+    /// <see cref="ArrayFilter.Contains{T}(T)"/>: C# lifts a user-defined conversion only when its
+    /// source is a nullable <em>value</em> type, so for a reference-type <typeparamref name="T"/>
+    /// the compiler calls this operator directly with <see langword="null"/> rather than skipping
+    /// it. Treating that as unset instead of forwarding into a factory that throws
+    /// <see cref="ArgumentNullException"/> matches every other optional parameter in this SDK.
+    /// </remarks>
+    public static implicit operator ArrayFilter<T>(T value) =>
+        value is null ? default : ArrayFilter.Contains(value);
 
     /// <summary>
     /// Converts a set filter. Any-of stays any-of; an equality becomes a contains filter, which is
