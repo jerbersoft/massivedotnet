@@ -27,6 +27,7 @@ and does not belong in this section.
 | 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project. | CI build |
 | 10 | Every public member carries XML documentation. | `GenerateDocumentationFile` + warnings-as-errors (CS1591) |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
+| 13 | **The test suite runs entirely offline.** No test reaches the network or requires credentials, and no live API key is ever placed in CI. Wire fidelity comes from committed fixtures, not from calling the service. | CI has no credential secret configured, and asserts no workflow references one |
 | 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
 
 ---
@@ -48,6 +49,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D8 | Packages: `MassiveDotNet` (core) · `.Rest` · `.WebSocket` · `.FlatFiles` · `.Extensions.DependencyInjection`. | REST consumers never pull streaming or S3 code; core stays dependency-free (rules 7–8). |
 | D9 | Vendor datasets (Benzinga, ETF Global, Fed, TMX, Fable — 28 operations) ship in `.Rest` like any other endpoint. | They are ordinary REST operations; entitlement is the server's concern, not the SDK's. |
 | D10 | `specs/openapi.json` is normalized (sorted keys, 2-space indent) before committing. | Upstream key ordering is unstable; without this every nightly refresh is a meaningless 20k-line diff. |
+| D13 | Tests never call the live API, and no Massive key is stored as a CI secret. Real responses are captured locally by a developer holding their own key, then committed as fixtures. | A key in CI leaks through build logs, consumes account quota on every push, makes the build depend on a third party's uptime, and cannot work for pull requests from forks — where secrets are deliberately withheld. Committed fixtures give the same wire fidelity, are reviewable in a diff, make failures reproducible years later, and keep the suite fast and deterministic. The cost is that fixtures drift from the live API; the nightly spec sync (D10) is what catches that, not a live test. |
 | D12 | NodaTime replaces BCL date and time types throughout the public API, and is the single external dependency permitted in core. | Market data is unforgiving about temporal ambiguity: bars are Eastern Time, tick timestamps are epoch nanoseconds, corporate actions are calendar dates with no time or zone, and sessions cross DST boundaries. `DateTime` conflates all of these behind one type whose meaning depends on an easily-lost `Kind` flag, and `DateOnly` cannot express a zone at all. NodaTime makes the distinction between an instant, a local date, and a zoned time unrepresentable-if-wrong rather than merely documented. Verified Native AOT clean at 3.3.3, including TZDB zone resolution, so it costs nothing against rules 3 and 4. The rule is strict rather than public-surface-only because a BCL type in a private field or local is the seed of the next one in a signature; the only sanctioned contact is an inline conversion at a BCL call site, which names no type. |
 | D11 | The endpoint catalog served by the Massive MCP server is a **build-time** input to the map only. It is never a runtime dependency, and never a test fixture source for wire formats. | Its `call_api` flattens JSON into DataFrames, so it cannot represent the wire envelope. Its docs *do* carry asset-class ownership and comparator groupings the OpenAPI description lacks. |
 
@@ -209,6 +211,45 @@ cannot pass merely because its stripping ate the input.
 
 ---
 
+## Testing
+
+Every test runs offline. There is no network access, no API key, and no dependence on Massive being
+up. This is rule 13, and it is not negotiable for convenience.
+
+### Where fixtures come from
+
+In order of preference:
+
+1. **Massive's published sample responses.** Every endpoint's documentation carries one. These are
+   the canonical shape and should be the default fixture for a new endpoint.
+2. **Captured live responses.** When a sample is absent, incomplete, or suspected of being out of
+   date, a developer with their own key captures the real response locally, reviews it, and commits
+   it as a fixture. The key stays in a gitignored `.env` and never leaves the machine.
+3. **Hand-written JSON.** Only for cases the service cannot easily be made to produce — a malformed
+   body, a truncated stream, an error envelope for a status code you cannot trigger on demand.
+
+A captured fixture is reviewed before committing: confirm it carries no account identifiers, and
+that no URL in it embeds a key. Bearer authentication keeps keys out of request URLs (D2), which is
+one reason it is the default.
+
+### What this does and does not buy
+
+Committed fixtures give reproducible failures, reviewable diffs, a fast suite, and tests that work
+on a fork's pull request where secrets are deliberately unavailable.
+
+What they do not do is notice when Massive changes a response shape. That is the job of the nightly
+spec sync (D10), which diffs the OpenAPI description and opens a pull request. If a shape changes
+without the description changing, the endpoint's own fixture needs recapturing — treat a surprising
+production report as a signal to do that.
+
+### If you want to hit the live API
+
+Do it from a scratch project or the Massive MCP server, not from the test suite. Nothing in
+`tests/` may require a key, because a test that silently skips when a key is absent is a test that
+passes for the wrong reason in CI, which is worse than not having it.
+
+---
+
 ## Conventions
 
 - **Naming**: groups are `{Asset}Group`; methods are verb-first and `Async`-suffixed
@@ -222,5 +263,5 @@ cannot pass merely because its stripping ate the input.
 - **Comments**: explain *why*, not *what*. The generator's output is read by humans in review, so
   emitted comments are held to the same standard as hand-written ones.
 - **Tests**: prefer driving the real public API through a stubbed `HttpMessageHandler` over testing
-  internals. Fixtures come from Massive's published sample responses, not from invented JSON.
+  internals. See [Testing](#testing) for where fixtures come from and why the suite runs offline.
 - **Commits**: do not commit or push unless asked.

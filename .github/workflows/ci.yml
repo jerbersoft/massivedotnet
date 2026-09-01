@@ -88,6 +88,23 @@ jobs:
             exit 1
           fi
 
+  no-live-credentials:
+    name: no live credentials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Constitution rule 13: the suite runs offline. A workflow referencing an API key secret
+      # means a test somewhere expects to call the live service, which is what this forbids.
+      - name: No workflow references a Massive credential
+        run: |
+          offenders=$(grep -rniE 'secrets\.[A-Za-z_]*(MASSIVE|POLYGON)[A-Za-z_]*' .github/workflows/ || true)
+          if [ -n "$offenders" ]; then
+            echo "::error::Workflows must not reference a Massive API key. Tests run offline against committed fixtures."
+            echo "$offenders"
+            exit 1
+          fi
+
   native-aot:
     name: native aot
     runs-on: ubuntu-latest
