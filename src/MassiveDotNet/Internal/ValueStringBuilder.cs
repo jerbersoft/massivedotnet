@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 
 namespace MassiveDotNet.Internal;
@@ -75,6 +76,24 @@ internal ref struct ValueStringBuilder
             Grow(24);
             bool ok = value.TryFormat(_chars[_position..], out written, provider: null);
             Debug.Assert(ok, "Formatting a long into a freshly grown buffer should always succeed.");
+        }
+
+        _position += written;
+    }
+
+    /// <summary>Appends the shortest round-trippable invariant representation of a double.</summary>
+    /// <param name="value">The value to append.</param>
+    /// <remarks>
+    /// The provider is named explicitly: a query string is not user-facing text, and
+    /// <c>0,5</c> under a comma-decimal culture would be a silent wrong request.
+    /// </remarks>
+    public void Append(double value)
+    {
+        if (!value.TryFormat(_chars[_position..], out int written, format: default, provider: CultureInfo.InvariantCulture))
+        {
+            Grow(32);
+            bool ok = value.TryFormat(_chars[_position..], out written, format: default, provider: CultureInfo.InvariantCulture);
+            Debug.Assert(ok, "Formatting a double into a freshly grown buffer should always succeed.");
         }
 
         _position += written;
