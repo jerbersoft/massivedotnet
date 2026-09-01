@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -16,5 +17,5 @@ public readonly partial record struct Agg
     /// only when read, so a large series costs nothing until the value is actually wanted.
     /// </remarks>
     [JsonIgnore]
-    public DateTimeOffset Timestamp => DateTimeOffset.FromUnixTimeMilliseconds(TimestampMilliseconds);
+    public Instant Timestamp => Instant.FromUnixTimeMilliseconds(TimestampMilliseconds);
 }

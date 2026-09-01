@@ -22,11 +22,12 @@ and does not belong in this section.
 | 4 | Shipped libraries set `IsAotCompatible` and `IsTrimmable`. | `src/Directory.Build.props`, verified by AOT publish |
 | 5 | Generated files (`*.g.cs`) are never hand-edited. Hand-written members go in the matching `partial`. | CI regenerates and fails on any diff |
 | 6 | The generator is deterministic: same inputs produce byte-identical output. | CI idempotency check |
-| 7 | `MassiveDotNet` (core) has **zero** external package references. | CI assertion on the restore graph |
+| 7 | `MassiveDotNet` (core) references **no** external package other than NodaTime (rule 12). Every other project stays dependency-free unless listed here. | CI assertion on the restore graph |
 | 8 | `Microsoft.Extensions.*` appears only in `MassiveDotNet.Extensions.DependencyInjection`. | CI assertion on the restore graph |
 | 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project. | CI build |
 | 10 | Every public member carries XML documentation. | `GenerateDocumentationFile` + warnings-as-errors (CS1591) |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
+| 12 | **NodaTime is the SDK's temporal vocabulary.** Every date, time, instant, and duration in the public API uses `Instant`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, or `Duration`. BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, and `TimeSpan` are permitted **only** in non-public code, and only where a BCL API signature forces them (for example `HttpClient.Timeout` or the `Retry-After` header). Convert at that boundary, never above it. | `TemporalTypeTests` — build fails |
 
 ---
 
@@ -47,6 +48,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D8 | Packages: `MassiveDotNet` (core) · `.Rest` · `.WebSocket` · `.FlatFiles` · `.Extensions.DependencyInjection`. | REST consumers never pull streaming or S3 code; core stays dependency-free (rules 7–8). |
 | D9 | Vendor datasets (Benzinga, ETF Global, Fed, TMX, Fable — 28 operations) ship in `.Rest` like any other endpoint. | They are ordinary REST operations; entitlement is the server's concern, not the SDK's. |
 | D10 | `specs/openapi.json` is normalized (sorted keys, 2-space indent) before committing. | Upstream key ordering is unstable; without this every nightly refresh is a meaningless 20k-line diff. |
+| D12 | NodaTime replaces BCL date and time types throughout the public API, and is the single external dependency permitted in core. | Market data is unforgiving about temporal ambiguity: bars are Eastern Time, tick timestamps are epoch nanoseconds, corporate actions are calendar dates with no time or zone, and sessions cross DST boundaries. `DateTime` conflates all of these behind one type whose meaning depends on an easily-lost `Kind` flag, and `DateOnly` cannot express a zone at all. NodaTime makes the distinction between an instant, a local date, and a zoned time unrepresentable-if-wrong rather than merely documented. Verified Native AOT clean at 3.3.3, including TZDB zone resolution, so it costs nothing against rules 3 and 4. |
 | D11 | The endpoint catalog served by the Massive MCP server is a **build-time** input to the map only. It is never a runtime dependency, and never a test fixture source for wire formats. | Its `call_api` flattens JSON into DataFrames, so it cannot represent the wire envelope. Its docs *do* carry asset-class ownership and comparator groupings the OpenAPI description lacks. |
 
 ---
@@ -108,6 +110,10 @@ dotnet publish samples/MassiveDotNet.AotSmokeTest -r <rid> -c Release          #
   always defaulted.
 - **Nullability**: enabled everywhere. Optional query parameters are nullable and omitted from the
   request when `null` — never sent as empty.
+- **Temporal**: an *instant* is `Instant`; a calendar date with no time or zone is `LocalDate`; a
+  wall-clock time in a named zone is `ZonedDateTime`; an elapsed amount is `Duration`. Store raw
+  epoch values on wire DTOs and expose the NodaTime type as a computed property (D5), so conversion
+  is paid only when read.
 - **Allocation**: build request URIs through `RequestUriBuilder`, never `UriBuilder` or a
   `Dictionary`. Deserialize from the response stream; never buffer a body into a string first.
 - **Comments**: explain *why*, not *what*. The generator's output is read by humans in review, so

@@ -1,6 +1,7 @@
 using System.Net;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
+using NodaTime;
 using Xunit;
 
 namespace MassiveDotNet.Rest.Tests;
@@ -29,8 +30,8 @@ public sealed class StocksAggregatesTests
                 "AAPL",
                 1,
                 AggregateTimespan.Day,
-                new DateOnly(2020, 1, 1),
-                new DateOnly(2020, 1, 10),
+                new LocalDate(2020, 1, 1),
+                new LocalDate(2020, 1, 10),
                 cancellationToken: Ct);
         }
 
@@ -179,7 +180,7 @@ public sealed class StocksAggregatesTests
         }
 
         Assert.Equal(
-            DateTimeOffset.FromUnixTimeMilliseconds(1577941200000),
+            Instant.FromUnixTimeMilliseconds(1577941200000),
             bars[0].Timestamp);
     }
 
@@ -256,7 +257,7 @@ public sealed class StocksAggregatesTests
                 client.Stocks.ListAggregatesAsync("AAPL", 1, AggregateTimespan.Day, "2020-01-01", "2020-01-10", cancellationToken: Ct));
         }
 
-        Assert.Equal(TimeSpan.FromSeconds(30), exception.RetryAfter);
+        Assert.Equal(Duration.FromSeconds(30), exception.RetryAfter);
     }
 
     [Fact]

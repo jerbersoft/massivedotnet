@@ -1,4 +1,6 @@
 using System.Globalization;
+using NodaTime;
+using NodaTime.Text;
 
 namespace MassiveDotNet;
 
@@ -7,7 +9,7 @@ namespace MassiveDotNet;
 /// YYYY-MM-DD or a millisecond timestamp".
 /// </summary>
 /// <remarks>
-/// Implicit conversions exist from <see cref="DateOnly"/>, <see cref="DateTimeOffset"/>,
+/// Implicit conversions exist from <see cref="LocalDate"/>, <see cref="Instant"/>,
 /// <see cref="long"/>, and <see cref="string"/>, so callers can pass whichever form they
 /// already have without converting by hand.
 /// </remarks>
@@ -31,13 +33,13 @@ public readonly struct DateOrTimestamp : IEquatable<DateOrTimestamp>
     /// <summary>Creates a value from a calendar date, rendered as <c>YYYY-MM-DD</c>.</summary>
     /// <param name="value">The calendar date.</param>
     /// <returns>The wrapped value.</returns>
-    public static DateOrTimestamp FromDate(DateOnly value) =>
-        new(value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+    public static DateOrTimestamp FromDate(LocalDate value) =>
+        new(LocalDatePattern.Iso.Format(value));
 
     /// <summary>Creates a value from an instant, rendered as Unix milliseconds.</summary>
     /// <param name="value">The instant.</param>
     /// <returns>The wrapped value.</returns>
-    public static DateOrTimestamp FromInstant(DateTimeOffset value) =>
+    public static DateOrTimestamp FromInstant(Instant value) =>
         new(value.ToUnixTimeMilliseconds());
 
     /// <summary>Creates a value from a Unix millisecond timestamp.</summary>
@@ -58,11 +60,11 @@ public readonly struct DateOrTimestamp : IEquatable<DateOrTimestamp>
 
     /// <summary>Converts a calendar date.</summary>
     /// <param name="value">The calendar date.</param>
-    public static implicit operator DateOrTimestamp(DateOnly value) => FromDate(value);
+    public static implicit operator DateOrTimestamp(LocalDate value) => FromDate(value);
 
     /// <summary>Converts an instant.</summary>
     /// <param name="value">The instant.</param>
-    public static implicit operator DateOrTimestamp(DateTimeOffset value) => FromInstant(value);
+    public static implicit operator DateOrTimestamp(Instant value) => FromInstant(value);
 
     /// <summary>Converts a Unix millisecond timestamp.</summary>
     /// <param name="value">Milliseconds since the Unix epoch.</param>

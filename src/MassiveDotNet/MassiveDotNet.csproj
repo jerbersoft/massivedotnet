@@ -6,4 +6,9 @@
     <Description>Core primitives shared by the MassiveDotNet SDK: transport, authentication, error handling, and allocation-conscious serialization helpers for the Massive (formerly Polygon.io) market data platform.</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The only external dependency permitted in core. See CLAUDE.md rules 7 and 12. -->
+    <PackageReference Include="NodaTime" />
+  </ItemGroup>
+
 </Project>
