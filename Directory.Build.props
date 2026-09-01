@@ -1,0 +1,27 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Repository">
+    <Authors>Herbert Sabanal</Authors>
+    <Company>MassiveDotNet</Company>
+    <Copyright>Copyright (c) 2026 Herbert Sabanal</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/herbertsabanal/massivedotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/herbertsabanal/massivedotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>massive;polygon;market-data;stocks;options;crypto;forex;futures;finance</PackageTags>
+  </PropertyGroup>
+
+</Project>
