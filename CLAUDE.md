@@ -27,7 +27,7 @@ and does not belong in this section.
 | 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project. | CI build |
 | 10 | Every public member carries XML documentation. | `GenerateDocumentationFile` + warnings-as-errors (CS1591) |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
-| 13 | **The test suite runs entirely offline.** No test reaches the network or requires credentials, and no live API key is ever placed in CI. Wire fidelity comes from committed fixtures, not from calling the service. | CI has no credential secret configured, and asserts no workflow references one |
+| 13 | **CI runs entirely offline.** No live API key is ever placed in CI, and no test that calls the service executes there. Integration tests against the live API are committed and run locally; CI excludes them by category but still compiles them, so public API drift breaks the build. | CI holds no credential secret, asserts no workflow references one, and asserts the exclusion actually selected no live test |
 | 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
 
 ---
@@ -49,7 +49,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D8 | Packages: `MassiveDotNet` (core) · `.Rest` · `.WebSocket` · `.FlatFiles` · `.Extensions.DependencyInjection`. | REST consumers never pull streaming or S3 code; core stays dependency-free (rules 7–8). |
 | D9 | Vendor datasets (Benzinga, ETF Global, Fed, TMX, Fable — 28 operations) ship in `.Rest` like any other endpoint. | They are ordinary REST operations; entitlement is the server's concern, not the SDK's. |
 | D10 | `specs/openapi.json` is normalized (sorted keys, 2-space indent) before committing. | Upstream key ordering is unstable; without this every nightly refresh is a meaningless 20k-line diff. |
-| D13 | Tests never call the live API, and no Massive key is stored as a CI secret. Real responses are captured locally by a developer holding their own key, then committed as fixtures. | A key in CI leaks through build logs, consumes account quota on every push, makes the build depend on a third party's uptime, and cannot work for pull requests from forks — where secrets are deliberately withheld. Committed fixtures give the same wire fidelity, are reviewable in a diff, make failures reproducible years later, and keep the suite fast and deterministic. The cost is that fixtures drift from the live API; the nightly spec sync (D10) is what catches that, not a live test. |
+| D13 | No Massive key is stored as a CI secret, and no test that calls the live API executes in CI. Live integration tests are committed and run locally, excluded from the CI run by category while still compiling there. | A key in CI leaks through build logs, consumes account quota on every push, makes the build depend on a third party's uptime, and cannot work for pull requests from forks — where secrets are deliberately withheld. Committed fixtures give the same wire fidelity, are reviewable in a diff, make failures reproducible years later, and keep the suite fast and deterministic. Fixtures do drift from the live API, which is what the locally run live tier and the nightly spec sync (D10) exist to catch. Excluding that tier rather than skipping it inside the CI run matters: a skip reports into the same summary and reads as green, whereas a project CI never invokes makes no claim at all. |
 | D12 | NodaTime replaces BCL date and time types throughout the public API, and is the single external dependency permitted in core. | Market data is unforgiving about temporal ambiguity: bars are Eastern Time, tick timestamps are epoch nanoseconds, corporate actions are calendar dates with no time or zone, and sessions cross DST boundaries. `DateTime` conflates all of these behind one type whose meaning depends on an easily-lost `Kind` flag, and `DateOnly` cannot express a zone at all. NodaTime makes the distinction between an instant, a local date, and a zoned time unrepresentable-if-wrong rather than merely documented. Verified Native AOT clean at 3.3.3, including TZDB zone resolution, so it costs nothing against rules 3 and 4. The rule is strict rather than public-surface-only because a BCL type in a private field or local is the seed of the next one in a signature; the only sanctioned contact is an inline conversion at a BCL call site, which names no type. |
 | D11 | The endpoint catalog served by the Massive MCP server is a **build-time** input to the map only. It is never a runtime dependency, and never a test fixture source for wire formats. | Its `call_api` flattens JSON into DataFrames, so it cannot represent the wire envelope. Its docs *do* carry asset-class ownership and comparator groupings the OpenAPI description lacks. |
 
@@ -213,8 +213,28 @@ cannot pass merely because its stripping ate the input.
 
 ## Testing
 
-Every test runs offline. There is no network access, no API key, and no dependence on Massive being
-up. This is rule 13, and it is not negotiable for convenience.
+The suite has two tiers. **CI runs only the offline tier**, which is rule 13 and is not negotiable
+for convenience.
+
+| Tier | Project | Runs in CI | Needs a key |
+|------|---------|------------|-------------|
+| Offline | `MassiveDotNet.Rest.Tests` | yes | no |
+| Live | `MassiveDotNet.IntegrationTests` | **no** — compiled only | yes |
+
+```bash
+dotnet test MassiveDotNet.slnx --filter "Category!=Integration"   # what CI runs
+dotnet test MassiveDotNet.slnx --filter "Category=Integration"    # live, local only
+```
+
+The live project stays in the solution deliberately. It is never executed by CI, but it is still
+**compiled** there, so a change to the public API breaks the build rather than rotting unnoticed
+until someone next runs it.
+
+Excluded, not skipped. A test that skips inside the CI run still reports into the same summary and
+reads as green; a project CI never invokes makes no claim at all. Locally the same tests *do* skip
+when no key is present, with a reason naming the variable to set — that is honest feedback to a
+person reading the output, not a false signal in an automated gate. CI additionally holds no key,
+so a live test could not pass there even if the filter were removed.
 
 ### Where fixtures come from
 
@@ -242,11 +262,26 @@ spec sync (D10), which diffs the OpenAPI description and opens a pull request. I
 without the description changing, the endpoint's own fixture needs recapturing — treat a surprising
 production report as a signal to do that.
 
-### If you want to hit the live API
+### What the live tier is for
 
-Do it from a scratch project or the Massive MCP server, not from the test suite. Nothing in
-`tests/` may require a key, because a test that silently skips when a key is absent is a test that
-passes for the wrong reason in CI, which is worse than not having it.
+Only what fixtures structurally cannot verify:
+
+- **Authentication actually works** against the real service, rather than against a stub that was
+  told to accept it.
+- **The wire format still matches.** A fixture asserts the SDK agrees with a recording of the past;
+  a live call asserts it agrees with the service today.
+- **Error envelopes are real.** The OpenAPI description declares every error response with an empty
+  schema, so `MassiveErrorPayload` is an informed guess. `ErrorHandlingLiveTests` is what confirms
+  the guess, and is the highest-value test in the suite.
+- **Assumptions about behaviour the spec does not state**, such as whether an unknown ticker yields
+  an empty result or an error status.
+
+Do not port assertions here that a fixture already covers. Every live test costs quota, wall time,
+and a dependency on Massive being up.
+
+Run the live tier after finishing an endpoint group, and before tagging a release. If it reveals
+that a response shape has moved, recapture that endpoint's fixture (see #27) so the offline tier
+learns what the live tier found.
 
 ---
 

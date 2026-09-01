@@ -34,8 +34,24 @@ jobs:
         run: dotnet build MassiveDotNet.slnx --no-restore -c Release
 
       # Constitution rule 1: endpoint coverage is a contract test, not a promise.
-      - name: Test
-        run: dotnet test MassiveDotNet.slnx --no-build -c Release --verbosity normal
+      #
+      # Rule 13: integration tests calling the live API are excluded here. They still COMPILED in
+      # the build step above, which is what catches public API drift. CI also holds no API key
+      # (see the no-live-credentials job), so they could not pass here even without this filter.
+      - name: Test (offline only)
+        run: |
+          dotnet test MassiveDotNet.slnx --no-build -c Release --verbosity normal \
+            --filter "Category!=Integration"
+
+      # A live test that ran here would either fail or, worse, skip and read as green. Assert the
+      # exclusion actually took effect rather than trusting the filter string.
+      - name: Assert no integration test executed
+        run: |
+          if dotnet test MassiveDotNet.slnx --no-build -c Release --filter "Category!=Integration" \
+               --list-tests 2>/dev/null | grep -qi 'LiveTests'; then
+            echo "::error::An integration test is not excluded by the Category!=Integration filter."
+            exit 1
+          fi
 
   generated-code:
     name: generated code is current
