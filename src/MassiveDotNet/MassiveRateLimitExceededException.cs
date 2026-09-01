@@ -23,7 +23,13 @@ public sealed class MassiveRateLimitExceededException : MassiveApiException
 
     /// <summary>
     /// How long the server asked the caller to wait before retrying, when it supplied a
-    /// <c>Retry-After</c> header.
+    /// <c>Retry-After</c> header carrying a delta-seconds value.
     /// </summary>
+    /// <remarks>
+    /// <see langword="null"/> when the header was absent, or when it carried an HTTP-date rather
+    /// than a delta. The date form is not converted, because doing so would mean trusting the
+    /// local clock against the server's; treat <see langword="null"/> as "no hint given" and fall
+    /// back to your own backoff policy.
+    /// </remarks>
     public Duration? RetryAfter { get; }
 }
