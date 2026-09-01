@@ -59,6 +59,42 @@ await foreach (Agg bar in client.Stocks.EnumerateAggregatesAsync(
     Console.WriteLine(Describe(bar));
 }
 
+// Filters are rooted for the same reason as the traversal above. RequestUriBuilder.AppendQuery<T>
+// dispatches on typeof(T) through Unsafe.As, and the LocalDate converter is reached only through
+// the generated context: each is a generic instantiation a clean publish says nothing about
+// unless something here calls it. This call covers string, LocalDate, and long elements, a range,
+// a set, and a date on the way back in.
+Console.WriteLine("\ndividends, filtered:");
+
+MassivePage<Dividend> dividends = await client.Stocks.ListDividendsAsync(
+    ticker: "AAPL",
+    exDividendDate: RangeFilter.Between(new LocalDate(2025, 1, 1), new LocalDate(2025, 12, 31)),
+    frequency: RangeFilter.Gte(4L),
+    distributionType: SetFilter.AnyOf("recurring", "special"));
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (Dividend dividend in dividends.Results)
+{
+    Console.WriteLine($"  {dividend.Ticker}  ex {dividend.ExDividendDate}  {dividend.CashAmount:F2} {dividend.Currency}");
+}
+
+const string ExpectedFilterQuery =
+    "?ticker=AAPL&ex_dividend_date.gte=2025-01-01&ex_dividend_date.lte=2025-12-31"
+    + "&frequency.gte=4&distribution_type.any_of=recurring,special";
+
+if (handler.LastRequestUri?.Query != ExpectedFilterQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the filter query {ExpectedFilterQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (dividends.Results.Length != 1 || dividends.Results[0].ExDividendDate != new LocalDate(2025, 8, 11))
+{
+    Console.Error.WriteLine("FAIL: expected one dividend with ex-dividend date 2025-08-11.");
+    return 1;
+}
+
 Console.WriteLine($"\nrequests: {handler.Requests}");
 
 if (bars.Length != 2 || !page.HasMore)
@@ -67,11 +103,11 @@ if (bars.Length != 2 || !page.HasMore)
     return 1;
 }
 
-// Two pages of the enumeration plus the single-page call above.
-if (enumerated != 3 || handler.Requests != 3)
+// Two pages of the enumeration, the single-page aggregates call, and the dividends call.
+if (enumerated != 3 || handler.Requests != 4)
 {
     Console.Error.WriteLine(
-        $"FAIL: expected 3 enumerated bars over 3 requests; got {enumerated} over {handler.Requests}.");
+        $"FAIL: expected 3 enumerated bars over 4 requests; got {enumerated} over {handler.Requests}.");
     return 1;
 }
 
@@ -114,6 +150,29 @@ internal sealed class StubHandler : HttpMessageHandler
         }
         """;
 
+    private const string Dividends = """
+        {
+          "request_id": "1",
+          "results": [
+            {
+              "cash_amount": 0.26,
+              "currency": "USD",
+              "declaration_date": "2025-07-31",
+              "distribution_type": "recurring",
+              "ex_dividend_date": "2025-08-11",
+              "frequency": 4,
+              "historical_adjustment_factor": 0.997899,
+              "id": "Ed2c9da60abda1e3f0e99a43f6465863c137b671e1f5cd3f833d1fcb4f4eb27fe",
+              "pay_date": "2025-08-14",
+              "record_date": "2025-08-11",
+              "split_adjusted_cash_amount": 0.26,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     public Uri? LastRequestUri { get; private set; }
 
     public int Requests { get; private set; }
@@ -125,13 +184,23 @@ internal sealed class StubHandler : HttpMessageHandler
         LastRequestUri = request.RequestUri;
         Requests++;
 
-        // Keyed on the cursor rather than on a request counter, so the single-page call and the
-        // traversal below it stay independent of the order they happen to run in.
-        bool cursored = request.RequestUri?.Query.Contains("cursor=", StringComparison.Ordinal) == true;
+        string body;
+
+        if (request.RequestUri?.AbsolutePath == "/stocks/v1/dividends")
+        {
+            body = Dividends;
+        }
+        else
+        {
+            // Keyed on the cursor rather than on a request counter, so the single-page call and the
+            // traversal stay independent of the order they happen to run in.
+            bool cursored = request.RequestUri?.Query.Contains("cursor=", StringComparison.Ordinal) == true;
+            body = cursored ? FinalPage : FirstPage;
+        }
 
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent(cursored ? FinalPage : FirstPage, Encoding.UTF8, "application/json"),
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
         });
     }
 }

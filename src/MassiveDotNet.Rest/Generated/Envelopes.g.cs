@@ -54,3 +54,23 @@ internal sealed class GetStocksAggregatesResponse : IPagedEnvelope<Agg>
     [JsonPropertyName("next_url")]
     public string? NextUrl { get; init; }
 }
+
+/// <summary>The response envelope returned by /stocks/v1/dividends.</summary>
+internal sealed class GetStocksV1DividendsResponse : IPagedEnvelope<Dividend>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public Dividend[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

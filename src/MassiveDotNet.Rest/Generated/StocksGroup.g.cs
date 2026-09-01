@@ -13,6 +13,7 @@
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
 using MassiveDotNet.Rest.Serialization;
+using NodaTime;
 
 namespace MassiveDotNet.Rest;
 
@@ -163,6 +164,159 @@ public readonly partial struct StocksGroup
         // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
         // reports the same thing rather than promising a page that is never fetched.
         return new MassivePage<Agg>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves cash dividend distributions for US stocks, with declaration, ex-dividend, record, and
+    /// pay dates, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListDividendsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Pass a plain value for equality, a <see cref="RangeFilter"/> factory for a
+    /// range, or <see cref="SetFilter"/> for a set of values.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Stock symbol for the company issuing the dividend. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="exDividendDate">
+    /// Date when the stock begins trading without the dividend value Value must be formatted
+    /// 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="frequency">
+    /// How many times per year this dividend is expected to occur. A value of 0 means the distribution
+    /// is non-recurring or irregular (e.g., special, supplemental, or a one-off dividend). Other
+    /// possible values include 1 (annual), 2 (semi-annual), 3 (trimester), 4 (quarterly), 12 (monthly),
+    /// 24 (bi-monthly), 52 (weekly), 104 (bi-weekly), and 365 (daily) depending on the issuer's
+    /// declared or inferred payout cadence. Value must be an integer. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="distributionType">
+    /// Classification describing the nature of this dividend's recurrence pattern: recurring (paid on a
+    /// regular schedule), special (one-time or commemorative), supplemental (extra beyond the regular
+    /// schedule), irregular (unpredictable or non-recurring), unknown (cannot be classified from
+    /// available data). Accepts an exact value or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Dividend> EnumerateDividendsAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<LocalDate>? exDividendDate = null,
+        RangeFilter<long>? frequency = null,
+        SetFilter<string>? distributionType = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDividendsUri(ticker, exDividendDate, frequency, distributionType, limit, sort);
+        return _transport.EnumerateAsync<GetStocksV1DividendsResponse, Dividend>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1DividendsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves cash dividend distributions for US stocks, with declaration, ex-dividend, record, and
+    /// pay dates.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateDividendsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality, a <see cref="RangeFilter"/> factory for a range, or <see
+    /// cref="SetFilter"/> for a set of values.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Stock symbol for the company issuing the dividend. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="exDividendDate">
+    /// Date when the stock begins trading without the dividend value Value must be formatted
+    /// 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="frequency">
+    /// How many times per year this dividend is expected to occur. A value of 0 means the distribution
+    /// is non-recurring or irregular (e.g., special, supplemental, or a one-off dividend). Other
+    /// possible values include 1 (annual), 2 (semi-annual), 3 (trimester), 4 (quarterly), 12 (monthly),
+    /// 24 (bi-monthly), 52 (weekly), 104 (bi-weekly), and 365 (daily) depending on the issuer's
+    /// declared or inferred payout cadence. Value must be an integer. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="distributionType">
+    /// Classification describing the nature of this dividend's recurrence pattern: recurring (paid on a
+    /// regular schedule), special (one-time or commemorative), supplemental (extra beyond the regular
+    /// schedule), irregular (unpredictable or non-recurring), unknown (cannot be classified from
+    /// available data). Accepts an exact value or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Dividend>> ListDividendsAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<LocalDate>? exDividendDate = null,
+        RangeFilter<long>? frequency = null,
+        SetFilter<string>? distributionType = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDividendsUri(ticker, exDividendDate, frequency, distributionType, limit, sort);
+        return SendListDividendsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListDividendsUri(
+        Filter<string>? ticker,
+        RangeFilter<LocalDate>? exDividendDate,
+        RangeFilter<long>? frequency,
+        SetFilter<string>? distributionType,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/dividends");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("ex_dividend_date", exDividendDate);
+        builder.AppendQuery("frequency", frequency);
+        builder.AppendQuery("distribution_type", distributionType);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Dividend>> SendListDividendsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1DividendsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1DividendsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Dividend>(
             response?.Results,
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);

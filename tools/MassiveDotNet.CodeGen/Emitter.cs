@@ -54,10 +54,28 @@ internal sealed class Emitter(Spec spec, Map map)
         List<SpecProperty> properties = [.. Spec.Properties(schema)
             .OrderBy(p => declared.IndexOf(p.Name) is var i and >= 0 ? i : int.MaxValue)];
 
+        List<(SpecProperty Property, string Name, string Type, string? Summary)> members = [.. properties.Select(property =>
+        {
+            model.Properties.TryGetValue(property.Name, out MapProperty? mapped);
+
+            return (
+                property,
+                mapped?.Name ?? Naming.Pascal(property.Name),
+                mapped?.Type ?? DefaultPropertyType(property),
+                mapped?.Summary ?? Prose.Clean(property.Description));
+        })];
+
         CodeWriter writer = new();
         writer.Line(Header);
         writer.Line();
         writer.Line("using System.Text.Json.Serialization;");
+
+        // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
+        if (members.Exists(m => NamesNodaTime(m.Type)))
+        {
+            writer.Line("using NodaTime;");
+        }
+
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Models;");
         writer.Line();
@@ -73,11 +91,8 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             bool first = true;
 
-            foreach (SpecProperty property in properties)
+            foreach ((SpecProperty property, string name, string type, string? summary) in members)
             {
-                map.Models.First(m => m.Name == model.Name)
-                    .Properties.TryGetValue(property.Name, out MapProperty? mapped);
-
                 if (!first)
                 {
                     writer.Line();
@@ -85,12 +100,11 @@ internal sealed class Emitter(Spec spec, Map map)
 
                 first = false;
 
-                string name = mapped?.Name ?? Naming.Pascal(property.Name);
-                string type = mapped?.Type ?? DefaultPropertyType(property);
-
-                writer.Doc("summary", mapped?.Summary ?? Prose.Clean(property.Description));
+                writer.Doc("summary", summary);
                 writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
-                writer.Line($"public {type} {name} {{ get; init; }}");
+
+                string modifier = NeedsRequiredModifier(property.Required, type) ? "required " : "";
+                writer.Line($"public {modifier}{type} {name} {{ get; init; }}");
             }
         }
 
@@ -99,7 +113,22 @@ internal sealed class Emitter(Spec spec, Map map)
 
     private string EmitEnvelopes()
     {
-        bool anyPaginated = map.Endpoints.Any(e => Spec.IsPaginated(spec.Operation(e.OperationId)));
+        // Hoisted for the reason EmitModel hoists its members: the file's usings depend on the
+        // types it emits, so those have to be resolved before the first line is written.
+        List<(MapEndpoint Endpoint, SpecOperation Operation, bool Paginated, List<(SpecProperty Property, string Type)> Members)> envelopes =
+            [.. map.Endpoints.Select(endpoint =>
+            {
+                SpecOperation operation = spec.Operation(endpoint.OperationId);
+
+                List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
+                    .Select(property => (
+                        property,
+                        property.Name == endpoint.Result.Property
+                            ? $"{endpoint.Result.Model}[]?"
+                            : NullableEnvelopeType(property)))];
+
+                return (endpoint, operation, Spec.IsPaginated(operation), members);
+            })];
 
         CodeWriter writer = new();
         writer.Line(Header);
@@ -107,21 +136,26 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line("using System.Text.Json.Serialization;");
 
         // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
-        if (anyPaginated)
+        // Exists is order-independent, so rule 6 holds.
+        if (envelopes.Exists(e => e.Paginated))
         {
             writer.Line("using MassiveDotNet.Http;");
         }
 
         writer.Line("using MassiveDotNet.Rest.Models;");
+
+        // An envelope can name a NodaTime type in its own right: the open/close operations declare
+        // a format: date property at the top level of their response, which binds to LocalDate.
+        if (envelopes.Exists(e => e.Members.Exists(m => NamesNodaTime(m.Type))))
+        {
+            writer.Line("using NodaTime;");
+        }
+
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
 
-        foreach (MapEndpoint endpoint in map.Endpoints)
+        foreach ((MapEndpoint endpoint, SpecOperation operation, bool paginated, List<(SpecProperty Property, string Type)> members) in envelopes)
         {
-            SpecOperation operation = spec.Operation(endpoint.OperationId);
-            List<SpecProperty> properties = Spec.Properties(Spec.SuccessSchema(operation));
-            bool paginated = Spec.IsPaginated(operation);
-
             writer.Line();
             writer.Doc("summary", $"The response envelope returned by {operation.Path}.");
 
@@ -133,7 +167,7 @@ internal sealed class Emitter(Spec spec, Map map)
             {
                 bool first = true;
 
-                foreach (SpecProperty property in properties)
+                foreach ((SpecProperty property, string type) in members)
                 {
                     if (!first)
                     {
@@ -141,10 +175,6 @@ internal sealed class Emitter(Spec spec, Map map)
                     }
 
                     first = false;
-
-                    string type = property.Name == endpoint.Result.Property
-                        ? $"{endpoint.Result.Model}[]?"
-                        : NullableEnvelopeType(property);
 
                     writer.Doc("summary", Prose.Clean(property.Description));
                     writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
@@ -175,9 +205,20 @@ internal sealed class Emitter(Spec spec, Map map)
         CodeWriter writer = new();
         writer.Line(Header);
         writer.Line();
+        // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
+        // Any is order-independent, so rule 6 holds.
+        bool needsNodaTime = endpoints.Any(e =>
+            Arguments(e, spec.Operation(e.OperationId)).Exists(a => NamesNodaTime(a.CSharpType)));
+
         writer.Line("using MassiveDotNet.Http;");
         writer.Line("using MassiveDotNet.Rest.Models;");
         writer.Line("using MassiveDotNet.Rest.Serialization;");
+
+        if (needsNodaTime)
+        {
+            writer.Line("using NodaTime;");
+        }
+
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest;");
         writer.Line();
@@ -204,7 +245,7 @@ internal sealed class Emitter(Spec spec, Map map)
     private void EmitEndpoint(CodeWriter writer, MapEndpoint endpoint)
     {
         SpecOperation operation = spec.Operation(endpoint.OperationId);
-        List<SpecParameter> parameters = spec.Parameters(operation);
+        List<Argument> arguments = Arguments(endpoint, operation);
         bool paginated = Spec.IsPaginated(operation);
 
         // A request identifier is not universal: the futures AggregatesV1 envelope declares only
@@ -214,10 +255,6 @@ internal sealed class Emitter(Spec spec, Map map)
         bool hasRequestId = paginated
             && Spec.Properties(Spec.SuccessSchema(operation))
                 .Exists(p => Naming.Pascal(p.Name) == "RequestId");
-
-        List<Argument> arguments = [.. parameters
-            .Select(p => Argument.Create(p, endpoint.Parameters.GetValueOrDefault(p.Name)))
-            .OrderByDescending(a => a.Required)];
 
         string model = endpoint.Result.Model;
         string returnType = paginated ? $"MassivePage<{model}>" : $"{model}[]";
@@ -378,6 +415,93 @@ internal sealed class Emitter(Spec spec, Map map)
         }
     }
 
+    /// <summary>
+    /// Every parameter the endpoint's methods take, required first, otherwise in the
+    /// description's declaration order with each comparator group standing where its base
+    /// field was declared.
+    /// </summary>
+    private List<Argument> Arguments(MapEndpoint endpoint, SpecOperation operation)
+    {
+        List<ParameterSlot> slots = Spec.Slots(spec.Parameters(operation));
+        ValidateMapKeys(endpoint, slots);
+
+        return [.. slots
+            .Select(s => Argument.Create(s, endpoint.Parameters.GetValueOrDefault(s.WireName), endpoint.OperationId))
+            .OrderByDescending(a => a.Required)];
+    }
+
+    /// <summary>
+    /// A map row that names nothing the operation declares is a typo that would otherwise be
+    /// ignored without a word. Grouping adds a second way to be wrong that looks right: a row
+    /// keyed by a variant such as <c>ticker.gte</c> does nothing, because the group is keyed by
+    /// its base name.
+    /// </summary>
+    private static void ValidateMapKeys(MapEndpoint endpoint, List<ParameterSlot> slots)
+    {
+        foreach (string key in endpoint.Parameters.Keys.Order(StringComparer.Ordinal))
+        {
+            if (!slots.Exists(s => s.WireName == key))
+            {
+                throw new InvalidOperationException(
+                    $"Operation '{endpoint.OperationId}' maps parameter '{key}', which it does not declare. "
+                    + "Rows are keyed by the field's base name: comparator variants such as 'ticker.gte' "
+                    + "are grouped under 'ticker'.");
+            }
+        }
+    }
+
+    /// <summary>The NodaTime types the generator can emit, per the vocabulary table in CLAUDE.md.</summary>
+    private static readonly HashSet<string> NodaTimeTypes = new(StringComparer.Ordinal)
+    {
+        "Instant",
+        "LocalDate",
+        "LocalDateTime",
+        "ZonedDateTime",
+        "Duration",
+    };
+
+    /// <summary>Separators that split an emitted type name into the identifiers it names.</summary>
+    private static readonly char[] TypeNameSeparators = ['<', '>', ',', ' ', '?', '[', ']'];
+
+    /// <summary>Whether a C# type name needs <c>using NodaTime;</c> in the file that declares it.</summary>
+    /// <remarks>
+    /// Matches whole identifiers rather than substrings, in both directions. A generic argument
+    /// counts, so <c>RangeFilter&lt;LocalDate&gt;?</c> is caught; a type merely containing one of
+    /// these names as a substring does not, since an unused using is itself a build failure
+    /// under IDE0005.
+    /// </remarks>
+    /// <param name="type">An emitted type name, nullable annotation and generic arguments included.</param>
+    /// <returns><see langword="true"/> when the type names a NodaTime type.</returns>
+    private static bool NamesNodaTime(string type) =>
+        Array.Exists(type.Split(TypeNameSeparators, StringSplitOptions.RemoveEmptyEntries), NodaTimeTypes.Contains);
+
+    /// <summary>
+    /// Whether a schema-required property needs the C# <c>required</c> modifier to satisfy
+    /// nullable reference analysis.
+    /// </summary>
+    /// <remarks>
+    /// A required value type (<c>double</c>, <c>long</c>, <c>bool</c>, an enum, a NodaTime value
+    /// type such as <c>LocalDate</c>, or a mapped <c>struct</c> model such as <c>Agg</c>) already
+    /// has a non-null default and needs nothing. A required reference type (<c>string</c>, an
+    /// array, or another mapped <c>class</c> model) does not: the compiler-synthesized constructor
+    /// exits without assigning it, which is CS8618 under this repository's warnings-as-errors
+    /// build. The schema calling the field required is the fact being encoded -- <c>required</c>
+    /// states it honestly, rather than an initializer such as <c>= null!</c> that pretends a value
+    /// exists before one is read, or a nullable annotation that pretends the field might be absent
+    /// when the schema says it never is. Reference-ness is read from the resolved type string
+    /// alone (ends with <c>[]</c>, equals <c>string</c>, or names another non-<c>struct</c> model
+    /// in the map), so the check is order-independent and rule 6 holds.
+    /// </remarks>
+    /// <param name="required">Whether the schema declares the property required.</param>
+    /// <param name="type">The property's resolved C# type, nullable annotation included.</param>
+    /// <returns><see langword="true"/> when the property needs the <c>required</c> modifier.</returns>
+    private bool NeedsRequiredModifier(bool required, string type) =>
+        required
+        && !type.EndsWith('?')
+        && (type == "string"
+            || type.EndsWith("[]", StringComparison.Ordinal)
+            || map.Models.Exists(m => m.Name == type && m.Kind != "struct"));
+
     private static void EmitGuards(CodeWriter writer, List<Argument> arguments)
     {
         foreach (Argument argument in arguments.Where(a => a is { Required: true, CSharpType: "string" }))
@@ -437,10 +561,13 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line(Header);
         writer.Line();
         writer.Line("using System.Text.Json.Serialization;");
+        writer.Line("using MassiveDotNet.Serialization;");
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
         writer.Line();
         writer.Doc("summary", "Source-generated serialization metadata for every REST response envelope. Using a context rather than reflection keeps the SDK Native AOT compatible.");
+        writer.Doc("remarks", "Calendar dates are read by <see cref=\"LocalDateJsonConverter\"/>, registered here once so no model property needs its own attribute.", preserveMarkup: true);
+        writer.Line("[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter) })]");
 
         foreach (MapEndpoint endpoint in map.Endpoints)
         {
@@ -466,7 +593,7 @@ internal sealed class Emitter(Spec spec, Map map)
         return lines;
     }
 
-    private static string EnvelopeName(MapEndpoint endpoint) => $"{endpoint.OperationId}Response";
+    private static string EnvelopeName(MapEndpoint endpoint) => $"{Naming.Pascal(endpoint.OperationId)}Response";
 
     private static string Summary(SpecOperation operation) =>
         operation.Operation.TryGetProperty("summary", out JsonElement summary)

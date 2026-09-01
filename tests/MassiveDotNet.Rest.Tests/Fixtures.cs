@@ -41,6 +41,36 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/dividends, with one departure from the published
+    /// text: the sample shows <c>"request_id": 1</c>, a number, while the envelope schema declares
+    /// a string and every other endpoint returns one. The fixture uses the string so it matches the
+    /// schema the SDK is generated from; a numeric id would fail deserialization, which is the
+    /// sample's error rather than the service's.
+    /// </summary>
+    public const string StocksDividends = """
+        {
+          "request_id": "1",
+          "results": [
+            {
+              "cash_amount": 0.26,
+              "currency": "USD",
+              "declaration_date": "2025-07-31",
+              "distribution_type": "recurring",
+              "ex_dividend_date": "2025-08-11",
+              "frequency": 4,
+              "historical_adjustment_factor": 0.997899,
+              "id": "Ed2c9da60abda1e3f0e99a43f6465863c137b671e1f5cd3f833d1fcb4f4eb27fe",
+              "pay_date": "2025-08-14",
+              "record_date": "2025-08-11",
+              "split_adjusted_cash_amount": 0.26,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An error body in the shape Massive returns for an unauthorized request.</summary>
     public const string Unauthorized = """
         {
