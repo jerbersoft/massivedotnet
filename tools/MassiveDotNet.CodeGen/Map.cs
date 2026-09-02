@@ -2,7 +2,8 @@ using System.Text.Json;
 
 namespace MassiveDotNet.CodeGen;
 
-internal sealed record MapProperty(string? Name, string? Type, string? Summary);
+/// <summary>A property row: a .NET name, and either a verbatim type or a model the schema binds to (D-N2).</summary>
+internal sealed record MapProperty(string? Name, string? Type, string? Model, string? Summary);
 
 internal sealed record MapModel(
     string Name,
@@ -37,10 +38,13 @@ internal sealed class Map
 
     public required List<MapEndpoint> Endpoints { get; init; }
 
-    public static Map Load(string path)
+    public static Map Load(string path) => Parse(File.ReadAllText(path));
+
+    /// <summary>Parses a map document. The generator loads from disk; tests hand in fragments.</summary>
+    public static Map Parse(string json)
     {
         using JsonDocument document = JsonDocument.Parse(
-            File.ReadAllBytes(path),
+            json,
             new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
 
         JsonElement root = document.RootElement;
@@ -64,6 +68,7 @@ internal sealed class Map
                     properties[property.Name] = new MapProperty(
                         String(property.Value, "name"),
                         String(property.Value, "type"),
+                        String(property.Value, "model"),
                         String(property.Value, "summary"));
                 }
             }

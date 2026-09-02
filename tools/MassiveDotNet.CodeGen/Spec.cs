@@ -80,6 +80,25 @@ internal sealed record ComparatorGroup(string BaseName, IReadOnlySet<string> Suf
 /// <param name="Group">The comparator group, or <see langword="null"/> for a plain parameter.</param>
 internal sealed record ParameterSlot(string WireName, SpecParameter Parameter, ComparatorGroup? Group);
 
+/// <summary>What a schema node is, as far as binding is concerned (D-N3, D-N5).</summary>
+internal enum SchemaShape
+{
+    /// <summary>A string, number, integer, or boolean, or a node with no type, which defaults to string.</summary>
+    Scalar,
+
+    /// <summary>An object, whether or not it declares properties.</summary>
+    Object,
+
+    /// <summary>An array of scalars, or an array with no item schema.</summary>
+    Array,
+
+    /// <summary>An array whose items are objects.</summary>
+    ArrayOfObjects,
+
+    /// <summary>An array whose items are arrays. None exists in the description; refused if one arrives.</summary>
+    ArrayOfArrays,
+}
+
 /// <summary>Reads the OpenAPI description and resolves its composed, anonymous schemas.</summary>
 internal sealed class Spec
 {
@@ -88,8 +107,16 @@ internal sealed class Spec
     private readonly JsonElement _componentParameters;
 
     public Spec(string path)
+        : this(JsonDocument.Parse(File.ReadAllBytes(path)))
     {
-        _document = JsonDocument.Parse(File.ReadAllBytes(path));
+    }
+
+    /// <summary>Parses a description. The generator loads from disk; tests hand in fragments.</summary>
+    public static Spec Parse(string json) => new(JsonDocument.Parse(json));
+
+    private Spec(JsonDocument document)
+    {
+        _document = document;
         JsonElement root = _document.RootElement;
 
         _componentParameters = root.GetProperty("components").GetProperty("parameters");
@@ -304,6 +331,48 @@ internal sealed class Spec
 
         return current;
     }
+
+    /// <summary>Classifies a schema node for binding.</summary>
+    /// <remarks>
+    /// An object is anything typed <c>object</c>, or anything that declares <c>properties</c> or
+    /// composes them through <c>allOf</c>, since the description omits the type on some composed
+    /// nodes. A free-form object with no properties is still an object: it has no default binding
+    /// and the map must name a type for it (D-N6).
+    /// </remarks>
+    public static SchemaShape Shape(JsonElement schema)
+    {
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return SchemaShape.Scalar;
+        }
+
+        if (IsObject(schema))
+        {
+            return SchemaShape.Object;
+        }
+
+        if (!schema.TryGetProperty("type", out JsonElement type) || type.GetString() != "array")
+        {
+            return SchemaShape.Scalar;
+        }
+
+        if (!schema.TryGetProperty("items", out JsonElement items))
+        {
+            return SchemaShape.Array;
+        }
+
+        return Shape(items) switch
+        {
+            SchemaShape.Object => SchemaShape.ArrayOfObjects,
+            SchemaShape.Scalar => SchemaShape.Array,
+            _ => SchemaShape.ArrayOfArrays,
+        };
+    }
+
+    private static bool IsObject(JsonElement schema) =>
+        (schema.TryGetProperty("type", out JsonElement type) && type.GetString() == "object")
+        || schema.TryGetProperty("properties", out _)
+        || schema.TryGetProperty("allOf", out _);
 
     private static void Collect(
         JsonElement schema,
