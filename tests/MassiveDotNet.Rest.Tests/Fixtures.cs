@@ -1000,6 +1000,90 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/splits, with one departure from the published
+    /// text: the sample shows <c>"request_id": 1</c>, a number, while the envelope schema declares
+    /// a string and every other endpoint returns one. The fixture uses the string, as the
+    /// dividends fixture does for the same defect.
+    /// </summary>
+    public const string StocksSplits = """
+        {
+          "request_id": "1",
+          "results": [
+            {
+              "adjustment_type": "forward_split",
+              "execution_date": "2005-02-28",
+              "historical_adjustment_factor": 0.017857,
+              "id": "E90a77bdf742661741ed7c8fc086415f0457c2816c45899d73aaa88bdc8ff6025",
+              "split_from": 1,
+              "split_to": 2,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/exchanges, with one departure from the published
+    /// text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksSplits"/>. The <c>count</c> member is not in the schema and is ignored.
+    /// </summary>
+    public const string StocksExchanges = """
+        {
+          "count": 2,
+          "request_id": "1",
+          "results": [
+            {
+              "id": "10",
+              "locale": "US",
+              "mic": "XNYS",
+              "name": "New York Stock Exchange",
+              "operating_mic": "XNYS",
+              "participant_id": "N",
+              "type": "exchange",
+              "url": "https://www.nyse.com"
+            },
+            {
+              "id": "12",
+              "locale": "US",
+              "mic": "XNAS",
+              "name": "Nasdaq",
+              "operating_mic": "XNAS",
+              "participant_id": "T",
+              "type": "exchange",
+              "url": "https://www.nasdaq.com"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the exchanges envelope's shape, with no <c>next_url</c>, so a
+    /// traversal from a cursored copy of <see cref="StocksExchanges"/> ends after two requests.
+    /// The published sample has no cursor of its own; the test adds one.
+    /// </summary>
+    public const string StocksExchangesLastPage = """
+        {
+          "count": 1,
+          "request_id": "2",
+          "results": [
+            {
+              "id": "15",
+              "locale": "US",
+              "mic": "IEXG",
+              "name": "Investors Exchange",
+              "operating_mic": "IEXG",
+              "participant_id": "V",
+              "type": "exchange",
+              "url": "https://www.iextrading.com"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {

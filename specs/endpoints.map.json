@@ -469,6 +469,38 @@
         "i": { "name": "Indicators", "type": "int[]?", "summary": "The indicator codes. The description marks it required; the published example omits it." },
         "z": { "name": "Tape" }
       }
+    },
+
+    "Split": {
+      "summary": "A stock split or similar share-count change: the ticker, the execution date, the ratio, and the factor that normalises historical prices for it.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4). <see cref=\"ExecutionDate\"/> is a calendar date with no time or zone, hence <see cref=\"NodaTime.LocalDate\"/>.",
+      "schema": { "operationId": "get_stocks_v1_splits", "pointer": "results/items" },
+      "properties": {
+        "ticker":                       { "name": "Ticker" },
+        "execution_date":               { "name": "ExecutionDate" },
+        "adjustment_type":              { "name": "AdjustmentType" },
+        "split_from":                   { "name": "SplitFrom" },
+        "split_to":                     { "name": "SplitTo" },
+        "historical_adjustment_factor": { "name": "HistoricalAdjustmentFactor" },
+        "id":                           { "name": "Id" }
+      }
+    },
+
+    "StockExchange": {
+      "summary": "An exchange or trade reporting facility that US stocks trade on, with its MIC codes and identifiers.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4). Prefixed by family because other asset classes list exchanges of their own, whose shapes the generator's structural check will judge when those groups arrive (decision D16).",
+      "schema": { "operationId": "get_stocks_v1_exchanges", "pointer": "results/items" },
+      "properties": {
+        "id":             { "name": "Id" },
+        "name":           { "name": "Name" },
+        "acronym":        { "name": "Acronym" },
+        "type":           { "name": "Type" },
+        "locale":         { "name": "Locale" },
+        "mic":            { "name": "Mic" },
+        "operating_mic":  { "name": "OperatingMic" },
+        "participant_id": { "name": "ParticipantId" },
+        "url":            { "name": "Url" }
+      }
     }
   },
 
@@ -762,6 +794,32 @@
         "timestampLimit": { "name": "timestampLimit", "type": "long" },
         "reverse":        { "name": "reverse" },
         "limit":          { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_splits",
+      "group": "Stocks",
+      "method": "ListSplits",
+      "summary": "Retrieves stock splits and similar share-count changes for US stocks, with the execution date and ratio of each.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality, a <see cref=\"RangeFilter\"/> factory for a range, or <see cref=\"SetFilter\"/> for a set of values. Lives beside <see cref=\"ListDividendsAsync\"/> because the description marks it a stocks operation.",
+      "result": { "kind": "array", "model": "Split", "property": "results" },
+      "parameters": {
+        "ticker":          { "name": "ticker" },
+        "execution_date":  { "name": "executionDate", "type": "LocalDate" },
+        "adjustment_type": { "name": "adjustmentType" },
+        "limit":           { "name": "limit" },
+        "sort":            { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_exchanges",
+      "group": "Stocks",
+      "method": "ListExchanges",
+      "summary": "Retrieves the exchanges and trade reporting facilities that US stocks trade on.",
+      "remarks": "The list is short and rarely changes, so a single page usually holds all of it; <see cref=\"EnumerateExchangesAsync\"/> follows the cursor if the service ever pages it.",
+      "result": { "kind": "array", "model": "StockExchange", "property": "results" },
+      "parameters": {
+        "limit": { "name": "limit" }
       }
     }
   ]

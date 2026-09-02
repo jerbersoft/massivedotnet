@@ -1710,4 +1710,217 @@ public readonly partial struct StocksGroup
 
         return response?.Results ?? [];
     }
+
+    /// <summary>
+    /// Retrieves stock splits and similar share-count changes for US stocks, with the execution date
+    /// and ratio of each, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListSplitsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. Pass a plain value for equality, a <see cref="RangeFilter"/> factory for a range, or
+    /// <see cref="SetFilter"/> for a set of values. Lives beside <see cref="ListDividendsAsync"/>
+    /// because the description marks it a stocks operation.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Stock symbol for the company that executed the split. Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="executionDate">
+    /// Date when the stock split takes effect. The adjustment is applied overnight. On the prior
+    /// trading day, the post-market session is the last session that shows pre-split prices. On the
+    /// execution date, all trading is already adjusted for the split. This includes the pre-market
+    /// session. Value must be formatted 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="adjustmentType">
+    /// Classification of the share-change event. Possible values include: forward_split (share count
+    /// increases), reverse_split (share count decreases), stock_dividend (shares issued as a dividend).
+    /// Accepts an exact value or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'execution_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Split> EnumerateSplitsAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<LocalDate>? executionDate = null,
+        SetFilter<string>? adjustmentType = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSplitsUri(ticker, executionDate, adjustmentType, limit, sort);
+        return _transport.EnumerateAsync<GetStocksV1SplitsResponse, Split>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1SplitsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves stock splits and similar share-count changes for US stocks, with the execution date
+    /// and ratio of each.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateSplitsAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. Pass a plain
+    /// value for equality, a <see cref="RangeFilter"/> factory for a range, or <see cref="SetFilter"/>
+    /// for a set of values. Lives beside <see cref="ListDividendsAsync"/> because the description marks
+    /// it a stocks operation.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Stock symbol for the company that executed the split. Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="executionDate">
+    /// Date when the stock split takes effect. The adjustment is applied overnight. On the prior
+    /// trading day, the post-market session is the last session that shows pre-split prices. On the
+    /// execution date, all trading is already adjusted for the split. This includes the pre-market
+    /// session. Value must be formatted 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="adjustmentType">
+    /// Classification of the share-change event. Possible values include: forward_split (share count
+    /// increases), reverse_split (share count decreases), stock_dividend (shares issued as a dividend).
+    /// Accepts an exact value or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'execution_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Split>> ListSplitsAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<LocalDate>? executionDate = null,
+        SetFilter<string>? adjustmentType = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSplitsUri(ticker, executionDate, adjustmentType, limit, sort);
+        return SendListSplitsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListSplitsUri(
+        Filter<string>? ticker,
+        RangeFilter<LocalDate>? executionDate,
+        SetFilter<string>? adjustmentType,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/splits");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("execution_date", executionDate);
+        builder.AppendQuery("adjustment_type", adjustmentType);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Split>> SendListSplitsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1SplitsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1SplitsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Split>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the exchanges and trade reporting facilities that US stocks trade on, enumerating
+    /// every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListExchangesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The list is short and rarely changes,
+    /// so a single page usually holds all of it; <see cref="EnumerateExchangesAsync"/> follows the
+    /// cursor if the service ever pages it.
+    /// </remarks>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<StockExchange> EnumerateExchangesAsync(
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListExchangesUri(limit);
+        return _transport.EnumerateAsync<GetStocksV1ExchangesResponse, StockExchange>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1ExchangesResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the exchanges and trade reporting facilities that US stocks trade on.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateExchangesAsync"/> to walk every page
+    /// without handling cursors yourself. The list is short and rarely changes, so a single page
+    /// usually holds all of it; <see cref="EnumerateExchangesAsync"/> follows the cursor if the service
+    /// ever pages it.
+    /// </remarks>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<StockExchange>> ListExchangesAsync(
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListExchangesUri(limit);
+        return SendListExchangesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListExchangesUri(
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/exchanges");
+
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<StockExchange>> SendListExchangesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1ExchangesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1ExchangesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<StockExchange>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }
