@@ -515,6 +515,36 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// A hand-written final page in the quotes envelope's shape, with no <c>next_url</c> and one
+    /// quote later than the sample's, so a traversal that starts from <see cref="StocksQuotes"/>
+    /// ends after two requests. The service cannot be asked for "the page after the published
+    /// sample", since its own last page depends on the day's data.
+    /// </summary>
+    public const string StocksQuotesLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": [
+            {
+              "ask_exchange": 0,
+              "ask_price": 0,
+              "ask_size": 0,
+              "bid_exchange": 11,
+              "bid_price": 170.1,
+              "bid_size": 3,
+              "conditions": [
+                1
+              ],
+              "participant_timestamp": 1517562000065500000,
+              "sequence_number": 2062,
+              "sip_timestamp": 1517562000065900000,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     /// <summary>The documented sample for GET /v2/snapshot/locale/us/markets/stocks/tickers/{stocksTicker}, verbatim.</summary>
     public const string StocksSnapshot = """
         {
@@ -767,6 +797,68 @@ internal static class Fixtures
                 "c": 0.0027,
                 "v": 30000,
                 "vw": 0.003096
+              }
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// A live whole-market snapshot captured on 2026-09-02 and trimmed to one ticker, kept because
+    /// the description marks <c>lastTrade.ds</c> and <c>min.dav</c> required while the service
+    /// omits them, along with <c>lastTrade.c</c>, on a ticker that has not traded.
+    /// </summary>
+    public const string StocksSnapshotsMissingDecimals = """
+        {
+          "status": "OK",
+          "request_id": "c9b98c194a3c8563199e44ed6238f13d",
+          "count": 1,
+          "tickers": [
+            {
+              "ticker": "AACI",
+              "todaysChangePerc": 0,
+              "todaysChange": 0,
+              "updated": 0,
+              "day": {
+                "o": 0,
+                "h": 0,
+                "l": 0,
+                "c": 0,
+                "v": 0,
+                "vw": 0
+              },
+              "lastQuote": {
+                "P": 10.14,
+                "S": 100,
+                "p": 4.02,
+                "s": 200,
+                "t": 1788385980252379425
+              },
+              "lastTrade": {
+                "i": "",
+                "p": 0,
+                "s": 0,
+                "t": 0,
+                "x": 0
+              },
+              "min": {
+                "av": 0,
+                "t": 0,
+                "n": 0,
+                "o": 0,
+                "h": 0,
+                "l": 0,
+                "c": 0,
+                "v": 0,
+                "vw": 0
+              },
+              "prevDay": {
+                "o": 10.03,
+                "h": 10.05,
+                "l": 10.03,
+                "c": 10.0499,
+                "v": 553,
+                "vw": 10.0436
               }
             }
           ]

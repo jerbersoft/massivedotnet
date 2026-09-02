@@ -738,10 +738,10 @@ public readonly partial struct StocksGroup
     /// cref="ListTradesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
     /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
     /// items; bound the sequence with <c>Take</c> instead. <paramref name="timestamp"/> takes a
-    /// calendar date for a whole session or a <see cref="DateOrNanoseconds"/> for a moment within one;
-    /// an <see cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision
-    /// D20). A busy session is millions of trades, so set <paramref name="limit"/> and let <see
-    /// cref="EnumerateTradesAsync"/> follow the cursor.
+    /// calendar date for a whole session or an <see cref="NodaTime.Instant"/> for a moment within one;
+    /// both convert implicitly to <see cref="DateOrNanoseconds"/>, and an instant renders as Unix
+    /// nanoseconds (decision D20). A busy session is millions of trades, so set <paramref
+    /// name="limit"/> and enumerate rather than list.
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="timestamp">
@@ -772,10 +772,10 @@ public readonly partial struct StocksGroup
     /// <remarks>
     /// Returns the first page only. Use <see cref="EnumerateTradesAsync"/> to walk every page without
     /// handling cursors yourself. <paramref name="timestamp"/> takes a calendar date for a whole
-    /// session or a <see cref="DateOrNanoseconds"/> for a moment within one; an <see
-    /// cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision D20). A
-    /// busy session is millions of trades, so set <paramref name="limit"/> and let <see
-    /// cref="EnumerateTradesAsync"/> follow the cursor.
+    /// session or an <see cref="NodaTime.Instant"/> for a moment within one; both convert implicitly to
+    /// <see cref="DateOrNanoseconds"/>, and an instant renders as Unix nanoseconds (decision D20). A
+    /// busy session is millions of trades, so set <paramref name="limit"/> and enumerate rather than
+    /// list.
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="timestamp">
@@ -844,10 +844,10 @@ public readonly partial struct StocksGroup
     /// cref="ListQuotesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
     /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
     /// items; bound the sequence with <c>Take</c> instead. <paramref name="timestamp"/> takes a
-    /// calendar date for a whole session or a <see cref="DateOrNanoseconds"/> for a moment within one;
-    /// an <see cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision
-    /// D20). Quotes outnumber trades many times over, so set <paramref name="limit"/> and let <see
-    /// cref="EnumerateQuotesAsync"/> follow the cursor.
+    /// calendar date for a whole session or an <see cref="NodaTime.Instant"/> for a moment within one;
+    /// both convert implicitly to <see cref="DateOrNanoseconds"/>, and an instant renders as Unix
+    /// nanoseconds (decision D20). Quotes outnumber trades many times over, so set <paramref
+    /// name="limit"/> and enumerate rather than list.
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="timestamp">
@@ -878,10 +878,10 @@ public readonly partial struct StocksGroup
     /// <remarks>
     /// Returns the first page only. Use <see cref="EnumerateQuotesAsync"/> to walk every page without
     /// handling cursors yourself. <paramref name="timestamp"/> takes a calendar date for a whole
-    /// session or a <see cref="DateOrNanoseconds"/> for a moment within one; an <see
-    /// cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision D20).
-    /// Quotes outnumber trades many times over, so set <paramref name="limit"/> and let <see
-    /// cref="EnumerateQuotesAsync"/> follow the cursor.
+    /// session or an <see cref="NodaTime.Instant"/> for a moment within one; both convert implicitly to
+    /// <see cref="DateOrNanoseconds"/>, and an instant renders as Unix nanoseconds (decision D20).
+    /// Quotes outnumber trades many times over, so set <paramref name="limit"/> and enumerate rather
+    /// than list.
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="timestamp">

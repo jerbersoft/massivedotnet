@@ -50,9 +50,12 @@ public readonly partial record struct SnapshotLastTrade
     [JsonPropertyName("s")]
     public int Size { get; init; }
 
-    /// <summary>The size of the trade including fractional shares, respresented as a string.</summary>
+    /// <summary>
+    /// The size of the trade as a decimal string. The description marks it required; the service omits
+    /// it on some tickers in the whole-market snapshot.
+    /// </summary>
     [JsonPropertyName("ds")]
-    public required string DecimalSize { get; init; }
+    public string? DecimalSize { get; init; }
 
     /// <summary>The exchange ID. See Exchanges for Massive's mapping of exchange IDs.</summary>
     [JsonPropertyName("x")]

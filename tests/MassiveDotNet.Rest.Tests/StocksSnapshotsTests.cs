@@ -203,7 +203,7 @@ public sealed class StocksSnapshotsTests
     {
         // The description marks lastTrade.c required, but a live movers response can omit it
         // when the trade carried no conditions; the map types Conditions as int[]? for exactly
-        // this reason (fix round 1, D-G5 precedent).
+        // this reason (D-G5 precedent).
         StubHandler handler = new(Fixtures.StocksMoversWithoutConditions);
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
 
@@ -219,6 +219,34 @@ public sealed class StocksSnapshotsTests
         Assert.NotNull(snapshot.LastTrade);
         Assert.Equal("1", snapshot.LastTrade.Value.TradeId);
         Assert.Null(snapshot.LastTrade.Value.Conditions);
+    }
+
+    [Fact]
+    public async Task AnUntradedTickerDeserializesWithNullDecimalFields()
+    {
+        // The description marks lastTrade.ds and min.dav required, but a live whole-market
+        // snapshot omits both on a ticker that has not traded; the map types DecimalSize and
+        // DecimalAccumulatedVolume as string? for exactly this reason.
+        StubHandler handler = new(Fixtures.StocksSnapshotsMissingDecimals);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        TickerSnapshot[] snapshots;
+
+        using (client)
+        using (transport)
+        {
+            snapshots = await client.Stocks.ListSnapshotsAsync(cancellationToken: Ct);
+        }
+
+        TickerSnapshot snapshot = Assert.Single(snapshots);
+        Assert.Equal("AACI", snapshot.Ticker);
+
+        Assert.NotNull(snapshot.LastTrade);
+        Assert.Null(snapshot.LastTrade.Value.DecimalSize);
+        Assert.Null(snapshot.LastTrade.Value.Conditions);
+
+        Assert.NotNull(snapshot.Minute);
+        Assert.Null(snapshot.Minute.Value.DecimalAccumulatedVolume);
     }
 
     [Fact]

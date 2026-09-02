@@ -18,8 +18,8 @@ namespace MassiveDotNet.Rest.Models;
 /// <remarks>
 /// A struct like <see cref="Agg"/> (decision D4). <see cref="Timestamp"/> is computed from <see
 /// cref="TimestampMilliseconds"/> only when read (decision D5). The description declares the
-/// timestamp and the accumulated volume as bare integers; both overflow int32, so the map types
-/// them <see cref="long"/>.
+/// timestamp and the accumulated volume as bare integers; the timestamp always overflows int32 and
+/// a busy session's accumulated volume can, so the map types both <see cref="long"/>.
 /// </remarks>
 public readonly partial record struct SnapshotMinute
 {
@@ -65,9 +65,12 @@ public readonly partial record struct SnapshotMinute
     [JsonPropertyName("av")]
     public long AccumulatedVolume { get; init; }
 
-    /// <summary>The accumulated volume including fractional shares, respresented as a string.</summary>
+    /// <summary>
+    /// The accumulated volume for the day so far as a decimal string. The description marks it
+    /// required; the service omits it on some tickers in the whole-market snapshot.
+    /// </summary>
     [JsonPropertyName("dav")]
-    public required string DecimalAccumulatedVolume { get; init; }
+    public string? DecimalAccumulatedVolume { get; init; }
 
     /// <summary>The volume including fractional shares, respresented as a string.</summary>
     [JsonPropertyName("dv")]

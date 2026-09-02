@@ -40,4 +40,16 @@ public sealed class StocksSnapshotsLiveTests : LiveApiTest
         Assert.NotEmpty(gainers);
         Assert.All(gainers, snapshot => Assert.False(string.IsNullOrEmpty(snapshot.Ticker)));
     }
+
+    [Fact]
+    public async Task TheWholeMarketDeserializes()
+    {
+        // This is the only call that samples the whole universe, so it is the only place a field
+        // the service omits on an untraded ticker can surface; the fixture tier cannot see it, and
+        // on 2026-09-02 it surfaced three (lastTrade.c, lastTrade.ds, min.dav). The cost is one
+        // response of several megabytes per live run, which is the consumer's own path.
+        TickerSnapshot[] snapshots = await Client.Stocks.ListSnapshotsAsync(cancellationToken: Ct);
+
+        Assert.True(snapshots.Length > 1000, "The whole market should hold thousands of tickers.");
+    }
 }

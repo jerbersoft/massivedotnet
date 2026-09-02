@@ -336,7 +336,7 @@
     "SnapshotMinute": {
       "kind": "struct",
       "summary": "The most recent minute bar inside a snapshot, with the day's accumulated volume so far.",
-      "remarks": "A struct like <see cref=\"Agg\"/> (decision D4). <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5). The description declares the timestamp and the accumulated volume as bare integers; both overflow int32, so the map types them <see cref=\"long\"/>.",
+      "remarks": "A struct like <see cref=\"Agg\"/> (decision D4). <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5). The description declares the timestamp and the accumulated volume as bare integers; the timestamp always overflows int32 and a busy session's accumulated volume can, so the map types both <see cref=\"long\"/>.",
       "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/min" },
       "properties": {
         "t":   { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp for the start of the minute window. The description declares a bare integer; every value overflows int32." },
@@ -348,7 +348,7 @@
         "vw":  { "name": "VolumeWeightedAveragePrice" },
         "n":   { "name": "TransactionCount", "type": "long" },
         "av":  { "name": "AccumulatedVolume", "type": "long", "summary": "The accumulated volume for the day so far. The description declares a bare integer; a busy session overflows int32." },
-        "dav": { "name": "DecimalAccumulatedVolume" },
+        "dav": { "name": "DecimalAccumulatedVolume", "type": "string?", "summary": "The accumulated volume for the day so far as a decimal string. The description marks it required; the service omits it on some tickers in the whole-market snapshot." },
         "dv":  { "name": "DecimalVolume" },
         "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
       }
@@ -378,7 +378,7 @@
         "i":  { "name": "TradeId" },
         "p":  { "name": "Price" },
         "s":  { "name": "Size" },
-        "ds": { "name": "DecimalSize" },
+        "ds": { "name": "DecimalSize", "type": "string?", "summary": "The size of the trade as a decimal string. The description marks it required; the service omits it on some tickers in the whole-market snapshot." },
         "x":  { "name": "ExchangeId" },
         "c":  { "name": "Conditions", "type": "int[]?", "summary": "The condition codes of the trade. The description marks it required; the service omits it when the trade carried no conditions." }
       }
@@ -645,7 +645,7 @@
       "group": "Stocks",
       "method": "ListTrades",
       "summary": "Retrieves tick-level trades for a stock, filtered by timestamp.",
-      "remarks": "<paramref name=\"timestamp\"/> takes a calendar date for a whole session or a <see cref=\"DateOrNanoseconds\"/> for a moment within one; an <see cref=\"NodaTime.Instant\"/> converts implicitly and renders as Unix nanoseconds (decision D20). A busy session is millions of trades, so set <paramref name=\"limit\"/> and let <see cref=\"EnumerateTradesAsync\"/> follow the cursor.",
+      "remarks": "<paramref name=\"timestamp\"/> takes a calendar date for a whole session or an <see cref=\"NodaTime.Instant\"/> for a moment within one; both convert implicitly to <see cref=\"DateOrNanoseconds\"/>, and an instant renders as Unix nanoseconds (decision D20). A busy session is millions of trades, so set <paramref name=\"limit\"/> and enumerate rather than list.",
       "result": { "kind": "array", "model": "Trade", "property": "results" },
       "parameters": {
         "stockTicker": { "name": "ticker" },
@@ -660,7 +660,7 @@
       "group": "Stocks",
       "method": "ListQuotes",
       "summary": "Retrieves tick-level NBBO quotes for a stock, filtered by timestamp.",
-      "remarks": "<paramref name=\"timestamp\"/> takes a calendar date for a whole session or a <see cref=\"DateOrNanoseconds\"/> for a moment within one; an <see cref=\"NodaTime.Instant\"/> converts implicitly and renders as Unix nanoseconds (decision D20). Quotes outnumber trades many times over, so set <paramref name=\"limit\"/> and let <see cref=\"EnumerateQuotesAsync\"/> follow the cursor.",
+      "remarks": "<paramref name=\"timestamp\"/> takes a calendar date for a whole session or an <see cref=\"NodaTime.Instant\"/> for a moment within one; both convert implicitly to <see cref=\"DateOrNanoseconds\"/>, and an instant renders as Unix nanoseconds (decision D20). Quotes outnumber trades many times over, so set <paramref name=\"limit\"/> and enumerate rather than list.",
       "result": { "kind": "array", "model": "Quote", "property": "results" },
       "parameters": {
         "stockTicker": { "name": "ticker" },

@@ -81,6 +81,24 @@ public sealed class StocksQuotesTests
     }
 
     [Fact]
+    public async Task ReportsNoFurtherPagesFromAPageWithoutACursor()
+    {
+        StubHandler handler = new(Fixtures.StocksQuotesLastPage);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        MassivePage<Quote> page;
+
+        using (client)
+        using (transport)
+        {
+            page = await client.Stocks.ListQuotesAsync("AAPL", cancellationToken: Ct);
+        }
+
+        Assert.False(page.HasMore);
+        Assert.Equal(2062L, Assert.Single(page.Results).SequenceNumber);
+    }
+
+    [Fact]
     public async Task EnumerateWalksTheSinglePage()
     {
         // The published sample advertises a cursor; the stub serves the same body again, so the
