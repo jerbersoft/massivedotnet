@@ -77,7 +77,23 @@ public sealed class ParameterBindingTests
 
         Dictionary<string, string> files = Harness.Generate(spec, MapDocument());
 
-        Assert.Contains("string[]? tickers = null", files["ReferenceGroup.g.cs"], StringComparison.Ordinal);
+        string group = files["ReferenceGroup.g.cs"];
+        Assert.Contains("string[]? tickers = null", group, StringComparison.Ordinal);
+        // The plain query line resolves to the builder's array overload, which renders the
+        // elements comma-joined (D19); no array-specific emission exists.
+        Assert.Contains("builder.AppendQuery(\"tickers\", tickers);", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnArrayOfAnUnsupportedElementHasNoBinding()
+    {
+        string spec = Document("""[ { "name": "flags", "in": "query", "schema": { "type": "array", "items": { "type": "boolean" } } } ]""");
+
+        string message = Harness.Refusal(spec, MapDocument());
+
+        Assert.Contains("Operation 'ListThings'", message, StringComparison.Ordinal);
+        Assert.Contains("parameter 'flags' is an array of 'bool'", message, StringComparison.Ordinal);
+        Assert.Contains("Set \"type\"", message, StringComparison.Ordinal);
     }
 
     [Fact]

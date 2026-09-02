@@ -31,6 +31,17 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
     {
         string type = mapType ?? DefaultParameterType(schema, operationId, parameterName);
 
+        // An array parameter renders through the builder's element dispatch, so its element must
+        // come from the same closed set a filter's does (D19). Refusing here keeps an unsupported
+        // element a generation failure rather than a NotSupportedException at request time.
+        if (type.EndsWith("[]", StringComparison.Ordinal) && !ElementTypes.Contains(type[..^2]))
+        {
+            throw new InvalidOperationException(
+                $"Operation '{operationId}': parameter '{parameterName}' is an array of '{type[..^2]}', which "
+                + $"RequestUriBuilder cannot render. Supported element types: {string.Join(", ", ElementTypes.Order(StringComparer.Ordinal))}. "
+                + "Set \"type\" on its row in specs/endpoints.map.json to one of these, suffixed [].");
+        }
+
         return type switch
         {
             // Enum wire values are fixed literals, so they need no percent-escaping.
@@ -55,10 +66,10 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
     }
 
     /// <summary>
-    /// The element types a filter can render. This mirrors the dispatch in
-    /// <c>RequestUriBuilder.AppendElement</c>; extend the two together.
+    /// The element types a filter or a bare array parameter can render. This mirrors the dispatch
+    /// in <c>RequestUriBuilder.AppendElement</c>; extend the two together.
     /// </summary>
-    private static readonly HashSet<string> FilterElementTypes =
+    private static readonly HashSet<string> ElementTypes =
         new(StringComparer.Ordinal) { "string", "int", "long", "double", "LocalDate", "DateOrTimestamp" };
 
     /// <summary>
@@ -70,11 +81,11 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
     {
         string element = mapType ?? DefaultParameterType(schema, operationId, group.BaseName);
 
-        if (!FilterElementTypes.Contains(element))
+        if (!ElementTypes.Contains(element))
         {
             throw new InvalidOperationException(
                 $"Operation '{operationId}' filters on '{group.BaseName}' with element type '{element}', which "
-                + $"RequestUriBuilder cannot render. Supported: {string.Join(", ", FilterElementTypes.Order(StringComparer.Ordinal))}. "
+                + $"RequestUriBuilder cannot render. Supported: {string.Join(", ", ElementTypes.Order(StringComparer.Ordinal))}. "
                 + $"Set 'type' on the '{group.BaseName}' row in specs/endpoints.map.json to one of these -- the element "
                 + "type, never the filter type.");
         }
