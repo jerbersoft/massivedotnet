@@ -58,6 +58,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D17 | The `result` row has two kinds, `array` and `object`, and an omitted `property` means the body is the payload. A paginated object result returns `MassivePagedResult<T>` and enumerates the array its model row names as `items`; a paginated object with no `items` keeps a `Get` whose cursor, if one ever arrives, throws. Every singular `Get` returns `T`, and a 200 without its payload throws. | Fifty operations are not an array under `results`: 28 return one object there, 20 of which — the indicators — genuinely paginate over `results.values` with a per-page `underlying`, and 22 have no `results` at all. `MassivePage<T>` cannot hold an object with two halves, and discarding `underlying` would silently drop what `expand_underlying` asked for. Pagination stays spec-detected: the map only says where the items are, so it cannot drift. `Task<T?>` on every `Get` was rejected because the description's requiredness is unreliable and every unknown-ticker probe returned 404; a 200 without a payload is the same class of failure as a body that will not deserialize, and is reported the same way. |
 | D18 | Stability is **read from the spec**, never declared in the map: `x-polygon-deprecation` marks a deprecated operation, and a `vX` route segment or `x-polygon-experimental` marks an experimental one. Deprecated entry points carry `[Obsolete]` with diagnostic `MASSIVE0002`, a warning, whose message names the .NET method that supersedes them; experimental ones carry `[Experimental("MASSIVE0001")]`, an error until a consumer suppresses it. Only the public entry points are marked. | The issue that asked for this had the map carry a `stability` column, but the description already says both things, and a second source is one that drifts. The extension alone is not enough — it appears on two of the fourteen `vX` routes — so the path is the primary signal. Dedicated diagnostic ids let a consumer with warnings-as-errors suppress this SDK's deprecations without hiding every other CS0618, and make the experimental opt-in a single `NoWarn` entry. A replacement is resolved from the docs-site slug the description carries rather than restated in the map, so generation refuses a deprecated operation whose replacement is unmapped instead of emitting a message that names nothing. Models, envelopes, and the JSON context stay unmarked so the SDK's own generated code compiles without suppressions. |
 | D19 | A `type: array` query parameter that carries no comparators binds to `T[]?` and renders **comma-joined**, each element escaped, an empty array omitted like `null`. Its element type comes from the same closed set as a filter's, checked at generation. | The description declares neither `style` nor `explode` on these parameters, and the OpenAPI default for that omission is the repeated-key form, `tickers=A&tickers=B`. The service does not honour it: probed live, that form returned one ticker where the comma-joined form returned both, so following the standard would silently drop every value after the first, and the parameter's own prose says comma-separated. It is not a `SetFilter` because the field is the list, not a comparator over a scalar field, so there is no suffix to render. An empty array is omitted because an optional parameter is never sent as empty, and on the one family that has these, `tickers=` and an absent `tickers` mean the same thing anyway. The live proof lands with the snapshot operations that use it, since a fixture cannot tell the two wire forms apart. |
+| D20 | Tick-level timestamp filters bind to `DateOrNanoseconds`, a second core value type with the unit in its name. It joins the closed element set beside `DateOrTimestamp`, and the map names whichever the endpoint documents. | The v3 trades and quotes `timestamp` takes "a date or a nanosecond timestamp". `DateOrTimestamp` renders an `Instant` as Unix milliseconds, so binding it there would compile and ask for a moment in 1970; adding nanosecond factories to it would keep one type but leave its implicit `Instant` conversion rendering the wrong unit on half the endpoints. Two types make the wrong unit unrepresentable. Binding the filter to `LocalDate` alone was rejected because it drops the nanosecond form the API documents, which is rule 2's silent omission arriving on the request side. |
 
 ---
 
@@ -318,12 +319,15 @@ learns what the live tier found.
   `RangeFilter<T>`, `SetFilter<T>`, `Filter<T>`, or `ArrayFilter<T>` by its suffix set; a plain
   `T` converts implicitly to equality. The map names the **element** type on the base field's row
   (`"ex_dividend_date": { "type": "LocalDate" }`), never the filter type, and never a row keyed by
-  a variant. Grouping is detected from the spec, never declared in the map (D15). Calendar dates
-  (`format: date`) are `LocalDate` on parameters and models alike, read by
-  `LocalDateJsonConverter`, and date-times are `Instant`, read by `InstantJsonConverter`.
-  A field whose own schema is `type: array` and carries no comparators is not a filter: it binds
-  to `T[]?` and renders comma-joined as the plain field, with an empty array omitted (D19). A
-  map override names the C# type, `string[]`, the same way it does for any plain parameter.
+  a variant. Grouping is detected from the spec, never declared in the map (D15). Element types
+  are a closed set: `string`, `int`, `long`, `double`, `LocalDate`, `DateOrTimestamp`, and
+  `DateOrNanoseconds`; the last two differ only in the unit an `Instant` renders as, and the map
+  names whichever the endpoint documents (D20). Calendar dates (`format: date`) are `LocalDate` on
+  parameters and models alike, read by `LocalDateJsonConverter`, and date-times are `Instant`,
+  read by `InstantJsonConverter`. A field whose own schema is `type: array` and carries no
+  comparators is not a filter: it binds to `T[]?` and renders comma-joined as the plain field,
+  with an empty array omitted (D19). A map override names the C# type, `string[]`, the same way it
+  does for any plain parameter.
 - **Models**: a nested object, or the element of a nested array of objects, is its own `models`
   row with a pointer through its parent (`results/items/publisher`,
   `results/items/insights/items`), and the parent's property row names it with `model`; the
@@ -342,7 +346,8 @@ learns what the live tier found.
   a `vX` operation's carry `[Experimental("MASSIVE0001")]`, an error until a consumer opts in
   with `<NoWarn>$(NoWarn);MASSIVE0001</NoWarn>` or a `#pragma`. Both are read from the spec, never
   declared in the map (D18). A test or sample project that exercises such an endpoint suppresses
-  the id in its own `.csproj`; nothing is ever suppressed inside generated code.
+  the id in its own `.csproj`, as the REST and integration test projects do for the deprecated
+  tick endpoints; nothing is ever suppressed inside generated code.
 - **Nullability**: enabled everywhere. Optional query parameters are nullable and omitted from the
   request when `null` — never sent as empty.
 - **Temporal**: see [Temporal types](#temporal-types). Rule 12 is strict and machine-checked.

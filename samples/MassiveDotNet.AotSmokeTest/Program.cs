@@ -217,6 +217,65 @@ if (holidays is not [.., { Status: "early-close", Open: not null }])
     return 1;
 }
 
+// The nanosecond filter type and the bare array parameter are new generic instantiations of the
+// builder's element dispatch (D19, D20), and the snapshot item is the first model with five
+// optional nested structs; each is reachable only through these two calls.
+Console.WriteLine("\ntrades, with a nanosecond range:");
+
+MassivePage<Trade> trades = await client.Stocks.ListTradesAsync(
+    "AAPL",
+    timestamp: RangeFilter.Between(
+        DateOrNanoseconds.FromInstant(NodaConstants.UnixEpoch + Duration.FromNanoseconds(1517562000000000000)),
+        DateOrNanoseconds.FromDate(new LocalDate(2018, 2, 3))),
+    order: SortOrder.Ascending,
+    limit: 2);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (Trade tick in trades.Results)
+{
+    Console.WriteLine($"  {tick.TradeId,-3} {tick.Price,9:F2} x {tick.Size,6:N0}  at {InstantPattern.ExtendedIso.Format(tick.SipTimestamp)}");
+}
+
+const string ExpectedTradesQuery = "?timestamp.gte=1517562000000000000&timestamp.lte=2018-02-03&order=asc&limit=2";
+
+if (handler.LastRequestUri?.Query != ExpectedTradesQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the trades query {ExpectedTradesQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (!trades.HasMore || trades.Results is not [{ SipTimestampNanoseconds: 1517562000016036600 }, _])
+{
+    Console.Error.WriteLine("FAIL: expected two trades, the first at 1517562000016036600, with more pages.");
+    return 1;
+}
+
+Console.WriteLine("\nsnapshots, for two tickers:");
+
+TickerSnapshot[] snapshots = await client.Stocks.ListSnapshotsAsync(tickers: ["BCAT", "BRK/B"], includeOtc: false);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (TickerSnapshot snapshot in snapshots)
+{
+    Console.WriteLine($"  {snapshot.Ticker,-6} day close {snapshot.Day?.Close,9:F3}  accumulated volume {snapshot.Minute?.AccumulatedVolume,10:N0}");
+}
+
+const string ExpectedSnapshotsQuery = "?tickers=BCAT,BRK%2FB&include_otc=false";
+
+if (handler.LastRequestUri?.Query != ExpectedSnapshotsQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the snapshots query {ExpectedSnapshotsQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (snapshots is not [{ Ticker: "BCAT", Minute: { AccumulatedVolume: 37216 }, LastTrade: { SipTimestampNanoseconds: 1605192894630916600 }, Updated: not null }])
+{
+    Console.Error.WriteLine("FAIL: expected one BCAT snapshot with accumulated volume 37216 and a last trade at 1605192894630916600.");
+    return 1;
+}
+
 Console.WriteLine($"\nrequests: {handler.Requests}");
 
 if (bars.Length != 2 || !page.HasMore)
@@ -226,12 +285,12 @@ if (bars.Length != 2 || !page.HasMore)
 }
 
 // Two pages of the aggregates enumeration, the single-page aggregates call, the dividends call,
-// the news call, one SMA page, two SMA pages enumerated, the last trade, the open/close day, and
-// the holidays.
-if (enumerated != 3 || handler.Requests != 11)
+// the news call, one SMA page, two SMA pages enumerated, the last trade, the open/close day, the
+// holidays, the trades page, and the snapshots.
+if (enumerated != 3 || handler.Requests != 13)
 {
     Console.Error.WriteLine(
-        $"FAIL: expected 3 enumerated bars over 11 requests; got {enumerated} over {handler.Requests}.");
+        $"FAIL: expected 3 enumerated bars over 13 requests; got {enumerated} over {handler.Requests}.");
     return 1;
 }
 
@@ -419,6 +478,38 @@ internal sealed class StubHandler : HttpMessageHandler
         ]
         """;
 
+    private const string Trades = """
+        {
+          "next_url": "https://api.massive.com/v3/trades/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": [
+            { "conditions": [ 12, 41 ], "decimal_size": "100.0", "exchange": 11, "id": "1", "participant_timestamp": 1517562000015577000, "price": 171.55, "sequence_number": 1063, "sip_timestamp": 1517562000016036600, "size": 100, "tape": 3 },
+            { "conditions": [ 12, 41 ], "decimal_size": "100.0", "exchange": 11, "id": "2", "participant_timestamp": 1517562000015577600, "price": 171.55, "sequence_number": 1064, "sip_timestamp": 1517562000016038100, "size": 100, "tape": 3 }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    private const string Snapshots = """
+        {
+          "count": 1,
+          "status": "OK",
+          "tickers": [
+            {
+              "day": { "c": 20.506, "dv": "37216.0", "h": 20.64, "l": 20.506, "o": 20.64, "v": 37216, "vw": 20.616 },
+              "lastQuote": { "P": 20.6, "S": 22, "p": 20.5, "s": 13, "t": 1605192959994246100 },
+              "lastTrade": { "c": [ 14, 41 ], "ds": "2416.0", "i": "71675577320245", "p": 20.506, "s": 2416, "t": 1605192894630916600, "x": 4 },
+              "min": { "av": 37216, "c": 20.506, "dav": "37216.0", "dv": "5000.0", "h": 20.506, "l": 20.506, "n": 1, "o": 20.506, "t": 1684428600000, "v": 5000, "vw": 20.5105 },
+              "prevDay": { "c": 20.63, "h": 21, "l": 20.5, "o": 20.79, "v": 292738, "vw": 20.6939 },
+              "ticker": "BCAT",
+              "todaysChange": -0.124,
+              "todaysChangePerc": -0.601,
+              "updated": 1605192894630916600
+            }
+          ]
+        }
+        """;
+
     public Uri? LastRequestUri { get; private set; }
 
     public int Requests { get; private set; }
@@ -442,6 +533,8 @@ internal sealed class StubHandler : HttpMessageHandler
             "/v2/last/trade/AAPL" => LastTradeBody,
             "/v1/open-close/AAPL/2023-01-09" => OpenClose,
             "/v1/marketstatus/upcoming" => Holidays,
+            "/v3/trades/AAPL" => Trades,
+            "/v2/snapshot/locale/us/markets/stocks/tickers" => Snapshots,
             _ => cursored ? FinalPage : FirstPage,
         };
 
