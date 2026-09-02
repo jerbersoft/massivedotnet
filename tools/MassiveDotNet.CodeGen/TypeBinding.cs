@@ -34,7 +34,7 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
         return type switch
         {
             // Enum wire values are fixed literals, so they need no percent-escaping.
-            "AggregateTimespan" or "SortOrder" or "MarketType" =>
+            "AggregateTimespan" or "SortOrder" or "MarketType" or "SeriesType" =>
                 new TypeBinding(type, "AppendPathLiteral", "ToWireValue()"),
 
             "DateOrTimestamp" =>

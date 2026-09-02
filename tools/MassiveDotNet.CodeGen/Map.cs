@@ -5,6 +5,9 @@ namespace MassiveDotNet.CodeGen;
 /// <summary>A property row: a .NET name, and either a verbatim type or a model the schema binds to (D-N2).</summary>
 internal sealed record MapProperty(string? Name, string? Type, string? Model, string? Summary);
 
+/// <summary>A model row: the schema it is generated from, its properties, and, for the page object of a paginated singular result, the property that carries the page's items (D-S2).</summary>
+/// <param name="SchemaPointer">The path from the success schema root, or empty for the root itself, which a body payload binds to (D-S1).</param>
+/// <param name="Items">The wire name of the array property whose elements <c>Enumerate</c> yields, or <see langword="null"/>.</param>
 internal sealed record MapModel(
     string Name,
     string Kind,
@@ -12,11 +15,15 @@ internal sealed record MapModel(
     string? Remarks,
     string SchemaOperationId,
     string SchemaPointer,
-    Dictionary<string, MapProperty> Properties);
+    Dictionary<string, MapProperty> Properties,
+    string? Items);
 
 internal sealed record MapParameter(string? Name, string? Type);
 
-internal sealed record MapResult(string Kind, string Model, string Property);
+/// <summary>An endpoint's payload: one model or an array of it, on a named envelope property or as the body itself (D-S1).</summary>
+/// <param name="Kind"><c>array</c> or <c>object</c>.</param>
+/// <param name="Property">The envelope property that holds the payload, or <see langword="null"/> when the body is the payload.</param>
+internal sealed record MapResult(string Kind, string Model, string? Property);
 
 internal sealed record MapEndpoint(
     string OperationId,
@@ -79,8 +86,11 @@ internal sealed class Map
                 String(model.Value, "summary"),
                 String(model.Value, "remarks"),
                 schema.GetProperty("operationId").GetString()!,
-                schema.GetProperty("pointer").GetString()!,
-                properties));
+                // An omitted pointer is the success schema root, which Spec.Navigate reads as an
+                // empty path: the model is the response body itself (D-S1).
+                String(schema, "pointer") ?? string.Empty,
+                properties,
+                String(model.Value, "items")));
         }
 
         List<MapEndpoint> endpoints = [];
@@ -108,7 +118,7 @@ internal sealed class Map
                 new MapResult(
                     result.GetProperty("kind").GetString()!,
                     result.GetProperty("model").GetString()!,
-                    result.GetProperty("property").GetString()!),
+                    String(result, "property")),
                 parameters));
         }
 

@@ -120,6 +120,15 @@ internal sealed class Emitter(Spec spec, Map map)
             {
                 SpecOperation operation = spec.Operation(endpoint.OperationId);
 
+                // A body payload has no envelope; Task 3 of the singular-results plan emits it.
+                // Until then, refuse rather than emit an envelope with a null property name.
+                if (endpoint.Result.Property is null)
+                {
+                    throw new InvalidOperationException(
+                        $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): a result with no "
+                        + "\"property\" is not yet supported by the emitter.");
+                }
+
                 ValidateResultReuse(endpoint, operation);
 
                 List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
@@ -186,7 +195,7 @@ internal sealed class Emitter(Spec spec, Map map)
                 // The interface names the results property `Results`. When the endpoint's result
                 // property maps to some other name, satisfy it explicitly rather than renaming
                 // the public property away from the wire shape.
-                string resultsProperty = Naming.Pascal(endpoint.Result.Property);
+                string resultsProperty = Naming.Pascal(endpoint.Result.Property!);
 
                 if (paginated && resultsProperty != "Results")
                 {
@@ -406,13 +415,13 @@ internal sealed class Emitter(Spec spec, Map map)
                 }
 
                 writer.Line($"return new MassivePage<{model}>(");
-                writer.Line($"    response?.{Naming.Pascal(endpoint.Result.Property)},");
+                writer.Line($"    response?.{Naming.Pascal(endpoint.Result.Property!)},");
                 writer.Line("    !string.IsNullOrWhiteSpace(response?.NextUrl),");
                 writer.Line(hasRequestId ? "    response?.RequestId);" : "    requestId: null);");
             }
             else
             {
-                writer.Line($"return response?.{Naming.Pascal(endpoint.Result.Property)} ?? [];");
+                writer.Line($"return response?.{Naming.Pascal(endpoint.Result.Property!)} ?? [];");
             }
         }
     }
