@@ -97,6 +97,7 @@ public sealed class InstantJsonConverterTests
     [InlineData("\"2024-06-24T18:33:53.1234567890Z\"")]
     [InlineData("\"2024-06-24T18:33:53+0400\"")]
     [InlineData("\"2024-06-24T18:33:53+19:00\"")]
+    [InlineData("\"2024-06-24T18:33:53+05:99\"")]
     [InlineData("\"2024-13-24T18:33:53Z\"")]
     [InlineData("\"2024-06-24T24:00:00Z\"")]
     [InlineData("\"2024-06-24T18:33:53ZZ\"")]
@@ -105,6 +106,16 @@ public sealed class InstantJsonConverterTests
     public void RejectsAnythingThatIsNotAnRfc3339Timestamp(string json)
     {
         Assert.Throws<JsonException>(() => Read(json));
+    }
+
+    [Fact]
+    public void RejectsAnOffsetThatOverflowsTheSupportedInstantRange()
+    {
+        // The local date/time is itself the maximum NodaTime's calendar supports; subtracting a
+        // further 18 hours of offset pushes the instant past what NodaTime's Instant can
+        // represent, which surfaces as OverflowException rather than the ArgumentOutOfRangeException
+        // an out-of-range local date/time (a bad month, an hour of 24) throws.
+        Assert.Throws<JsonException>(() => Read("\"9999-12-31T23:59:59-18:00\""));
     }
 
     [Fact]

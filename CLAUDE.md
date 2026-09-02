@@ -308,7 +308,7 @@ learns what the live tier found.
   (`"ex_dividend_date": { "type": "LocalDate" }`), never the filter type, and never a row keyed by
   a variant. Grouping is detected from the spec, never declared in the map (D15). Calendar dates
   (`format: date`) are `LocalDate` on parameters and models alike, read by
-  `LocalDateJsonConverter`.
+  `LocalDateJsonConverter`, and date-times are `Instant`, read by `InstantJsonConverter`.
 - **Models**: a nested object, or the element of a nested array of objects, is its own `models`
   row with a pointer through its parent (`results/items/publisher`,
   `results/items/insights/items`), and the parent's property row names it with `model`; the

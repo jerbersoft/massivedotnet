@@ -436,16 +436,18 @@ internal sealed class Spec
                     $"{path}{expected.Name}/items/",
                     differences);
             }
-            else if (modelShape != siteShape && (IsStructured(modelShape) || IsStructured(siteShape)))
+            else if (modelShape != siteShape)
             {
+                // Array-ness is a shape fact, not a scalar type: a model property that is an array
+                // of scalars versus a plain scalar at a reuse site, or an array versus an array of
+                // arrays, is flagged the same as object-versus-scalar. Scalar types themselves stay
+                // uncompared -- both sides land on SchemaShape.Scalar, so modelShape == siteShape and
+                // this branch never runs for them.
                 differences.Add(
                     $"'{path}{expected.Name}' is {Describe(modelShape)} on the model but {Describe(siteShape)} at the site");
             }
         }
     }
-
-    private static bool IsStructured(SchemaShape shape) =>
-        shape is SchemaShape.Object or SchemaShape.ArrayOfObjects;
 
     private static bool IsObject(JsonElement schema) =>
         (schema.TryGetProperty("type", out JsonElement type) && type.GetString() == "object")

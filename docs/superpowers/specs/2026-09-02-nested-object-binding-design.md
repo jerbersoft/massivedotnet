@@ -161,7 +161,8 @@ always add a second row; nobody can undo a silently dropped field.
 `format: date` strings `LocalDate[]`. Today every array is `string[]` regardless of its element,
 which is wrong in the same silent way as the object default. An array of objects has no default and
 needs `model` (D-N3). No array of arrays exists in the description; if one arrives it fails
-generation like any other shape without a binding.
+generation like any other shape without a binding. An array schema with no `items` at all binds to
+`string[]`: the description declares nothing about its elements, and a string reads any scalar.
 
 On parameters this changes nothing observable: the only array-typed parameters are arrays of
 strings, and their rendering is #33's concern.
@@ -183,8 +184,10 @@ The generator's only new obligation is the `required` modifier. D-F10's check en
 types (`string`, arrays, class models) and would miss a dictionary. It inverts to a closed set of
 value types — `int`, `long`, `double`, `bool`, `LocalDate`, `Instant`, any `struct` model, and
 their nullable forms — and everything else is a reference type. An unfamiliar type gets `required`
-when the schema requires it, which is the safe direction: a spurious modifier is a compile error
-in the SDK's own build, a missing one is CS8618 there too.
+when the schema requires it, which is the safe direction: a missing modifier is CS8618 in the
+SDK's own build. A spurious modifier is not a compile error at all — C# allows `required` on a
+member of any type — but System.Text.Json then demands the key at deserialization time, which is
+wrong for an optional value-typed field.
 
 System.Text.Json source generation handles string-keyed dictionaries and discovers the value type
 through the property graph, so no `[JsonSerializable]` entry is needed and Native AOT is unaffected.

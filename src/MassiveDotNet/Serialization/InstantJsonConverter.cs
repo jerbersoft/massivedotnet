@@ -31,8 +31,8 @@ namespace MassiveDotNet.Serialization;
 public sealed class InstantJsonConverter : JsonConverter<Instant>
 {
     // YYYY-MM-DDTHH:MM:SS is 19 bytes; the shortest valid value adds a Z.
-    private const int DateTimeLength = 19;
-    private const int MinLength = DateTimeLength + 1;
+    private const int TimestampLength = 19;
+    private const int MinLength = TimestampLength + 1;
 
     // Longer than any escaped spelling of a timestamp. A raw value past this cannot be one, so it
     // is rejected before any buffer is sized from it.
@@ -101,7 +101,7 @@ public sealed class InstantJsonConverter : JsonConverter<Instant>
             throw Malformed(utf8);
         }
 
-        int position = DateTimeLength;
+        int position = TimestampLength;
         long nanoseconds = 0;
 
         if (utf8[position] == (byte)'.')
@@ -140,7 +140,8 @@ public sealed class InstantJsonConverter : JsonConverter<Instant>
             if (utf8.Length - position != 6
                 || utf8[position + 3] != (byte)':'
                 || !TryDigits(utf8.Slice(position + 1, 2), out int offsetHours)
-                || !TryDigits(utf8.Slice(position + 4, 2), out int offsetMinutes))
+                || !TryDigits(utf8.Slice(position + 4, 2), out int offsetMinutes)
+                || offsetMinutes > 59)
             {
                 throw Malformed(utf8);
             }
@@ -163,8 +164,13 @@ public sealed class InstantJsonConverter : JsonConverter<Instant>
             LocalDateTime local = new LocalDateTime(year, month, day, hour, minute, second).PlusNanoseconds(nanoseconds);
             return local.WithOffset(Offset.FromSeconds(offsetSeconds)).ToInstant();
         }
-        catch (ArgumentOutOfRangeException ex)
+        catch (Exception ex) when (ex is ArgumentOutOfRangeException or OverflowException)
         {
+            // ArgumentOutOfRangeException is an out-of-range local date or time, such as month 13
+            // or hour 24. OverflowException is a well-formed local date/time whose offset, once
+            // applied, pushes the instant past what NodaTime's Instant can represent -- the
+            // maximum year with a large negative offset, or the minimum year with a large positive
+            // one.
             throw new JsonException($"'{Encoding.UTF8.GetString(utf8)}' is not a valid timestamp.", ex);
         }
     }

@@ -216,7 +216,12 @@ public sealed class ReferenceNewsTests
 
         Assert.Equal(["8ec638777ca03b553ae516761c2a22ba2fdd2f37befae3ab6fdab74e9e5193eb", "second"], ids);
         Assert.Equal(2, handler.Requests.Count);
-        Assert.Equal("/v2/reference/news", handler.Requests[1].AbsolutePath);
-        Assert.StartsWith("?cursor=eyJsaW1pdCI6MSw", handler.Requests[1].Query, StringComparison.Ordinal);
+
+        // The cursor is followed verbatim (D14): the second request's path and query must match
+        // the fixture's own next_url exactly, not merely start with its cursor.
+        using JsonDocument firstPage = JsonDocument.Parse(Fixtures.ReferenceNews);
+        Uri nextUrl = new(firstPage.RootElement.GetProperty("next_url").GetString()!);
+
+        Assert.Equal(nextUrl.PathAndQuery, handler.Requests[1].PathAndQuery);
     }
 }

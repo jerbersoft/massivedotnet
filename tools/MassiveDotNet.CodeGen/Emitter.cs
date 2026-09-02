@@ -120,6 +120,8 @@ internal sealed class Emitter(Spec spec, Map map)
             {
                 SpecOperation operation = spec.Operation(endpoint.OperationId);
 
+                ValidateResultReuse(endpoint, operation);
+
                 List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
                     .Select(property => (
                         property,
@@ -489,9 +491,11 @@ internal sealed class Emitter(Spec spec, Map map)
     /// is. Value types are a closed set (D-N6): the scalars the generator emits, the NodaTime
     /// types, and any <c>struct</c> model. Everything else -- <c>string</c>, arrays, class models,
     /// a map-supplied <c>Dictionary&lt;string, T&gt;</c> -- is a reference type and gets the
-    /// modifier, which is the safe direction: a spurious modifier and a missing one are both
-    /// compile errors in this build, so neither can ship. Read from the resolved type string
-    /// alone, so the check is order-independent and rule 6 holds.
+    /// modifier, which is the safe direction: a missing modifier is CS8618 in this build, so it
+    /// cannot ship. A spurious modifier on a value type is not a compile error -- C# allows
+    /// <c>required</c> on a member of any type -- but System.Text.Json then demands the key at
+    /// deserialization time, which is wrong for a field the schema does not require. Read from the
+    /// resolved type string alone, so the check is order-independent and rule 6 holds.
     /// </remarks>
     /// <param name="required">Whether the schema declares the property required.</param>
     /// <param name="type">The property's resolved C# type, nullable annotation included.</param>
@@ -728,6 +732,45 @@ internal sealed class Emitter(Spec spec, Map map)
         string type = shape == SchemaShape.ArrayOfObjects ? $"{target.Name}[]" : target.Name;
 
         return property.Required ? type : $"{type}?";
+    }
+
+    /// <summary>
+    /// Verifies an endpoint's <c>result</c> row against the schema its named model was generated
+    /// from, the same structural check <see cref="ModelReferenceType"/> runs where a model is
+    /// named on a property (D-N4). A model name may cover only one shape, whether it is reused on
+    /// a property or as an endpoint's own top-level result. Runs once per endpoint, from
+    /// <see cref="EmitEnvelopes"/>, so it is order-independent and rule 6 holds.
+    /// </summary>
+    private void ValidateResultReuse(MapEndpoint endpoint, SpecOperation operation)
+    {
+        MapModel target = map.Models.Find(m => m.Name == endpoint.Result.Model)
+            ?? throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
+                + $"'{endpoint.Result.Model}', which is not declared in \"models\" in specs/endpoints.map.json.");
+
+        // "array" is the only result kind the map declares today. A new kind needs its own site
+        // pointer added here rather than silently skipping the check.
+        JsonElement site = endpoint.Result.Kind switch
+        {
+            "array" => Spec.Navigate(Spec.SuccessSchema(operation), $"{endpoint.Result.Property}/items"),
+            _ => throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result kind "
+                + $"'{endpoint.Result.Kind}' has no structural reuse check. Add one for it in "
+                + "Emitter.ValidateResultReuse before using this kind."),
+        };
+
+        JsonElement origin = Spec.Navigate(Spec.SuccessSchema(spec.Operation(target.SchemaOperationId)), target.SchemaPointer);
+        List<string> differences = Spec.StructuralDifferences(origin, site);
+
+        if (differences.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
+                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at '{target.SchemaPointer}', "
+                + "but the schema at this site differs:\n  "
+                + string.Join("\n  ", differences)
+                + "\nA model name may cover only one shape. Declare a second model for this site, or fix the row.");
+        }
     }
 
     private static string NullableEnvelopeType(SpecProperty property)
