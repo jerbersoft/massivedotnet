@@ -243,6 +243,15 @@ internal sealed class Emitter(Spec spec, Map map)
         // order-independent, so rule 6 holds.
         bool needsSystemNet = endpoints.Exists(e => Shape(e, spec.Operation(e.OperationId)).ThrowsOnMissingPayload);
 
+        // ExperimentalAttribute lives in System.Diagnostics.CodeAnalysis; ObsoleteAttribute is in
+        // System, which the implicit usings already cover. Exists is order-independent (rule 6).
+        bool needsCodeAnalysis = endpoints.Exists(e => Spec.IsExperimental(spec.Operation(e.OperationId)));
+
+        if (needsCodeAnalysis)
+        {
+            writer.Line("using System.Diagnostics.CodeAnalysis;");
+        }
+
         if (needsSystemNet)
         {
             writer.Line("using System.Net;");
@@ -301,6 +310,10 @@ internal sealed class Emitter(Spec spec, Map map)
         // Nullable because Prose.Clean returns null for blank prose; Doc skips blank content.
         string? summary = endpoint.Summary ?? Prose.Clean(Summary(operation));
         bool preserve = endpoint.Summary is not null;
+        // Both public entry points carry the same attributes: a consumer reaches a deprecated or
+        // experimental operation through either one, and only the entry points are marked, so the
+        // private Build and Send methods, the models, and the JSON context stay diagnostic-free.
+        List<string> stability = StabilityAttributes(operation);
 
         if (shape.Enumerates)
         {
@@ -350,6 +363,11 @@ internal sealed class Emitter(Spec spec, Map map)
                 preserveMarkup: true);
             writer.Doc("exception", "The server responded with an error status.", "cref=\"MassiveApiException\"");
 
+            foreach (string attribute in stability)
+            {
+                writer.Line(attribute);
+            }
+
             List<string> enumerateSignature = Signature(
                 $"public IAsyncEnumerable<{shape.ItemType}> {enumerate}Async",
                 [.. arguments.Select(a => a.Declaration), "CancellationToken cancellationToken = default"]);
@@ -396,6 +414,11 @@ internal sealed class Emitter(Spec spec, Map map)
         };
 
         writer.Doc("exception", thrown, "cref=\"MassiveApiException\"", preserveMarkup: true);
+
+        foreach (string attribute in stability)
+        {
+            writer.Line(attribute);
+        }
 
         List<string> signature = Signature(
             $"public Task<{shape.ReturnType}> {endpoint.Method}Async",
@@ -448,6 +471,56 @@ internal sealed class Emitter(Spec spec, Map map)
     }
 
     /// <summary>The <c>returns</c> sentence of the <c>List</c> or <c>Get</c> method, one per row of the D-S1 table.</summary>
+    /// <summary>The diagnostic a consumer suppresses to opt in to an experimental operation. An error by default.</summary>
+    private const string ExperimentalDiagnosticId = "MASSIVE0001";
+
+    /// <summary>The diagnostic a consumer suppresses to keep calling a deprecated operation. A warning.</summary>
+    private const string DeprecatedDiagnosticId = "MASSIVE0002";
+
+    /// <summary>
+    /// The attributes an operation's public entry points carry, read from the description (D18).
+    /// A deprecation names the .NET method that supersedes it, which is why the replacement must
+    /// already be mapped; an experimental operation names the diagnostic to suppress, since the
+    /// attribute is an error until a consumer opts in.
+    /// </summary>
+    private List<string> StabilityAttributes(SpecOperation operation)
+    {
+        List<string> attributes = [];
+
+        if (Spec.Deprecation(operation) is { } deprecation)
+        {
+            string message = "Massive has deprecated this operation.";
+
+            if (deprecation.ReplacementSlug is { } slug)
+            {
+                SpecOperation replacement = spec.OperationBySlug(slug)
+                    ?? throw new InvalidOperationException(
+                        $"Operation '{operation.OperationId}' is deprecated in favour of '{slug}', which matches no "
+                        + "operation in the OpenAPI description. The slug is derived from the replacement's route, "
+                        + "so either the description changed or the derivation in Spec.Slug needs revisiting.");
+
+                MapEndpoint row = map.Endpoints.Find(e => e.OperationId == replacement.OperationId)
+                    ?? throw new InvalidOperationException(
+                        $"Operation '{operation.OperationId}' is deprecated in favour of '{replacement.OperationId}' "
+                        + $"({replacement.Path}), which is not mapped. Map the replacement first, so the Obsolete "
+                        + "message can name the method that supersedes it.");
+
+                message += $" Use {row.Group}.{row.Method}Async instead.";
+            }
+
+            attributes.Add($"[Obsolete(\"{message}\", DiagnosticId = \"{DeprecatedDiagnosticId}\")]");
+        }
+
+        if (Spec.IsExperimental(operation))
+        {
+            attributes.Add(
+                $"[Experimental(\"{ExperimentalDiagnosticId}\", Message = \"Massive marks this operation experimental: "
+                + $"it may change or be removed without notice. Suppress {ExperimentalDiagnosticId} to opt in.\")]");
+        }
+
+        return attributes;
+    }
+
     private static string Returns(ResultShape shape)
     {
         if (shape.Property is not { } property)

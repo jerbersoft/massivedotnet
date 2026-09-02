@@ -17,7 +17,7 @@ and does not belong in this section.
 | # | Rule | Enforced by |
 |---|------|-------------|
 | 1 | Every non-deprecated REST operation in `specs/openapi.json` is reachable from the public API. | `EndpointCoverageTests` — build fails |
-| 2 | Deprecated operations ship, marked `[Obsolete]`. `vX` operations ship, marked `[Experimental]`. Nothing is silently omitted. | Code review against the map |
+| 2 | Deprecated operations ship, marked `[Obsolete]`. `vX` operations ship, marked `[Experimental]`. Nothing is silently omitted. | `EndpointCoverageTests` — every mapped entry point carries the attribute exactly where the spec's `x-polygon-deprecation` extension or `vX` route says so; build fails |
 | 3 | No reflection-based serialization anywhere in shipped code. `System.Text.Json` source generation only. | AOT smoke publish must emit **zero** IL warnings |
 | 4 | Shipped libraries set `IsAotCompatible` and `IsTrimmable`. | `src/Directory.Build.props`, verified by AOT publish |
 | 5 | Generated files (`*.g.cs`) are never hand-edited. Hand-written members go in the matching `partial`. | CI regenerates and fails on any diff |
@@ -56,6 +56,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D15 | Comparator variants (`.gt` `.gte` `.lt` `.lte` `.any_of` `.all_of`) collapse to **one filter-typed parameter per field**: `RangeFilter<T>`, `SetFilter<T>`, `Filter<T>`, or `ArrayFilter<T>`, chosen by the generator from the exact suffix set the spec declares. Equality is the implicit conversion from `T`. Rendering lives in `RequestUriBuilder`, not in generated code. | 1,182 flat parameters gave one endpoint a 114-argument method. The field is the unit the platform documents; typing it by capability makes an unsupported comparator a compile error rather than a silently dropped parameter. Grouping is read from the spec so it cannot drift, and an unrecognised suffix set fails generation instead of guessing. One rendering implementation is tested once rather than in 93 generated files. Element types are a closed set (`string`, `int`, `long`, `double`, `LocalDate`, `DateOrTimestamp`); `Instant` is excluded because it carries no wire precision. |
 | D16 | Nested object schemas bind to **named models in the map**, generated from the spec and verified structurally at every site that names them. An object with no binding fails generation. | 184 nested sites across 55 operations collapse to 60 shapes, and their public names (`Greeks`, `NewsPublisher`) are worth a human's row in the map: path-derived names would give the three stocks snapshot operations three identical `Day` types. A name may cover only one shape, so every reuse site is checked — property names must match exactly and the model may not require what the site makes optional — while scalar types are trusted from the model row, because the description's own formats disagree at sites that are plainly the same thing. Failing on an unbound object is what stops a required nested object from shipping as a `string` that throws at deserialization. |
 | D17 | The `result` row has two kinds, `array` and `object`, and an omitted `property` means the body is the payload. A paginated object result returns `MassivePagedResult<T>` and enumerates the array its model row names as `items`; a paginated object with no `items` keeps a `Get` whose cursor, if one ever arrives, throws. Every singular `Get` returns `T`, and a 200 without its payload throws. | Fifty operations are not an array under `results`: 28 return one object there, 20 of which — the indicators — genuinely paginate over `results.values` with a per-page `underlying`, and 22 have no `results` at all. `MassivePage<T>` cannot hold an object with two halves, and discarding `underlying` would silently drop what `expand_underlying` asked for. Pagination stays spec-detected: the map only says where the items are, so it cannot drift. `Task<T?>` on every `Get` was rejected because the description's requiredness is unreliable and every unknown-ticker probe returned 404; a 200 without a payload is the same class of failure as a body that will not deserialize, and is reported the same way. |
+| D18 | Stability is **read from the spec**, never declared in the map: `x-polygon-deprecation` marks a deprecated operation, and a `vX` route segment or `x-polygon-experimental` marks an experimental one. Deprecated entry points carry `[Obsolete]` with diagnostic `MASSIVE0002`, a warning, whose message names the .NET method that supersedes them; experimental ones carry `[Experimental("MASSIVE0001")]`, an error until a consumer suppresses it. Only the public entry points are marked. | The issue that asked for this had the map carry a `stability` column, but the description already says both things, and a second source is one that drifts. The extension alone is not enough — it appears on two of the fourteen `vX` routes — so the path is the primary signal. Dedicated diagnostic ids let a consumer with warnings-as-errors suppress this SDK's deprecations without hiding every other CS0618, and make the experimental opt-in a single `NoWarn` entry. A replacement is resolved from the docs-site slug the description carries rather than restated in the map, so generation refuses a deprecated operation whose replacement is unmapped instead of emitting a message that names nothing. Models, envelopes, and the JSON context stay unmarked so the SDK's own generated code compiles without suppressions. |
 
 ---
 
@@ -87,7 +88,9 @@ samples/MassiveDotNet.AotSmokeTest
    sits (`property`, omitted when the body itself is the payload); a paginated object's model row
    names the array it enumerates as `items` (D17).
    Everything else — paths, parameters, requiredness, enum members, nullability, prose — is read
-   from the spec so it cannot drift.
+   from the spec so it cannot drift. So is stability: a deprecated operation's `[Obsolete]` message
+   names the method that replaces it, so map the replacement before the operation it supersedes,
+   or generation refuses (D18).
 2. Regenerate: `dotnet run --project tools/MassiveDotNet.CodeGen`
 3. Raise `CoverageBaseline` in `EndpointCoverageTests` to the new count.
 4. Add a deserialization test using the endpoint's **published sample response** as the fixture.
@@ -330,6 +333,12 @@ learns what the live tier found.
   objects, or unbound (D17). Names are domain nouns, prefixed by family only where it
   disambiguates; reuse a model across operations only where the generator's structural check
   passes (D16).
+- **Stability**: a deprecated operation's entry points carry
+  `[Obsolete("…", DiagnosticId = "MASSIVE0002")]`, a warning whose message names the replacement;
+  a `vX` operation's carry `[Experimental("MASSIVE0001")]`, an error until a consumer opts in
+  with `<NoWarn>$(NoWarn);MASSIVE0001</NoWarn>` or a `#pragma`. Both are read from the spec, never
+  declared in the map (D18). A test or sample project that exercises such an endpoint suppresses
+  the id in its own `.csproj`; nothing is ever suppressed inside generated code.
 - **Nullability**: enabled everywhere. Optional query parameters are nullable and omitted from the
   request when `null` — never sent as empty.
 - **Temporal**: see [Temporal types](#temporal-types). Rule 12 is strict and machine-checked.

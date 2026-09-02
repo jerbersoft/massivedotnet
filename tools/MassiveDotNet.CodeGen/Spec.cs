@@ -5,6 +5,13 @@ namespace MassiveDotNet.CodeGen;
 /// <summary>A single GET operation from the OpenAPI description.</summary>
 internal sealed record SpecOperation(string OperationId, string Path, JsonElement Operation);
 
+/// <summary>A deprecation the description declares on an operation through <c>x-polygon-deprecation</c> (D18).</summary>
+/// <param name="ReplacementSlug">
+/// The docs-site slug of the operation that supersedes it, such as <c>get_v3_trades__stockticker</c>,
+/// or <see langword="null"/> when the description names none.
+/// </param>
+internal sealed record SpecDeprecation(string? ReplacementSlug);
+
 /// <summary>A parameter as described by the OpenAPI document.</summary>
 internal sealed record SpecParameter(
     string Name,
@@ -147,6 +154,43 @@ internal sealed class Spec
             ? operation
             : throw new InvalidOperationException(
                 $"Operation '{operationId}' is not present in the OpenAPI description.");
+
+    /// <summary>The operation whose route a docs-site slug names, or <see langword="null"/>.</summary>
+    public SpecOperation? OperationBySlug(string slug) =>
+        _operations.Values.FirstOrDefault(operation => Slug(operation.Path) == slug);
+
+    /// <summary>
+    /// The docs-site slug of a route, which is how <c>x-polygon-deprecation</c> names a replacement:
+    /// <c>get</c>, then the path with every slash and brace as an underscore, lowercased, with the
+    /// trailing underscore a closing brace leaves behind trimmed away.
+    /// </summary>
+    public static string Slug(string path) =>
+        ("get" + path.Replace('/', '_').Replace('{', '_').Replace('}', '_')).ToLowerInvariant().TrimEnd('_');
+
+    /// <summary>
+    /// Whether Massive publishes an operation as experimental: its route carries a <c>vX</c>
+    /// segment, or it declares <c>x-polygon-experimental</c>. Both are read because the
+    /// extension appears on only two of the fourteen <c>vX</c> routes.
+    /// </summary>
+    public static bool IsExperimental(SpecOperation operation) =>
+        operation.Operation.TryGetProperty("x-polygon-experimental", out _)
+        || operation.Path.Split('/').Contains("vX");
+
+    /// <summary>The deprecation an operation declares, or <see langword="null"/> for a live one.</summary>
+    public static SpecDeprecation? Deprecation(SpecOperation operation)
+    {
+        if (!operation.Operation.TryGetProperty("x-polygon-deprecation", out JsonElement deprecation))
+        {
+            return null;
+        }
+
+        string? slug = deprecation.TryGetProperty("replaces", out JsonElement replaces)
+            && replaces.TryGetProperty("path", out JsonElement path)
+            ? path.GetString()
+            : null;
+
+        return new SpecDeprecation(slug);
+    }
 
     /// <summary>Returns an operation's parameters in declaration order, resolving component references.</summary>
     public List<SpecParameter> Parameters(SpecOperation operation)
