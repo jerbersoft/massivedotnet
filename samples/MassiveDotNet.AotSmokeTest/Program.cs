@@ -95,6 +95,42 @@ if (dividends.Results.Length != 1 || dividends.Results[0].ExDividendDate != new 
     return 1;
 }
 
+// Nested models and the RFC 3339 converter are reachable only through the news envelope, so a
+// clean publish says nothing about them unless something here deserializes one. This is the
+// first call whose result carries a required nested object, an array of nested objects, and an
+// Instant parsed from a string rather than an epoch number.
+Console.WriteLine("\nnews, with a nested publisher and insights:");
+
+MassivePage<NewsArticle> news = await client.Reference.ListNewsAsync(
+    ticker: "UBS",
+    publishedUtc: RangeFilter.Gte(new LocalDate(2024, 6, 1)),
+    limit: 1);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (NewsArticle item in news.Results)
+{
+    Console.WriteLine($"  {InstantPattern.ExtendedIso.Format(item.PublishedUtc)}  {item.Publisher.Name}  {item.Title}");
+}
+
+const string ExpectedNewsQuery = "?ticker=UBS&published_utc.gte=2024-06-01&limit=1";
+
+if (handler.LastRequestUri?.Query != ExpectedNewsQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the news query {ExpectedNewsQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (news.Results is not [NewsArticle article]
+    || article.Publisher.Name != "Investing.com"
+    || article.PublishedUtc != Instant.FromUtc(2024, 6, 24, 18, 33, 53)
+    || article.Insights is not [{ Ticker: "UBS", Sentiment: "positive" }]
+    || article.Keywords is not { Length: 3 })
+{
+    Console.Error.WriteLine("FAIL: expected one article from Investing.com published 2024-06-24T18:33:53Z with one positive UBS insight and three keywords.");
+    return 1;
+}
+
 Console.WriteLine($"\nrequests: {handler.Requests}");
 
 if (bars.Length != 2 || !page.HasMore)
@@ -103,11 +139,12 @@ if (bars.Length != 2 || !page.HasMore)
     return 1;
 }
 
-// Two pages of the enumeration, the single-page aggregates call, and the dividends call.
-if (enumerated != 3 || handler.Requests != 4)
+// Two pages of the enumeration, the single-page aggregates call, the dividends call, and the
+// news call.
+if (enumerated != 3 || handler.Requests != 5)
 {
     Console.Error.WriteLine(
-        $"FAIL: expected 3 enumerated bars over 4 requests; got {enumerated} over {handler.Requests}.");
+        $"FAIL: expected 3 enumerated bars over 5 requests; got {enumerated} over {handler.Requests}.");
     return 1;
 }
 
@@ -173,6 +210,48 @@ internal sealed class StubHandler : HttpMessageHandler
         }
         """;
 
+    private const string News = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com:443/v2/reference/news?cursor=eyJsaW1pdCI6MSwic29ydCI6InB1Ymxpc2hlZF91dGMiLCJvcmRlciI6ImFzY2VuZGluZyIsInRpY2tlciI6e30sInB1Ymxpc2hlZF91dGMiOnsiZ3RlIjoiMjAyMS0wNC0yNiJ9LCJzZWFyY2hfYWZ0ZXIiOlsxNjE5NDA0Mzk3MDAwLG51bGxdfQ",
+          "request_id": "831afdb0b8078549fed053476984947a",
+          "results": [
+            {
+              "amp_url": "https://m.uk.investing.com/news/stock-market-news/markets-are-underestimating-fed-cuts-ubs-3559968?ampMode=1",
+              "article_url": "https://uk.investing.com/news/stock-market-news/markets-are-underestimating-fed-cuts-ubs-3559968",
+              "author": "Sam Boughedda",
+              "description": "UBS analysts warn that markets are underestimating the extent of future interest rate cuts by the Federal Reserve, as the weakening economy is likely to justify more cuts than currently anticipated.",
+              "id": "8ec638777ca03b553ae516761c2a22ba2fdd2f37befae3ab6fdab74e9e5193eb",
+              "image_url": "https://i-invdn-com.investing.com/news/LYNXNPEC4I0AL_L.jpg",
+              "insights": [
+                {
+                  "sentiment": "positive",
+                  "sentiment_reasoning": "UBS analysts are providing a bullish outlook on the extent of future Federal Reserve rate cuts, suggesting that markets are underestimating the number of cuts that will occur.",
+                  "ticker": "UBS"
+                }
+              ],
+              "keywords": [
+                "Federal Reserve",
+                "interest rates",
+                "economic data"
+              ],
+              "published_utc": "2024-06-24T18:33:53Z",
+              "publisher": {
+                "favicon_url": "https://s3.massive.com/public/assets/news/favicons/investing.ico",
+                "homepage_url": "https://www.investing.com/",
+                "logo_url": "https://s3.massive.com/public/assets/news/logos/investing.png",
+                "name": "Investing.com"
+              },
+              "tickers": [
+                "UBS"
+              ],
+              "title": "Markets are underestimating Fed cuts: UBS By Investing.com - Investing.com UK"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     public Uri? LastRequestUri { get; private set; }
 
     public int Requests { get; private set; }
@@ -189,6 +268,10 @@ internal sealed class StubHandler : HttpMessageHandler
         if (request.RequestUri?.AbsolutePath == "/stocks/v1/dividends")
         {
             body = Dividends;
+        }
+        else if (request.RequestUri?.AbsolutePath == "/v2/reference/news")
+        {
+            body = News;
         }
         else
         {
