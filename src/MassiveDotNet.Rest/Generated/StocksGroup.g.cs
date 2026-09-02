@@ -10,6 +10,7 @@
 // nullable context, so it is re-enabled explicitly here.
 #nullable enable
 
+using System.Net;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
 using MassiveDotNet.Rest.Serialization;
@@ -320,5 +321,270 @@ public readonly partial struct StocksGroup
             response?.Results,
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the simple moving average (SMA) of a stock's price over a window of aggregates,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed, and yields
+    /// each page's <c>values</c> in turn; the other members of each page's <c>results</c> are not
+    /// observable through this sequence. Use <see cref="ListSmaAsync"/> to retrieve a single page
+    /// instead. <paramref name="limit"/> sizes each page rather than the traversal, so lowering it
+    /// issues more requests rather than returning fewer items; bound the sequence with <c>Take</c>
+    /// instead. Each page carries the values computed for it and, with <paramref
+    /// name="expandUnderlying"/>, the aggregates they were computed from. <paramref name="timespan"/>
+    /// accepts every <see cref="AggregateTimespan"/> except <see cref="AggregateTimespan.Second"/>,
+    /// which this endpoint does not offer and rejects with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get simple moving average (SMA) data. For
+    /// example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the simple moving average are adjusted for
+    /// splits. By default, aggregates are adjusted. Set this to false to get results that are NOT
+    /// adjusted for splits.
+    /// </param>
+    /// <param name="window">
+    /// The window size used to calculate the simple moving average (SMA). i.e. a window size of 10 with
+    /// daily aggregates would result in a 10 day moving average.
+    /// </param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the simple moving average. i.e.
+    /// 'close' will result in using close prices to calculate the simple moving average (SMA).
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>values</c> entry across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<IndicatorValue> EnumerateSmaAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? window = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListSmaUri(ticker, timestamp, timespan, adjusted, window, seriesType, expandUnderlying, order, limit);
+        return _transport.EnumerateAsync<SMAResponse, IndicatorValue>(
+            requestUri, MassiveRestJsonContext.Default.SMAResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the simple moving average (SMA) of a stock's price over a window of aggregates.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateSmaAsync"/> to walk every page without
+    /// handling cursors yourself. Each page carries the values computed for it and, with <paramref
+    /// name="expandUnderlying"/>, the aggregates they were computed from. <paramref name="timespan"/>
+    /// accepts every <see cref="AggregateTimespan"/> except <see cref="AggregateTimespan.Second"/>,
+    /// which this endpoint does not offer and rejects with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get simple moving average (SMA) data. For
+    /// example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the simple moving average are adjusted for
+    /// splits. By default, aggregates are adjusted. Set this to false to get results that are NOT
+    /// adjusted for splits.
+    /// </param>
+    /// <param name="window">
+    /// The window size used to calculate the simple moving average (SMA). i.e. a window size of 10 with
+    /// daily aggregates would result in a 10 day moving average.
+    /// </param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the simple moving average. i.e.
+    /// 'close' will result in using close prices to calculate the simple moving average (SMA).
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page: the <c>results</c> object, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<MassivePagedResult<IndicatorSeries>> ListSmaAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? window = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListSmaUri(ticker, timestamp, timespan, adjusted, window, seriesType, expandUnderlying, order, limit);
+        return SendListSmaAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListSmaUri(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp,
+        AggregateTimespan? timespan,
+        bool? adjusted,
+        int? window,
+        SeriesType? seriesType,
+        bool? expandUnderlying,
+        SortOrder? order,
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/indicators/sma/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("timespan", timespan?.ToWireValue());
+        builder.AppendQuery("adjusted", adjusted);
+        builder.AppendQuery("window", window);
+        builder.AppendQuery("series_type", seriesType?.ToWireValue());
+        builder.AppendQuery("expand_underlying", expandUnderlying);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePagedResult<IndicatorSeries>> SendListSmaAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        SMAResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.SMAResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        IndicatorSeries result = response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePagedResult<IndicatorSeries>(
+            result,
+            !string.IsNullOrWhiteSpace(response.NextUrl),
+            response.RequestId);
+    }
+
+    /// <summary>Retrieves the most recent trade for a stock.</summary>
+    /// <remarks>An unknown ticker is a 404, surfaced as <see cref="MassiveApiException"/>, not an empty result.</remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<LastTrade> GetLastTradeAsync(
+        string ticker,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildGetLastTradeUri(ticker);
+        return SendGetLastTradeAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetLastTradeUri(
+        string ticker)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/last/trade/");
+        builder.AppendPathSegment(ticker);
+
+
+        return builder.ToUriString();
+    }
+
+    private async Task<LastTrade> SendGetLastTradeAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        LastTradeResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.LastTradeResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the open, high, low, close, and volume for a stock on one trading day, with its
+    /// pre-market and after-hours prices.
+    /// </summary>
+    /// <remarks>
+    /// A date with no session, such as a weekend or a holiday, is a 404, surfaced as <see
+    /// cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="date">The date of the requested open/close in the format YYYY-MM-DD.</param>
+    /// <param name="adjusted">
+    /// Whether or not the results are adjusted for splits. By default, results are adjusted. Set this
+    /// to false to get results that are NOT adjusted for splits.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The response body, deserialized as one object.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<DailyOpenClose> GetDailyOpenCloseAsync(
+        string ticker,
+        LocalDate date,
+        bool? adjusted = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildGetDailyOpenCloseUri(ticker, date, adjusted);
+        return SendGetDailyOpenCloseAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetDailyOpenCloseUri(
+        string ticker,
+        LocalDate date,
+        bool? adjusted)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/open-close/");
+        builder.AppendPathSegment(ticker);
+        builder.AppendPathLiteral("/");
+        builder.AppendPathLiteral(date.ToWireValue());
+
+        builder.AppendQuery("adjusted", adjusted);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<DailyOpenClose> SendGetDailyOpenCloseAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        DailyOpenClose? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.DailyOpenClose, cancellationToken)
+            .ConfigureAwait(false);
+
+        // An empty body is a success the caller cannot use, reported the same way as a body that
+        // fails to deserialize (D17). There is no envelope here, so no request id can be reported.
+        return response
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no payload.");
     }
 }

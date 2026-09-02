@@ -98,3 +98,40 @@ internal sealed class ListNewsResponse : IPagedEnvelope<NewsArticle>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v1/indicators/sma/{stockTicker}.</summary>
+internal sealed class SMAResponse : IPagedEnvelope<IndicatorValue>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results of the SMA indicator calculation.</summary>
+    [JsonPropertyName("results")]
+    public IndicatorSeries? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    IndicatorValue[]? IPagedEnvelope<IndicatorValue>.Results => Results?.Values;
+}
+
+/// <summary>The response envelope returned by /v2/last/trade/{stocksTicker}.</summary>
+internal sealed class LastTradeResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    [JsonPropertyName("results")]
+    public LastTrade? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

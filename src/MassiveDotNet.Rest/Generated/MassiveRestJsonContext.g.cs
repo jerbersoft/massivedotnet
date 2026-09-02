@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Models;
 using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Serialization;
@@ -28,4 +29,8 @@ namespace MassiveDotNet.Rest.Serialization;
 [JsonSerializable(typeof(GetStocksAggregatesResponse))]
 [JsonSerializable(typeof(GetStocksV1DividendsResponse))]
 [JsonSerializable(typeof(ListNewsResponse))]
+[JsonSerializable(typeof(SMAResponse))]
+[JsonSerializable(typeof(LastTradeResponse))]
+[JsonSerializable(typeof(DailyOpenClose))]
+[JsonSerializable(typeof(MarketHoliday[]))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

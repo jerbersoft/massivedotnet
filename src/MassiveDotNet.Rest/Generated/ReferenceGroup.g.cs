@@ -121,4 +121,34 @@ public readonly partial struct ReferenceGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>Retrieves upcoming market holidays and early closes, one entry per exchange.</summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The response body, an array that is empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MarketHoliday[]> ListMarketHolidaysAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListMarketHolidaysUri();
+        return SendListMarketHolidaysAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListMarketHolidaysUri()
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/marketstatus/upcoming");
+
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MarketHoliday[]> SendListMarketHolidaysAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        MarketHoliday[]? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.MarketHolidayArray, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response ?? [];
+    }
 }

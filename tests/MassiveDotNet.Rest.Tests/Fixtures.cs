@@ -147,6 +147,169 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// The documented sample for GET /v1/indicators/sma/{stockTicker}, verbatim. One value, and
+    /// two underlying aggregates as <c>expand_underlying</c> returns them.
+    /// </summary>
+    public const string StocksSma = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/sma/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "aggregates": [
+                {
+                  "c": 75.0875,
+                  "h": 75.15,
+                  "l": 73.7975,
+                  "n": 1,
+                  "o": 74.06,
+                  "t": 1577941200000,
+                  "v": 135647456,
+                  "vw": 74.6099
+                },
+                {
+                  "c": 74.3575,
+                  "h": 75.145,
+                  "l": 74.125,
+                  "n": 1,
+                  "o": 74.2875,
+                  "t": 1578027600000,
+                  "v": 146535512,
+                  "vw": 74.7026
+                }
+              ],
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "timestamp": 1517562000016,
+                "value": 140.139
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the SMA envelope's shape, with no <c>next_url</c> and only the
+    /// underlying's URL, so a traversal that starts from <see cref="StocksSma"/> ends after two
+    /// requests. The service cannot be asked for "the page after the published sample".
+    /// </summary>
+    public const string StocksSmaLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-24"
+            },
+            "values": [
+              {
+                "timestamp": 1517475600016,
+                "value": 139.871
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v2/last/trade/{stocksTicker}, verbatim.</summary>
+    public const string StocksLastTrade = """
+        {
+          "request_id": "f05562305bd26ced64b98ed68b3c5d96",
+          "results": {
+            "T": "AAPL",
+            "c": [
+              37
+            ],
+            "ds": "25.0",
+            "f": 1617901342969796400,
+            "i": "118749",
+            "p": 129.8473,
+            "q": 3135876,
+            "r": 202,
+            "s": 25,
+            "t": 1617901342969834000,
+            "x": 4,
+            "y": 1617901342968000000,
+            "z": 3
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/open-close/{stocksTicker}/{date}, verbatim. The body is
+    /// the payload: there is no <c>results</c> wrapper, and <c>status</c> sits beside the prices.
+    /// </summary>
+    public const string StocksOpenClose = """
+        {
+          "afterHours": 322.1,
+          "close": 325.12,
+          "from": "2023-01-09",
+          "high": 326.2,
+          "low": 322.3,
+          "open": 324.66,
+          "preMarket": 324.5,
+          "status": "OK",
+          "symbol": "AAPL",
+          "volume": 26122646
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/marketstatus/upcoming, verbatim. The body is a bare array
+    /// with no envelope at all; the early-close entries carry timestamps with a fraction.
+    /// </summary>
+    public const string MarketHolidays = """
+        [
+          {
+            "date": "2020-11-26",
+            "exchange": "NYSE",
+            "name": "Thanksgiving",
+            "status": "closed"
+          },
+          {
+            "date": "2020-11-26",
+            "exchange": "NASDAQ",
+            "name": "Thanksgiving",
+            "status": "closed"
+          },
+          {
+            "date": "2020-11-26",
+            "exchange": "OTC",
+            "name": "Thanksgiving",
+            "status": "closed"
+          },
+          {
+            "close": "2020-11-27T18:00:00.000Z",
+            "date": "2020-11-27",
+            "exchange": "NASDAQ",
+            "name": "Thanksgiving",
+            "open": "2020-11-27T14:30:00.000Z",
+            "status": "early-close"
+          },
+          {
+            "close": "2020-11-27T18:00:00.000Z",
+            "date": "2020-11-27",
+            "exchange": "NYSE",
+            "name": "Thanksgiving",
+            "open": "2020-11-27T14:30:00.000Z",
+            "status": "early-close"
+          }
+        ]
+        """;
+
+    /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
+    public const string SingularWithoutResults = """
+        {
+          "status": "OK",
+          "request_id": "r"
+        }
+        """;
+
     /// <summary>An error body in the shape Massive returns for an unauthorized request.</summary>
     public const string Unauthorized = """
         {

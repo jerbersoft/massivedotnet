@@ -8,6 +8,7 @@
     "  * which SDK group and method name an operation surfaces as",
     "  * .NET-friendly parameter names and strong types",
     "  * property names for anonymous result schemas, and a name for every nested object",
+    "  * where the payload sits: one model or an array of it, on a named property or as the body",
     "",
     "Everything else -- paths, parameter lists, requiredness, enum members, nullability --",
     "is read from specs/openapi.json at generation time so it cannot drift.",
@@ -106,6 +107,94 @@
         "sentiment":           { "name": "Sentiment" },
         "sentiment_reasoning": { "name": "SentimentReasoning" }
       }
+    },
+
+    "IndicatorSeries": {
+      "summary": "One page of a technical indicator: the values computed for the page, and the aggregates they were computed from.",
+      "remarks": "The values continue across pages; the underlying belongs to each page alone, which is why <c>Enumerate</c> yields only values and <c>List</c> returns the whole page (decision D17). A container rather than a tick, so a class (decision D4).",
+      "schema": { "operationId": "SMA", "pointer": "results" },
+      "items": "values",
+      "properties": {
+        "values":     { "name": "Values",     "model": "IndicatorValue" },
+        "underlying": { "name": "Underlying", "model": "IndicatorUnderlying" }
+      }
+    },
+
+    "IndicatorValue": {
+      "kind": "struct",
+      "summary": "One point of a technical indicator series: the value, and the timestamp of the last aggregate that produced it.",
+      "remarks": "A struct, like <see cref=\"Agg\"/> (decision D4): a series is read as a whole and nobody null-checks a point. <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5).",
+      "schema": { "operationId": "SMA", "pointer": "results/values/items" },
+      "properties": {
+        "timestamp": { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp of the last aggregate used in this calculation." },
+        "value":     { "name": "Value", "type": "double", "summary": "The indicator's value at this point." }
+      }
+    },
+
+    "IndicatorUnderlying": {
+      "summary": "The aggregates a page of indicator values was computed from, and the aggregates request that produced them.",
+      "remarks": "<see cref=\"Aggregates\"/> is present only when the request set <c>expand_underlying</c>; <see cref=\"Url\"/> is always present. Each page carries its own, overlapping the previous page's by the indicator's window.",
+      "schema": { "operationId": "SMA", "pointer": "results/underlying" },
+      "properties": {
+        "url":        { "name": "Url" },
+        "aggregates": { "name": "Aggregates", "model": "Agg" }
+      }
+    },
+
+    "LastTrade": {
+      "kind": "struct",
+      "summary": "The most recent trade for a ticker: price, size, exchange, conditions, and three nanosecond timestamps.",
+      "remarks": "A tick-level type, so a struct (decision D4). The v2 wire keys are single letters, which the map names. Timestamps are stored as nanosecond <see cref=\"long\"/> values and exposed as <see cref=\"NodaTime.Instant\"/> only when read (decision D5).",
+      "schema": { "operationId": "LastTrade", "pointer": "results" },
+      "properties": {
+        "T":  { "name": "Ticker" },
+        "t":  { "name": "SipTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the SIP received this trade from the exchange that produced it." },
+        "y":  { "name": "ParticipantTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the trade was generated at the exchange." },
+        "f":  { "name": "TrfTimestampNanoseconds", "type": "long?", "summary": "The nanosecond Unix timestamp at which the trade reporting facility received this trade, when it passed through one." },
+        "q":  { "name": "SequenceNumber" },
+        "i":  { "name": "TradeId" },
+        "p":  { "name": "Price" },
+        "s":  { "name": "Size" },
+        "ds": { "name": "DecimalSize" },
+        "x":  { "name": "ExchangeId" },
+        "r":  { "name": "TrfId" },
+        "c":  { "name": "Conditions" },
+        "e":  { "name": "CorrectionIndicator" },
+        "z":  { "name": "Tape" }
+      }
+    },
+
+    "DailyOpenClose": {
+      "summary": "The open, high, low, close, and volume for one ticker on one trading day, with its pre-market and after-hours prices.",
+      "remarks": "The response body is the payload, so the envelope's <see cref=\"Status\"/> is a member here (decision D17). <see cref=\"From\"/> is a calendar date, hence <see cref=\"NodaTime.LocalDate\"/>.",
+      "schema": { "operationId": "GetStocksOpenClose" },
+      "properties": {
+        "symbol":     { "name": "Symbol" },
+        "from":       { "name": "From" },
+        "open":       { "name": "Open" },
+        "high":       { "name": "High" },
+        "low":        { "name": "Low" },
+        "close":      { "name": "Close" },
+        "volume":     { "name": "Volume" },
+        "preMarket":  { "name": "PreMarket", "type": "double?", "summary": "The open price in pre-market trading. The description calls this an integer; it is a price." },
+        "afterHours": { "name": "AfterHours" },
+        "otc":        { "name": "IsOtc", "type": "bool", "summary": "Whether this ticker trades over the counter. The API omits the field entirely when false, which deserializes to false here." },
+        "status":     { "name": "Status" }
+      }
+    },
+
+    "MarketHoliday": {
+      "summary": "An upcoming market holiday or early close for one exchange.",
+      "remarks": "The response body is a bare array of these (decision D17). <see cref=\"Date\"/> is a calendar date; <see cref=\"Open\"/> and <see cref=\"Close\"/> are moments, present only for an early close.",
+      "schema": { "operationId": "GetMarketHolidays", "pointer": "items" },
+      "properties": {
+        "date":     { "name": "Date",     "type": "LocalDate" },
+        "exchange": { "name": "Exchange" },
+        "name":     { "name": "Name" },
+        "status":   { "name": "Status" },
+        "open":     { "name": "Open",  "type": "Instant?" },
+        "close":    { "name": "Close", "type": "Instant?" }
+      }
     }
   },
 
@@ -158,6 +247,56 @@
         "limit":         { "name": "limit" },
         "sort":          { "name": "sort" }
       }
+    },
+    {
+      "operationId": "SMA",
+      "group": "Stocks",
+      "method": "ListSma",
+      "summary": "Retrieves the simple moving average (SMA) of a stock's price over a window of aggregates.",
+      "remarks": "Each page carries the values computed for it and, with <paramref name=\"expandUnderlying\"/>, the aggregates they were computed from. <paramref name=\"timespan\"/> accepts every <see cref=\"AggregateTimespan\"/> except <see cref=\"AggregateTimespan.Second\"/>, which this endpoint does not offer and rejects with a 400.",
+      "result": { "kind": "object", "model": "IndicatorSeries", "property": "results" },
+      "parameters": {
+        "stockTicker":       { "name": "ticker" },
+        "timestamp":         { "name": "timestamp", "type": "DateOrTimestamp" },
+        "timespan":          { "name": "timespan", "type": "AggregateTimespan" },
+        "adjusted":          { "name": "adjusted" },
+        "window":            { "name": "window" },
+        "series_type":       { "name": "seriesType", "type": "SeriesType" },
+        "expand_underlying": { "name": "expandUnderlying" },
+        "order":             { "name": "order", "type": "SortOrder" },
+        "limit":             { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "LastTrade",
+      "group": "Stocks",
+      "method": "GetLastTrade",
+      "summary": "Retrieves the most recent trade for a stock.",
+      "remarks": "An unknown ticker is a 404, surfaced as <see cref=\"MassiveApiException\"/>, not an empty result.",
+      "result": { "kind": "object", "model": "LastTrade", "property": "results" },
+      "parameters": {
+        "stocksTicker": { "name": "ticker" }
+      }
+    },
+    {
+      "operationId": "GetStocksOpenClose",
+      "group": "Stocks",
+      "method": "GetDailyOpenClose",
+      "summary": "Retrieves the open, high, low, close, and volume for a stock on one trading day, with its pre-market and after-hours prices.",
+      "remarks": "A date with no session, such as a weekend or a holiday, is a 404, surfaced as <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "DailyOpenClose" },
+      "parameters": {
+        "stocksTicker": { "name": "ticker" },
+        "date":         { "name": "date" },
+        "adjusted":     { "name": "adjusted" }
+      }
+    },
+    {
+      "operationId": "GetMarketHolidays",
+      "group": "Reference",
+      "method": "ListMarketHolidays",
+      "summary": "Retrieves upcoming market holidays and early closes, one entry per exchange.",
+      "result": { "kind": "array", "model": "MarketHoliday" }
     }
   ]
 }
