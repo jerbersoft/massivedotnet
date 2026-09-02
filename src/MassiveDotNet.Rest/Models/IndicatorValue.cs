@@ -17,5 +17,5 @@ public readonly partial record struct IndicatorValue
     /// only when read, so a long series costs nothing until the value is actually wanted.
     /// </remarks>
     [JsonIgnore]
-    public Instant Timestamp => Instant.FromUnixTimeMilliseconds(TimestampMilliseconds);
+    public Instant Timestamp => Epoch.FromMilliseconds(TimestampMilliseconds);
 }

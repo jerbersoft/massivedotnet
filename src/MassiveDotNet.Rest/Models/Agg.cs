@@ -17,5 +17,5 @@ public readonly partial record struct Agg
     /// only when read, so a large series costs nothing until the value is actually wanted.
     /// </remarks>
     [JsonIgnore]
-    public Instant Timestamp => Instant.FromUnixTimeMilliseconds(TimestampMilliseconds);
+    public Instant Timestamp => Epoch.FromMilliseconds(TimestampMilliseconds);
 }
