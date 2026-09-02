@@ -115,7 +115,7 @@
       "schema": { "operationId": "SMA", "pointer": "results" },
       "items": "values",
       "properties": {
-        "values":     { "name": "Values",     "model": "IndicatorValue" },
+        "values":     { "name": "Values",     "model": "IndicatorValue", "summary": "The indicator values for this page, oldest or newest first as requested." },
         "underlying": { "name": "Underlying", "model": "IndicatorUnderlying" }
       }
     },

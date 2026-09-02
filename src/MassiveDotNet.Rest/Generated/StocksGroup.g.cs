@@ -330,13 +330,13 @@ public readonly partial struct StocksGroup
     /// <remarks>
     /// Walks every page, requesting the next only once the previous one has been consumed, and yields
     /// each page's <c>values</c> in turn; the other members of each page's <c>results</c> are not
-    /// observable through this sequence. Use <see cref="ListSmaAsync"/> to retrieve a single page
-    /// instead. <paramref name="limit"/> sizes each page rather than the traversal, so lowering it
-    /// issues more requests rather than returning fewer items; bound the sequence with <c>Take</c>
-    /// instead. Each page carries the values computed for it and, with <paramref
-    /// name="expandUnderlying"/>, the aggregates they were computed from. <paramref name="timespan"/>
-    /// accepts every <see cref="AggregateTimespan"/> except <see cref="AggregateTimespan.Second"/>,
-    /// which this endpoint does not offer and rejects with a 400.
+    /// observable through this sequence. A page that carries no <c>results</c> contributes nothing. Use
+    /// <see cref="ListSmaAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Each page carries the values computed
+    /// for it and, with <paramref name="expandUnderlying"/>, the aggregates they were computed from.
+    /// <paramref name="timespan"/> accepts every <see cref="AggregateTimespan"/> except <see
+    /// cref="AggregateTimespan.Second"/>, which this endpoint does not offer and rejects with a 400.
     /// </remarks>
     /// <param name="ticker">
     /// Specify a case-sensitive ticker symbol for which to get simple moving average (SMA) data. For
@@ -509,7 +509,6 @@ public readonly partial struct StocksGroup
 
         builder.AppendPathLiteral("/v2/last/trade/");
         builder.AppendPathSegment(ticker);
-
 
         return builder.ToUriString();
     }

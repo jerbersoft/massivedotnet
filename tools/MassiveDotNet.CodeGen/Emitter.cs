@@ -22,6 +22,15 @@ internal sealed class Emitter(Spec spec, Map map)
 
     private const int UriBufferLength = 256;
 
+    /// <summary>
+    /// Why a blank cursor is reported as no further pages, emitted by both paged shapes. Written
+    /// once here so the two sites cannot drift into saying different things.
+    /// </summary>
+    private const string BlankCursorComment = """
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        """;
+
     public Dictionary<string, string> Emit()
     {
         Dictionary<string, string> files = new(StringComparer.Ordinal);
@@ -309,6 +318,7 @@ internal sealed class Emitter(Spec spec, Map map)
                 ? "Walks every page, requesting the next only once the previous one has been consumed, and "
                     + $"yields each page's <c>{items.WireName}</c> in turn; the other members of each page's "
                     + $"<c>{shape.Property}</c> are not observable through this sequence. "
+                    + $"A page that carries no <c>{shape.Property}</c> contributes nothing. "
                 : "Walks every page, requesting the next only once the previous one has been consumed. ";
 
             remarks += $"Use <see cref=\"{endpoint.Method}Async\"/> to retrieve a single page instead.";
@@ -374,12 +384,18 @@ internal sealed class Emitter(Spec spec, Map map)
 
         EmitParameterDocs(writer, arguments, "A token to cancel the request.");
         writer.Doc("returns", Returns(shape), preserveMarkup: true);
-        writer.Doc(
-            "exception",
-            shape.ThrowsOnMissingPayload
-                ? "The server responded with an error status, or with a success that carried no payload."
-                : "The server responded with an error status.",
-            "cref=\"MassiveApiException\"");
+        // The cursor case belongs to the guarded Get alone (D-S3): every other shape either follows
+        // a cursor or has none to refuse.
+        string thrown = shape switch
+        {
+            { ThrowsOnMissingPayload: false } => "The server responded with an error status.",
+            { Paginated: true, Items: null } =>
+                "The server responded with an error status, with a success that carried no payload, or with "
+                + "a success that carried a <c>next_url</c> cursor this operation cannot follow.",
+            _ => "The server responded with an error status, or with a success that carried no payload.",
+        };
+
+        writer.Doc("exception", thrown, "cref=\"MassiveApiException\"", preserveMarkup: true);
 
         List<string> signature = Signature(
             $"public Task<{shape.ReturnType}> {endpoint.Method}Async",
@@ -407,9 +423,19 @@ internal sealed class Emitter(Spec spec, Map map)
 
             EmitPath(writer, operation.Path, arguments);
 
-            foreach (Argument argument in arguments.Where(a => a.In == "query"))
+            List<Argument> query = [.. arguments.Where(a => a.In == "query")];
+
+            // Separation is the caller's job rather than each section's, because an operation
+            // with no query parameters has one section to separate and would otherwise be given
+            // the blank line twice.
+            if (query.Count > 0)
             {
-                writer.Line($"builder.AppendQuery(\"{argument.WireName}\", {argument.QueryExpression});");
+                writer.Line();
+
+                foreach (Argument argument in query)
+                {
+                    writer.Line($"builder.AppendQuery(\"{argument.WireName}\", {argument.QueryExpression});");
+                }
             }
 
             writer.Line();
@@ -464,8 +490,10 @@ internal sealed class Emitter(Spec spec, Map map)
             {
                 // Emitted, not just reasoned about here: a reader of the generated file meets
                 // a whitespace test on a URL and deserves to know it is load-bearing.
-                writer.Line("// A blank next_url is not a cursor. EnumerateAsync stops on one, so this");
-                writer.Line("// reports the same thing rather than promising a page that is never fetched.");
+                foreach (string line in BlankCursorComment.Split('\n'))
+                {
+                    writer.Line(line);
+                }
 
                 if (!hasRequestId)
                 {
@@ -533,8 +561,11 @@ internal sealed class Emitter(Spec spec, Map map)
             }
 
             writer.Line();
-            writer.Line("// A blank next_url is not a cursor. EnumerateAsync stops on one, so this");
-            writer.Line("// reports the same thing rather than promising a page that is never fetched.");
+            foreach (string line in BlankCursorComment.Split('\n'))
+            {
+                writer.Line(line);
+            }
+
             writer.Line($"return new MassivePagedResult<{shape.Model.Name}>(");
             writer.Line("    result,");
             writer.Line("    !string.IsNullOrWhiteSpace(response.NextUrl),");
@@ -847,8 +878,6 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             writer.Line($"builder.AppendPathLiteral(\"{literal}\");");
         }
-
-        writer.Line();
     }
 
     private string EmitJsonContext()

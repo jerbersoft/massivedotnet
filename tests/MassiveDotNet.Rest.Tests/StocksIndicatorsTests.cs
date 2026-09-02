@@ -153,4 +153,28 @@ public sealed class StocksIndicatorsTests
             Assert.Contains("/v1/indicators/sma/AAPL", exception.Message, StringComparison.Ordinal);
         }
     }
+
+    [Fact]
+    public async Task EnumerateYieldsNothingWhenAPageCarriesNoPayload()
+    {
+        // The counterpart of the throw above, and deliberately not the same answer: List owes the
+        // caller a page it never received, while a traversal over an absent array has nothing to
+        // yield and no cursor to follow, so it ends after the one request it made.
+        PagingStubHandler handler = new(Fixtures.SingularWithoutResults);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        List<IndicatorValue> values = [];
+
+        using (client)
+        using (transport)
+        {
+            await foreach (IndicatorValue value in client.Stocks.EnumerateSmaAsync("AAPL", cancellationToken: Ct))
+            {
+                values.Add(value);
+            }
+        }
+
+        Assert.Empty(values);
+        Assert.Single(handler.Requests);
+    }
 }

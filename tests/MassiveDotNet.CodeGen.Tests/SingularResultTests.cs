@@ -90,6 +90,7 @@ public sealed class SingularResultTests
         // The remark is longer than the doc writer's 96-column wrap, which puts the line break
         // between "yields" and this clause; the assertion stays inside one emitted line.
         Assert.Contains("each page's <c>values</c> in turn", group, StringComparison.Ordinal);
+        Assert.Contains("A page that carries no <c>results</c> contributes nothing.", group, StringComparison.Ordinal);
         Assert.Contains("<returns>Every <c>values</c> entry across every page.</returns>", group, StringComparison.Ordinal);
 
         Assert.Contains("[JsonSerializable(typeof(ListSeriesResponse))]", files["MassiveRestJsonContext.g.cs"], StringComparison.Ordinal);
@@ -115,6 +116,9 @@ public sealed class SingularResultTests
         string group = Group(files);
         Assert.Contains("public Task<Trade> GetTradeAsync(", group, StringComparison.Ordinal);
         Assert.Contains("MassiveHttpTransport.ThrowIfUnfollowableCursor(response?.NextUrl, requestUri, response?.RequestId);", group, StringComparison.Ordinal);
+        // The cursor this Get refuses is part of its contract, so the exception doc names it. The
+        // sentence wraps; the assertion stays inside one emitted line.
+        Assert.Contains("success that carried a <c>next_url</c> cursor this operation cannot follow.", group, StringComparison.Ordinal);
         Assert.Contains("return response?.Results", group, StringComparison.Ordinal);
         // No Enumerate is emitted, so the List-prefix rule does not apply and a Get name is accepted (D-S3).
         Assert.DoesNotContain("Enumerate", group, StringComparison.Ordinal);
@@ -241,6 +245,10 @@ public sealed class SingularResultTests
         string group = Group(Harness.Generate(spec, map));
 
         Assert.Contains("private static string BuildListHolidaysUri()", group, StringComparison.Ordinal);
+
+        // The path and the query are separate sections, but an operation with no query
+        // parameters has only one of them, so the separator must not double up.
+        Assert.DoesNotContain("\n\n\n", group, StringComparison.Ordinal);
     }
 
     [Fact]

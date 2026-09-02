@@ -139,7 +139,6 @@ public readonly partial struct ReferenceGroup
 
         builder.AppendPathLiteral("/v1/marketstatus/upcoming");
 
-
         return builder.ToUriString();
     }
 

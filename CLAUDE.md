@@ -304,9 +304,11 @@ learns what the live tier found.
   `ListXxxAsync` returning `MassivePage<T>` (one page, reporting whether more exist) and
   `EnumerateXxxAsync` returning `IAsyncEnumerable<T>` (every page, one in flight at a time).
   When the page is one object rather than an array, `List` returns `MassivePagedResult<T>` and
-  `Enumerate` yields the elements of the array the model row names as `items` (D17). The 47 that
-  do not paginate return `T[]`, or `T` for a singular result. Pagination is detected from the
-  spec, never declared in the map. `Enumerate`/`List` follows the BCL's `Directory.EnumerateFiles` /
+  `Enumerate` yields the elements of the array the model row names as `items` (D17). A paginated
+  object whose model names no `items` has nothing to enumerate, so it keeps a single `Get`
+  returning `T` that throws if the server ever sends a cursor it cannot follow. The 47 that do
+  not paginate return `T[]`, or `T` for a singular result. Pagination is detected from the spec,
+  never declared in the map. `Enumerate`/`List` follows the BCL's `Directory.EnumerateFiles` /
   `Directory.GetFiles` distinction; avoid "Stream", which in this SDK means WebSockets.
 - **Filters**: a field that carries comparator variants becomes one optional parameter typed
   `RangeFilter<T>`, `SetFilter<T>`, `Filter<T>`, or `ArrayFilter<T>` by its suffix set; a plain

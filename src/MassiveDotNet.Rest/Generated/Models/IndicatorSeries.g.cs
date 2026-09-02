@@ -25,7 +25,7 @@ namespace MassiveDotNet.Rest.Models;
 /// </remarks>
 public sealed partial record IndicatorSeries
 {
-    /// <summary>Timestamp or indicator value.</summary>
+    /// <summary>The indicator values for this page, oldest or newest first as requested.</summary>
     [JsonPropertyName("values")]
     public IndicatorValue[]? Values { get; init; }
 
