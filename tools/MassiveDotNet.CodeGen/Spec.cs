@@ -369,6 +369,16 @@ internal sealed class Spec
         };
     }
 
+    /// <summary>A shape as it reads in a diagnostic: "an object", "an array of objects".</summary>
+    public static string Describe(SchemaShape shape) => shape switch
+    {
+        SchemaShape.Object => "an object",
+        SchemaShape.ArrayOfObjects => "an array of objects",
+        SchemaShape.ArrayOfArrays => "an array of arrays",
+        SchemaShape.Array => "an array of scalars",
+        _ => "a scalar",
+    };
+
     private static bool IsObject(JsonElement schema) =>
         (schema.TryGetProperty("type", out JsonElement type) && type.GetString() == "object")
         || schema.TryGetProperty("properties", out _)

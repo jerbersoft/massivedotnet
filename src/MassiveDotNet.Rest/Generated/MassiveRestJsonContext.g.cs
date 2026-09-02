@@ -20,10 +20,11 @@ namespace MassiveDotNet.Rest.Serialization;
 /// than reflection keeps the SDK Native AOT compatible.
 /// </summary>
 /// <remarks>
-/// Calendar dates are read by <see cref="LocalDateJsonConverter"/>, registered here once so no
-/// model property needs its own attribute.
+/// Calendar dates are read by <see cref="LocalDateJsonConverter"/> and RFC 3339 timestamps by <see
+/// cref="InstantJsonConverter"/>, registered here once so no model property needs its own
+/// attribute.
 /// </remarks>
-[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter) })]
+[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter), typeof(InstantJsonConverter) })]
 [JsonSerializable(typeof(GetStocksAggregatesResponse))]
 [JsonSerializable(typeof(GetStocksV1DividendsResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

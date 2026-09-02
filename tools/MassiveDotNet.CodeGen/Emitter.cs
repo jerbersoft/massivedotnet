@@ -566,8 +566,8 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
         writer.Line();
         writer.Doc("summary", "Source-generated serialization metadata for every REST response envelope. Using a context rather than reflection keeps the SDK Native AOT compatible.");
-        writer.Doc("remarks", "Calendar dates are read by <see cref=\"LocalDateJsonConverter\"/>, registered here once so no model property needs its own attribute.", preserveMarkup: true);
-        writer.Line("[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter) })]");
+        writer.Doc("remarks", "Calendar dates are read by <see cref=\"LocalDateJsonConverter\"/> and RFC 3339 timestamps by <see cref=\"InstantJsonConverter\"/>, registered here once so no model property needs its own attribute.", preserveMarkup: true);
+        writer.Line("[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter), typeof(InstantJsonConverter) })]");
 
         foreach (MapEndpoint endpoint in map.Endpoints)
         {
