@@ -515,6 +515,200 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>The documented sample for GET /v2/snapshot/locale/us/markets/stocks/tickers/{stocksTicker}, verbatim.</summary>
+    public const string StocksSnapshot = """
+        {
+          "request_id": "657e430f1ae768891f018e08e03598d8",
+          "status": "OK",
+          "ticker": {
+            "day": {
+              "c": 120.4229,
+              "dv": "28727868.0",
+              "h": 120.53,
+              "l": 118.81,
+              "o": 119.62,
+              "v": 28727868,
+              "vw": 119.725
+            },
+            "lastQuote": {
+              "P": 120.47,
+              "S": 4,
+              "p": 120.46,
+              "s": 8,
+              "t": 1605195918507251700
+            },
+            "lastTrade": {
+              "c": [
+                14,
+                41
+              ],
+              "ds": "236.0",
+              "i": "4046",
+              "p": 120.47,
+              "s": 236,
+              "t": 1605195918306274000,
+              "x": 10
+            },
+            "min": {
+              "av": 28724441,
+              "c": 120.4201,
+              "dav": "28724441.0",
+              "dv": "270796.0",
+              "h": 120.468,
+              "l": 120.37,
+              "n": 762,
+              "o": 120.435,
+              "t": 1684428720000,
+              "v": 270796,
+              "vw": 120.4129
+            },
+            "prevDay": {
+              "c": 119.49,
+              "h": 119.63,
+              "l": 116.44,
+              "o": 117.19,
+              "v": 110597265,
+              "vw": 118.4998
+            },
+            "ticker": "AAPL",
+            "todaysChange": 0.98,
+            "todaysChangePerc": 0.82,
+            "updated": 1605195918306274000
+          }
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/snapshot/locale/us/markets/stocks/tickers, verbatim. The
+    /// envelope carries a <c>count</c> and no <c>request_id</c>.
+    /// </summary>
+    public const string StocksSnapshots = """
+        {
+          "count": 1,
+          "status": "OK",
+          "tickers": [
+            {
+              "day": {
+                "c": 20.506,
+                "dv": "37216.0",
+                "h": 20.64,
+                "l": 20.506,
+                "o": 20.64,
+                "v": 37216,
+                "vw": 20.616
+              },
+              "lastQuote": {
+                "P": 20.6,
+                "S": 22,
+                "p": 20.5,
+                "s": 13,
+                "t": 1605192959994246100
+              },
+              "lastTrade": {
+                "c": [
+                  14,
+                  41
+                ],
+                "ds": "2416.0",
+                "i": "71675577320245",
+                "p": 20.506,
+                "s": 2416,
+                "t": 1605192894630916600,
+                "x": 4
+              },
+              "min": {
+                "av": 37216,
+                "c": 20.506,
+                "dav": "37216.0",
+                "dv": "5000.0",
+                "h": 20.506,
+                "l": 20.506,
+                "n": 1,
+                "o": 20.506,
+                "t": 1684428600000,
+                "v": 5000,
+                "vw": 20.5105
+              },
+              "prevDay": {
+                "c": 20.63,
+                "h": 21,
+                "l": 20.5,
+                "o": 20.79,
+                "v": 292738,
+                "vw": 20.6939
+              },
+              "ticker": "BCAT",
+              "todaysChange": -0.124,
+              "todaysChangePerc": -0.601,
+              "updated": 1605192894630916600
+            }
+          ]
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v2/snapshot/locale/us/markets/stocks/{direction}, verbatim.</summary>
+    public const string StocksMovers = """
+        {
+          "status": "OK",
+          "tickers": [
+            {
+              "day": {
+                "c": 14.2284,
+                "dv": "133963.0",
+                "h": 15.09,
+                "l": 14.2,
+                "o": 14.33,
+                "v": 133963,
+                "vw": 14.5311
+              },
+              "lastQuote": {
+                "P": 14.44,
+                "S": 11,
+                "p": 14.2,
+                "s": 25,
+                "t": 1605195929997325600
+              },
+              "lastTrade": {
+                "c": [
+                  63
+                ],
+                "ds": "536.0",
+                "i": "79372124707124",
+                "p": 14.2284,
+                "s": 536,
+                "t": 1605195848258266000,
+                "x": 4
+              },
+              "min": {
+                "av": 133963,
+                "c": 14.2284,
+                "dav": "133963.0",
+                "dv": "6108.0",
+                "h": 14.325,
+                "l": 14.2,
+                "n": 5,
+                "o": 14.28,
+                "t": 1684428600000,
+                "v": 6108,
+                "vw": 14.2426
+              },
+              "prevDay": {
+                "c": 0.73,
+                "h": 0.799,
+                "l": 0.73,
+                "o": 0.75,
+                "v": 1568097,
+                "vw": 0.7721
+              },
+              "ticker": "PDS",
+              "todaysChange": 13.498,
+              "todaysChangePerc": 1849.096,
+              "updated": 1605195848258266000
+            }
+          ]
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {

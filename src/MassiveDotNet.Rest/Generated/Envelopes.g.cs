@@ -250,3 +250,47 @@ internal sealed class QuotesResponse : IPagedEnvelope<Quote>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v2/snapshot/locale/us/markets/stocks/tickers/{stocksTicker}.</summary>
+internal sealed class GetStocksSnapshotTickerResponse
+{
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Contains the requested snapshot data for the specified ticker.</summary>
+    [JsonPropertyName("ticker")]
+    public TickerSnapshot? Ticker { get; init; }
+}
+
+/// <summary>The response envelope returned by /v2/snapshot/locale/us/markets/stocks/tickers.</summary>
+internal sealed class GetStocksSnapshotTickersResponse
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>An array of snapshot data for the specified tickers.</summary>
+    [JsonPropertyName("tickers")]
+    public TickerSnapshot[]? Tickers { get; init; }
+}
+
+/// <summary>The response envelope returned by /v2/snapshot/locale/us/markets/stocks/{direction}.</summary>
+internal sealed class GetStocksSnapshotDirectionResponse
+{
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>An array of snapshot data for the specified tickers.</summary>
+    [JsonPropertyName("tickers")]
+    public TickerSnapshot[]? Tickers { get; init; }
+}

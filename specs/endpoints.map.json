@@ -298,6 +298,108 @@
         "indicators":            { "name": "Indicators" },
         "tape":                  { "name": "Tape" }
       }
+    },
+
+    "SnapshotDay": {
+      "kind": "struct",
+      "summary": "The current trading day's bar inside a snapshot: open, high, low, close, volume, and the day's volume as a decimal string.",
+      "remarks": "A struct like <see cref=\"Agg\"/> (decision D4). It carries no timestamp: the day is the snapshot's own. <see cref=\"SnapshotPreviousDay\"/> is the same shape without <see cref=\"DecimalVolume\"/>, which is why the two are separate models (decision D16).",
+      "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/day" },
+      "properties": {
+        "o":   { "name": "Open" },
+        "h":   { "name": "High" },
+        "l":   { "name": "Low" },
+        "c":   { "name": "Close" },
+        "v":   { "name": "Volume" },
+        "vw":  { "name": "VolumeWeightedAveragePrice" },
+        "dv":  { "name": "DecimalVolume" },
+        "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
+      }
+    },
+
+    "SnapshotPreviousDay": {
+      "kind": "struct",
+      "summary": "The previous trading day's bar inside a snapshot: open, high, low, close, and volume.",
+      "remarks": "A struct like <see cref=\"Agg\"/> (decision D4). <see cref=\"SnapshotDay\"/> carries a decimal volume this shape lacks, which is why the two are separate models (decision D16).",
+      "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/prevDay" },
+      "properties": {
+        "o":   { "name": "Open" },
+        "h":   { "name": "High" },
+        "l":   { "name": "Low" },
+        "c":   { "name": "Close" },
+        "v":   { "name": "Volume" },
+        "vw":  { "name": "VolumeWeightedAveragePrice" },
+        "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
+      }
+    },
+
+    "SnapshotMinute": {
+      "kind": "struct",
+      "summary": "The most recent minute bar inside a snapshot, with the day's accumulated volume so far.",
+      "remarks": "A struct like <see cref=\"Agg\"/> (decision D4). <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5). The description declares the timestamp and the accumulated volume as bare integers; both overflow int32, so the map types them <see cref=\"long\"/>.",
+      "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/min" },
+      "properties": {
+        "t":   { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp for the start of the minute window. The description declares a bare integer; every value overflows int32." },
+        "o":   { "name": "Open" },
+        "h":   { "name": "High" },
+        "l":   { "name": "Low" },
+        "c":   { "name": "Close" },
+        "v":   { "name": "Volume" },
+        "vw":  { "name": "VolumeWeightedAveragePrice" },
+        "n":   { "name": "TransactionCount", "type": "long" },
+        "av":  { "name": "AccumulatedVolume", "type": "long", "summary": "The accumulated volume for the day so far. The description declares a bare integer; a busy session overflows int32." },
+        "dav": { "name": "DecimalAccumulatedVolume" },
+        "dv":  { "name": "DecimalVolume" },
+        "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
+      }
+    },
+
+    "SnapshotLastQuote": {
+      "kind": "struct",
+      "summary": "The most recent NBBO quote inside a snapshot: bid and ask price and size, with the SIP timestamp.",
+      "remarks": "A tick-level type, so a struct (decision D4). <see cref=\"SipTimestamp\"/> is computed from <see cref=\"SipTimestampNanoseconds\"/> only when read (decision D5).",
+      "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/lastQuote" },
+      "properties": {
+        "t": { "name": "SipTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the SIP received this quote. The description declares a bare integer; every value overflows int32." },
+        "p": { "name": "BidPrice" },
+        "s": { "name": "BidSize" },
+        "P": { "name": "AskPrice" },
+        "S": { "name": "AskSize" }
+      }
+    },
+
+    "SnapshotLastTrade": {
+      "kind": "struct",
+      "summary": "The most recent trade inside a snapshot: price, size, exchange, conditions, and the SIP timestamp.",
+      "remarks": "A tick-level type, so a struct (decision D4). <see cref=\"SipTimestamp\"/> is computed from <see cref=\"SipTimestampNanoseconds\"/> only when read (decision D5).",
+      "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/lastTrade" },
+      "properties": {
+        "t":  { "name": "SipTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the SIP received this trade. The description declares a bare integer; every value overflows int32." },
+        "i":  { "name": "TradeId" },
+        "p":  { "name": "Price" },
+        "s":  { "name": "Size" },
+        "ds": { "name": "DecimalSize" },
+        "x":  { "name": "ExchangeId" },
+        "c":  { "name": "Conditions" }
+      }
+    },
+
+    "TickerSnapshot": {
+      "summary": "The current state of one ticker: today's and the previous day's bars, the latest minute bar, the last quote and trade, and today's change.",
+      "remarks": "A container of five optional structs rather than a tick, so a class (decision D4). Each nested object is a model of its own (decision D16), <see langword=\"null\"/> when the ticker has not traded in the window it describes. <see cref=\"Updated\"/> is computed from <see cref=\"UpdatedNanoseconds\"/> only when read (decision D5). The three snapshot operations share this shape, and the generator verifies each site against it.",
+      "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker" },
+      "properties": {
+        "ticker":           { "name": "Ticker" },
+        "day":              { "name": "Day", "model": "SnapshotDay" },
+        "prevDay":          { "name": "PreviousDay", "model": "SnapshotPreviousDay" },
+        "min":              { "name": "Minute", "model": "SnapshotMinute" },
+        "lastQuote":        { "name": "LastQuote", "model": "SnapshotLastQuote" },
+        "lastTrade":        { "name": "LastTrade", "model": "SnapshotLastTrade" },
+        "todaysChange":     { "name": "TodaysChange" },
+        "todaysChangePerc": { "name": "TodaysChangePercent" },
+        "updated":          { "name": "UpdatedNanoseconds", "type": "long?", "summary": "The nanosecond Unix timestamp of the last update to this snapshot. The description declares a bare integer; every value overflows int32." },
+        "fmv":              { "name": "FairMarketValue" }
+      }
     }
   },
 
@@ -465,6 +567,41 @@
         "order":       { "name": "order", "type": "SortOrder" },
         "limit":       { "name": "limit" },
         "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetStocksSnapshotTicker",
+      "group": "Stocks",
+      "method": "GetSnapshot",
+      "summary": "Retrieves the current snapshot of one stock: today's and the previous day's bars, the latest minute bar, the last quote and trade, and today's change.",
+      "remarks": "A 200 without its payload is reported as <see cref=\"MassiveApiException\"/> rather than as <see langword=\"null\"/> (decision D17).",
+      "result": { "kind": "object", "model": "TickerSnapshot", "property": "ticker" },
+      "parameters": {
+        "stocksTicker": { "name": "ticker" }
+      }
+    },
+    {
+      "operationId": "GetStocksSnapshotTickers",
+      "group": "Stocks",
+      "method": "ListSnapshots",
+      "summary": "Retrieves the current snapshot of every US stock, or of the tickers named.",
+      "remarks": "<paramref name=\"tickers\"/> renders comma-joined, the only form the service reads every element of (decision D19); <see langword=\"null\"/> or empty asks for the whole market, which is thousands of snapshots in one response. OTC securities are excluded unless <paramref name=\"includeOtc\"/> is set.",
+      "result": { "kind": "array", "model": "TickerSnapshot", "property": "tickers" },
+      "parameters": {
+        "tickers":     { "name": "tickers" },
+        "include_otc": { "name": "includeOtc" }
+      }
+    },
+    {
+      "operationId": "GetStocksSnapshotDirection",
+      "group": "Stocks",
+      "method": "ListMovers",
+      "summary": "Retrieves the current snapshots of the day's top twenty gainers or losers.",
+      "remarks": "One operation with a path enum, so one method: <paramref name=\"direction\"/> chooses the end of the market. OTC securities are excluded unless <paramref name=\"includeOtc\"/> is set.",
+      "result": { "kind": "array", "model": "TickerSnapshot", "property": "tickers" },
+      "parameters": {
+        "direction":   { "name": "direction", "type": "SnapshotDirection" },
+        "include_otc": { "name": "includeOtc" }
       }
     }
   ]

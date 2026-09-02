@@ -940,4 +940,140 @@ public readonly partial struct StocksGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves the current snapshot of one stock: today's and the previous day's bars, the latest
+    /// minute bar, the last quote and trade, and today's change.
+    /// </summary>
+    /// <remarks>
+    /// A 200 without its payload is reported as <see cref="MassiveApiException"/> rather than as <see
+    /// langword="null"/> (decision D17).
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>ticker</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<TickerSnapshot> GetSnapshotAsync(
+        string ticker,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildGetSnapshotUri(ticker);
+        return SendGetSnapshotAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetSnapshotUri(
+        string ticker)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/snapshot/locale/us/markets/stocks/tickers/");
+        builder.AppendPathSegment(ticker);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerSnapshot> SendGetSnapshotAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksSnapshotTickerResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksSnapshotTickerResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Ticker
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'ticker' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>Retrieves the current snapshot of every US stock, or of the tickers named.</summary>
+    /// <remarks>
+    /// <paramref name="tickers"/> renders comma-joined, the only form the service reads every element
+    /// of (decision D19); <see langword="null"/> or empty asks for the whole market, which is thousands
+    /// of snapshots in one response. OTC securities are excluded unless <paramref name="includeOtc"/>
+    /// is set.
+    /// </remarks>
+    /// <param name="tickers">
+    /// A case-sensitive comma separated list of tickers to get snapshots for. For example,
+    /// AAPL,TSLA,GOOG. Empty string defaults to querying all tickers.
+    /// </param>
+    /// <param name="includeOtc">Include OTC securities in the response. Default is false (don't include OTC securities).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>tickers</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<TickerSnapshot[]> ListSnapshotsAsync(
+        string[]? tickers = null,
+        bool? includeOtc = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSnapshotsUri(tickers, includeOtc);
+        return SendListSnapshotsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListSnapshotsUri(
+        string[]? tickers,
+        bool? includeOtc)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/snapshot/locale/us/markets/stocks/tickers");
+
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("include_otc", includeOtc);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerSnapshot[]> SendListSnapshotsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksSnapshotTickersResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksSnapshotTickersResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Tickers ?? [];
+    }
+
+    /// <summary>Retrieves the current snapshots of the day's top twenty gainers or losers.</summary>
+    /// <remarks>
+    /// One operation with a path enum, so one method: <paramref name="direction"/> chooses the end of
+    /// the market. OTC securities are excluded unless <paramref name="includeOtc"/> is set.
+    /// </remarks>
+    /// <param name="direction">The direction of the snapshot results to return.</param>
+    /// <param name="includeOtc">Include OTC securities in the response. Default is false (don't include OTC securities).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>tickers</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<TickerSnapshot[]> ListMoversAsync(
+        SnapshotDirection direction,
+        bool? includeOtc = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListMoversUri(direction, includeOtc);
+        return SendListMoversAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListMoversUri(
+        SnapshotDirection direction,
+        bool? includeOtc)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/snapshot/locale/us/markets/stocks/");
+        builder.AppendPathLiteral(direction.ToWireValue());
+
+        builder.AppendQuery("include_otc", includeOtc);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerSnapshot[]> SendListMoversAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksSnapshotDirectionResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksSnapshotDirectionResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Tickers ?? [];
+    }
 }
