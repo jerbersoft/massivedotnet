@@ -69,6 +69,17 @@ public static class MassiveEnumValues
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
     };
 
+    /// <summary>Returns the wire representation of a <see cref="SnapshotDirection"/>.</summary>
+    /// <param name="value">The value to convert.</param>
+    /// <returns>Either <c>"gainers"</c> or <c>"losers"</c>, the path segment the snapshot route takes.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a defined enum member.</exception>
+    public static string ToWireValue(this SnapshotDirection value) => value switch
+    {
+        SnapshotDirection.Gainers => "gainers",
+        SnapshotDirection.Losers => "losers",
+        _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
+    };
+
     /// <summary>Returns the wire representation of a calendar date.</summary>
     /// <param name="value">The date to convert.</param>
     /// <returns>The date in ISO <c>YYYY-MM-DD</c> form.</returns>
@@ -84,5 +95,8 @@ public static class MassiveEnumValues
     /// <param name="value">The instant to convert.</param>
     /// <returns>Nanoseconds since the Unix epoch, used by the tick-level endpoints.</returns>
     public static string ToWireValueNanoseconds(this Instant value) =>
-        value.ToUnixTimeTicks().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Not ToUnixTimeTicks: a tick is 100 ns, and the tick endpoints count nanoseconds, so
+        // that form would name a moment a hundred times too early. A Duration from the epoch
+        // keeps the full precision an Instant carries.
+        (value - NodaConstants.UnixEpoch).ToInt64Nanoseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
