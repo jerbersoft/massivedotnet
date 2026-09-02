@@ -7,7 +7,16 @@ namespace MassiveDotNet.CodeGen.Tests;
 /// <param name="Path">The route.</param>
 /// <param name="Envelope">The JSON schema of the 200 response.</param>
 /// <param name="Parameters">The JSON array of parameter objects.</param>
-internal sealed record Operation(string Id, string Path, string Envelope, string Parameters = "[]");
+/// <param name="Extensions">
+/// Extra members of the operation object, such as an <c>x-polygon-deprecation</c> extension,
+/// written as JSON members without a trailing comma.
+/// </param>
+internal sealed record Operation(
+    string Id,
+    string Path,
+    string Envelope,
+    string Parameters = "[]",
+    string Extensions = "");
 
 /// <summary>
 /// Builds the smallest OpenAPI document and map the generator accepts, so each test states only
@@ -21,6 +30,7 @@ internal static class Harness
         IEnumerable<string> paths = operations.Select(operation => $$"""
             "{{operation.Path}}": {
               "get": {
+                {{(operation.Extensions.Length == 0 ? "" : operation.Extensions + ",")}}
                 "operationId": "{{operation.Id}}",
                 "parameters": {{operation.Parameters}},
                 "responses": {
@@ -59,11 +69,12 @@ internal static class Harness
         """;
 
     /// <summary>An endpoint row returning <c>results</c> as an array of the model.</summary>
-    public static string Endpoint(string operationId, string model, string parameters = "{}") => $$"""
+    /// <param name="method">The .NET method name, defaulting to <c>List</c> plus the plural of the model.</param>
+    public static string Endpoint(string operationId, string model, string parameters = "{}", string? method = null) => $$"""
         {
           "operationId": "{{operationId}}",
           "group": "Reference",
-          "method": "List{{model}}s",
+          "method": "{{method ?? $"List{model}s"}}",
           "result": { "kind": "array", "model": "{{model}}", "property": "results" },
           "parameters": {{parameters}}
         }

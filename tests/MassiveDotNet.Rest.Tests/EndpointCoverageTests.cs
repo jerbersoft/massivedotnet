@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json;
 using Xunit;
 
@@ -89,6 +91,87 @@ public sealed class EndpointCoverageTests
         Assert.True(
             remaining >= 0,
             $"{mapped.Count}/{all.Count} operations mapped, {remaining} remaining.");
+    }
+
+    /// <summary>
+    /// Rule 2: a deprecated operation's entry points carry <see cref="ObsoleteAttribute"/> and an
+    /// experimental one's carry <see cref="ExperimentalAttribute"/>, each exactly where the
+    /// description says so. The signals are read here the way the generator reads them (D18):
+    /// <c>x-polygon-deprecation</c>, and a <c>vX</c> route segment or <c>x-polygon-experimental</c>.
+    /// A spec sync that deprecates a mapped operation therefore fails this test until the code
+    /// is regenerated, and a hand-written partial cannot mark a stable operation by mistake.
+    /// </summary>
+    [Fact]
+    public void StabilityAttributesMatchTheSpecification()
+    {
+        using JsonDocument spec = JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(RepositoryRoot, "specs", "openapi.json")));
+        using JsonDocument map = LoadMap();
+
+        Dictionary<string, (string Path, JsonElement Operation)> operations = new(StringComparer.Ordinal);
+
+        foreach (JsonProperty path in spec.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            if (path.Value.TryGetProperty("get", out JsonElement operation)
+                && operation.TryGetProperty("operationId", out JsonElement id))
+            {
+                operations[id.GetString()!] = (path.Name, operation);
+            }
+        }
+
+        Assembly rest = typeof(MassiveRestClient).Assembly;
+        List<string> failures = [];
+
+        foreach (JsonElement endpoint in map.RootElement.GetProperty("endpoints").EnumerateArray())
+        {
+            string operationId = endpoint.GetProperty("operationId").GetString()!;
+            string group = endpoint.GetProperty("group").GetString()!;
+            string method = endpoint.GetProperty("method").GetString()!;
+            (string path, JsonElement operation) = operations[operationId];
+
+            bool deprecated = operation.TryGetProperty("x-polygon-deprecation", out _);
+            bool experimental = operation.TryGetProperty("x-polygon-experimental", out _)
+                || path.Split('/').Contains("vX");
+
+            // The Enumerate sibling exists only for paginated List methods; asking for it by name
+            // and taking whichever entry points exist keeps this independent of pagination.
+            string[] entryPoints = method.StartsWith("List", StringComparison.Ordinal)
+                ? [$"{method}Async", $"Enumerate{method["List".Length..]}Async"]
+                : [$"{method}Async"];
+
+            Type groupType = rest.GetType($"MassiveDotNet.Rest.{group}Group", throwOnError: true)!;
+            MethodInfo[] methods = [.. groupType
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .Where(m => entryPoints.Contains(m.Name, StringComparer.Ordinal))];
+
+            if (methods.Length == 0)
+            {
+                failures.Add($"{group}.{method}Async was not found, so its attributes could not be checked.");
+                continue;
+            }
+
+            foreach (MethodInfo entry in methods)
+            {
+                bool obsolete = entry.GetCustomAttribute<ObsoleteAttribute>() is { DiagnosticId: "MASSIVE0002" };
+                bool marked = entry.GetCustomAttribute<ExperimentalAttribute>() is { DiagnosticId: "MASSIVE0001" };
+
+                if (obsolete != deprecated)
+                {
+                    failures.Add(deprecated
+                        ? $"{group}.{entry.Name} lacks [Obsolete] but the description deprecates {operationId}."
+                        : $"{group}.{entry.Name} carries [Obsolete] but the description does not deprecate {operationId}.");
+                }
+
+                if (marked != experimental)
+                {
+                    failures.Add(experimental
+                        ? $"{group}.{entry.Name} lacks [Experimental] but {operationId} is experimental."
+                        : $"{group}.{entry.Name} carries [Experimental] but {operationId} is not experimental.");
+                }
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
 
     private static HashSet<string> SpecOperationIds()
