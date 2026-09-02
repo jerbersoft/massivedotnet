@@ -74,3 +74,27 @@ internal sealed class GetStocksV1DividendsResponse : IPagedEnvelope<Dividend>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v2/reference/news.</summary>
+internal sealed class ListNewsResponse : IPagedEnvelope<NewsArticle>
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public NewsArticle[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

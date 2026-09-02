@@ -37,7 +37,7 @@ internal sealed record Argument(
     {
         if (slot.Group is null)
         {
-            return Create(slot.Parameter, mapped);
+            return Create(slot.Parameter, mapped, operationId);
         }
 
         ComparatorGroup group = slot.Group;
@@ -81,11 +81,11 @@ internal sealed record Argument(
             QueryCallSuffix: group.HasExactForm ? "" : ", hasExactForm: false");
     }
 
-    public static Argument Create(SpecParameter parameter, MapParameter? mapped) => new(
+    public static Argument Create(SpecParameter parameter, MapParameter? mapped, string operationId) => new(
         parameter.Name,
         mapped?.Name ?? parameter.Name,
         parameter.Required,
         parameter.In,
         Prose.Clean(parameter.Description),
-        TypeBinding.Resolve(mapped?.Type, parameter.Schema));
+        TypeBinding.Resolve(mapped?.Type, parameter.Schema, operationId, parameter.Name));
 }

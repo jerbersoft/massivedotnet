@@ -80,6 +80,25 @@ internal sealed record ComparatorGroup(string BaseName, IReadOnlySet<string> Suf
 /// <param name="Group">The comparator group, or <see langword="null"/> for a plain parameter.</param>
 internal sealed record ParameterSlot(string WireName, SpecParameter Parameter, ComparatorGroup? Group);
 
+/// <summary>What a schema node is, as far as binding is concerned (D-N3, D-N5).</summary>
+internal enum SchemaShape
+{
+    /// <summary>A string, number, integer, or boolean, or a node with no type, which defaults to string.</summary>
+    Scalar,
+
+    /// <summary>An object, whether or not it declares properties.</summary>
+    Object,
+
+    /// <summary>An array of scalars, or an array with no item schema.</summary>
+    Array,
+
+    /// <summary>An array whose items are objects.</summary>
+    ArrayOfObjects,
+
+    /// <summary>An array whose items are arrays. None exists in the description; refused if one arrives.</summary>
+    ArrayOfArrays,
+}
+
 /// <summary>Reads the OpenAPI description and resolves its composed, anonymous schemas.</summary>
 internal sealed class Spec
 {
@@ -88,8 +107,16 @@ internal sealed class Spec
     private readonly JsonElement _componentParameters;
 
     public Spec(string path)
+        : this(JsonDocument.Parse(File.ReadAllBytes(path)))
     {
-        _document = JsonDocument.Parse(File.ReadAllBytes(path));
+    }
+
+    /// <summary>Parses a description. The generator loads from disk; tests hand in fragments.</summary>
+    public static Spec Parse(string json) => new(JsonDocument.Parse(json));
+
+    private Spec(JsonDocument document)
+    {
+        _document = document;
         JsonElement root = _document.RootElement;
 
         _componentParameters = root.GetProperty("components").GetProperty("parameters");
@@ -304,6 +331,128 @@ internal sealed class Spec
 
         return current;
     }
+
+    /// <summary>Classifies a schema node for binding.</summary>
+    /// <remarks>
+    /// An object is anything typed <c>object</c>, or anything that declares <c>properties</c> or
+    /// composes them through <c>allOf</c>, since the description omits the type on some composed
+    /// nodes. A free-form object with no properties is still an object: it has no default binding
+    /// and the map must name a type for it (D-N6).
+    /// </remarks>
+    public static SchemaShape Shape(JsonElement schema)
+    {
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return SchemaShape.Scalar;
+        }
+
+        if (IsObject(schema))
+        {
+            return SchemaShape.Object;
+        }
+
+        if (!schema.TryGetProperty("type", out JsonElement type) || type.GetString() != "array")
+        {
+            return SchemaShape.Scalar;
+        }
+
+        if (!schema.TryGetProperty("items", out JsonElement items))
+        {
+            return SchemaShape.Array;
+        }
+
+        return Shape(items) switch
+        {
+            SchemaShape.Object => SchemaShape.ArrayOfObjects,
+            SchemaShape.Scalar => SchemaShape.Array,
+            _ => SchemaShape.ArrayOfArrays,
+        };
+    }
+
+    /// <summary>A shape as it reads in a diagnostic: "an object", "an array of objects".</summary>
+    public static string Describe(SchemaShape shape) => shape switch
+    {
+        SchemaShape.Object => "an object",
+        SchemaShape.ArrayOfObjects => "an array of objects",
+        SchemaShape.ArrayOfArrays => "an array of arrays",
+        SchemaShape.Array => "an array of scalars",
+        _ => "a scalar",
+    };
+
+    /// <summary>
+    /// The ways a reuse site's schema differs from the schema a model was generated from (D-N4).
+    /// Property names must match exactly; a property the model's schema requires must be required
+    /// at the site; both comparisons recurse through nested objects and arrays of objects. Scalar
+    /// types are not compared: the model row is the curated truth, and the description disagrees
+    /// with itself at sites that are plainly the same thing. Empty when the site matches.
+    /// </summary>
+    /// <param name="model">The schema at the model's own pointer.</param>
+    /// <param name="site">The schema at the property that names the model.</param>
+    /// <returns>One sentence per difference, in the description's declaration order.</returns>
+    public static List<string> StructuralDifferences(JsonElement model, JsonElement site)
+    {
+        List<string> differences = [];
+        Compare(model, site, "", differences);
+        return differences;
+    }
+
+    private static void Compare(JsonElement model, JsonElement site, string path, List<string> differences)
+    {
+        List<SpecProperty> modelProperties = Properties(model);
+        List<SpecProperty> siteProperties = Properties(site);
+
+        foreach (SpecProperty extra in siteProperties.Where(s => !modelProperties.Exists(m => m.Name == s.Name)))
+        {
+            differences.Add($"'{path}{extra.Name}' is declared at the site but not on the model");
+        }
+
+        foreach (SpecProperty expected in modelProperties)
+        {
+            SpecProperty? actual = siteProperties.Find(s => s.Name == expected.Name);
+
+            if (actual is null)
+            {
+                differences.Add($"'{path}{expected.Name}' is on the model but not declared at the site");
+                continue;
+            }
+
+            if (expected.Required && !actual.Required)
+            {
+                differences.Add($"'{path}{expected.Name}' is required on the model but optional at the site");
+            }
+
+            SchemaShape modelShape = Shape(expected.Schema);
+            SchemaShape siteShape = Shape(actual.Schema);
+
+            if (modelShape == SchemaShape.Object && siteShape == SchemaShape.Object)
+            {
+                Compare(expected.Schema, actual.Schema, $"{path}{expected.Name}/", differences);
+            }
+            else if (modelShape == SchemaShape.ArrayOfObjects && siteShape == SchemaShape.ArrayOfObjects)
+            {
+                Compare(
+                    expected.Schema.GetProperty("items"),
+                    actual.Schema.GetProperty("items"),
+                    $"{path}{expected.Name}/items/",
+                    differences);
+            }
+            else if (modelShape != siteShape)
+            {
+                // Array-ness is a shape fact, not a scalar type: a model property that is an array
+                // of scalars versus a plain scalar at a reuse site, or an array versus an array of
+                // arrays, is flagged the same as object-versus-scalar. Scalar types themselves stay
+                // uncompared -- both sides land on SchemaShape.Scalar, so modelShape == siteShape and
+                // this branch never runs for them.
+                differences.Add(
+                    $"'{path}{expected.Name}' is {Describe(modelShape)} on the model but {Describe(siteShape)} at the site");
+            }
+        }
+    }
+
+    private static bool IsObject(JsonElement schema) =>
+        (schema.TryGetProperty("type", out JsonElement type) && type.GetString() == "object")
+        || schema.TryGetProperty("properties", out _)
+        || schema.TryGetProperty("allOf", out _);
 
     private static void Collect(
         JsonElement schema,

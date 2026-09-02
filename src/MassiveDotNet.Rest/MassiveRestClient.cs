@@ -4,7 +4,7 @@ namespace MassiveDotNet.Rest;
 
 /// <summary>
 /// The entry point to the Massive REST API. Endpoints are reached through groups that mirror
-/// the platform's own taxonomy, for example <see cref="Stocks"/>.
+/// the platform's own taxonomy, for example <see cref="Stocks"/> and <see cref="Reference"/>.
 /// </summary>
 /// <remarks>
 /// This type is thread-safe and intended to be long-lived. Create one per application and
@@ -47,6 +47,9 @@ public sealed class MassiveRestClient : IDisposable
 
     /// <summary>US equities: aggregates, trades, quotes, snapshots, and technical indicators.</summary>
     public StocksGroup Stocks => new(_transport);
+
+    /// <summary>Reference data: tickers, news, corporate actions, exchanges, and conditions.</summary>
+    public ReferenceGroup Reference => new(_transport);
 
     /// <inheritdoc />
     public void Dispose()

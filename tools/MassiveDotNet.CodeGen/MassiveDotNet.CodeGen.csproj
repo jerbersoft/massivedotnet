@@ -7,4 +7,9 @@
     <!-- Build-time tool only; never shipped, so AOT and trimming rules do not apply. -->
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Every generator type is internal; the diagnostic tests need to construct them. -->
+    <InternalsVisibleTo Include="MassiveDotNet.CodeGen.Tests" />
+  </ItemGroup>
+
 </Project>

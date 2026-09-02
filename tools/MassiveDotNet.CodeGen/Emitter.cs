@@ -61,7 +61,7 @@ internal sealed class Emitter(Spec spec, Map map)
             return (
                 property,
                 mapped?.Name ?? Naming.Pascal(property.Name),
-                mapped?.Type ?? DefaultPropertyType(property),
+                PropertyType(model, property, mapped),
                 mapped?.Summary ?? Prose.Clean(property.Description));
         })];
 
@@ -120,12 +120,14 @@ internal sealed class Emitter(Spec spec, Map map)
             {
                 SpecOperation operation = spec.Operation(endpoint.OperationId);
 
+                ValidateResultReuse(endpoint, operation);
+
                 List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
                     .Select(property => (
                         property,
                         property.Name == endpoint.Result.Property
                             ? $"{endpoint.Result.Model}[]?"
-                            : NullableEnvelopeType(property)))];
+                            : EnvelopeType(endpoint, property)))];
 
                 return (endpoint, operation, Spec.IsPaginated(operation), members);
             })];
@@ -480,17 +482,20 @@ internal sealed class Emitter(Spec spec, Map map)
     /// nullable reference analysis.
     /// </summary>
     /// <remarks>
-    /// A required value type (<c>double</c>, <c>long</c>, <c>bool</c>, an enum, a NodaTime value
-    /// type such as <c>LocalDate</c>, or a mapped <c>struct</c> model such as <c>Agg</c>) already
-    /// has a non-null default and needs nothing. A required reference type (<c>string</c>, an
-    /// array, or another mapped <c>class</c> model) does not: the compiler-synthesized constructor
-    /// exits without assigning it, which is CS8618 under this repository's warnings-as-errors
-    /// build. The schema calling the field required is the fact being encoded -- <c>required</c>
-    /// states it honestly, rather than an initializer such as <c>= null!</c> that pretends a value
-    /// exists before one is read, or a nullable annotation that pretends the field might be absent
-    /// when the schema says it never is. Reference-ness is read from the resolved type string
-    /// alone (ends with <c>[]</c>, equals <c>string</c>, or names another non-<c>struct</c> model
-    /// in the map), so the check is order-independent and rule 6 holds.
+    /// A required value type already has a non-null default and needs nothing; a required
+    /// reference type does not: the compiler-synthesized constructor exits without assigning it,
+    /// which is CS8618 under this repository's warnings-as-errors build. The schema calling the
+    /// field required is the fact being encoded -- <c>required</c> states it honestly, rather than
+    /// an initializer such as <c>= null!</c> that pretends a value exists before one is read, or a
+    /// nullable annotation that pretends the field might be absent when the schema says it never
+    /// is. Value types are a closed set (D-N6): the scalars the generator emits, the NodaTime
+    /// types, and any <c>struct</c> model. Everything else -- <c>string</c>, arrays, class models,
+    /// a map-supplied <c>Dictionary&lt;string, T&gt;</c> -- is a reference type and gets the
+    /// modifier, which is the safe direction: a missing modifier is CS8618 in this build, so it
+    /// cannot ship. A spurious modifier on a value type is not a compile error -- C# allows
+    /// <c>required</c> on a member of any type -- but System.Text.Json then demands the key at
+    /// deserialization time, which is wrong for a field the schema does not require. Read from the
+    /// resolved type string alone, so the check is order-independent and rule 6 holds.
     /// </remarks>
     /// <param name="required">Whether the schema declares the property required.</param>
     /// <param name="type">The property's resolved C# type, nullable annotation included.</param>
@@ -498,9 +503,19 @@ internal sealed class Emitter(Spec spec, Map map)
     private bool NeedsRequiredModifier(bool required, string type) =>
         required
         && !type.EndsWith('?')
-        && (type == "string"
-            || type.EndsWith("[]", StringComparison.Ordinal)
-            || map.Models.Exists(m => m.Name == type && m.Kind != "struct"));
+        && !ValueTypes.Contains(type)
+        && !map.Models.Exists(m => m.Name == type && m.Kind == "struct");
+
+    /// <summary>The value types the generator emits on models (D-N6). Extend with the vocabulary, never ad hoc.</summary>
+    private static readonly HashSet<string> ValueTypes = new(StringComparer.Ordinal)
+    {
+        "int",
+        "long",
+        "double",
+        "bool",
+        "LocalDate",
+        "Instant",
+    };
 
     private static void EmitGuards(CodeWriter writer, List<Argument> arguments)
     {
@@ -566,8 +581,8 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
         writer.Line();
         writer.Doc("summary", "Source-generated serialization metadata for every REST response envelope. Using a context rather than reflection keeps the SDK Native AOT compatible.");
-        writer.Doc("remarks", "Calendar dates are read by <see cref=\"LocalDateJsonConverter\"/>, registered here once so no model property needs its own attribute.", preserveMarkup: true);
-        writer.Line("[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter) })]");
+        writer.Doc("remarks", "Calendar dates are read by <see cref=\"LocalDateJsonConverter\"/> and RFC 3339 timestamps by <see cref=\"InstantJsonConverter\"/>, registered here once so no model property needs its own attribute.", preserveMarkup: true);
+        writer.Line("[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter), typeof(InstantJsonConverter) })]");
 
         foreach (MapEndpoint endpoint in map.Endpoints)
         {
@@ -615,10 +630,170 @@ internal sealed class Emitter(Spec spec, Map map)
         return property.Required || type == "string" ? Nullable(type, property.Required) : $"{type}?";
     }
 
+    /// <summary>
+    /// The C# type of a model property: the row's verbatim <c>type</c>, the model its row names
+    /// (D-N2), or the schema's default. An object with neither is refused (D-N3).
+    /// </summary>
+    private string PropertyType(MapModel model, SpecProperty property, MapProperty? mapped)
+    {
+        if (mapped is { Model: not null, Type: not null })
+        {
+            throw new InvalidOperationException(
+                $"Model '{model.Name}' (operation '{model.SchemaOperationId}'): property '{property.Name}' carries both "
+                + "\"model\" and \"type\". A row names a model, whose nullability and array-ness the spec supplies, "
+                + "or a verbatim type, never both.");
+        }
+
+        if (mapped?.Model is { } modelName)
+        {
+            return ModelReferenceType(model, property, modelName);
+        }
+
+        if (mapped?.Type is { } type)
+        {
+            return type;
+        }
+
+        if (TypeBinding.NeedsModel(property.Schema))
+        {
+            throw Unbound(model, property);
+        }
+
+        return DefaultPropertyType(property);
+    }
+
+    /// <summary>
+    /// The diagnostic for an object with no binding: it names the row to add and the row to
+    /// point at it, so the fix is a paste rather than a search (D-N3).
+    /// </summary>
+    private static InvalidOperationException Unbound(MapModel model, SpecProperty property)
+    {
+        SchemaShape shape = Spec.Shape(property.Schema);
+        string described = Spec.Describe(shape);
+
+        if (shape == SchemaShape.ArrayOfArrays)
+        {
+            return new InvalidOperationException(
+                $"Operation '{model.SchemaOperationId}': property '{property.Name}' of model '{model.Name}' is {described}, "
+                + "which has no binding. Set \"type\" on its row in specs/endpoints.map.json.");
+        }
+
+        string pointer = shape == SchemaShape.ArrayOfObjects
+            ? $"{model.SchemaPointer}/{property.Name}/items"
+            : $"{model.SchemaPointer}/{property.Name}";
+
+        return new InvalidOperationException(
+            $"Operation '{model.SchemaOperationId}': property '{property.Name}' of model '{model.Name}' is {described} with no binding.\n"
+            + "Add a row to \"models\" in specs/endpoints.map.json:\n"
+            + $"  \"<Name>\": {{ \"schema\": {{ \"operationId\": \"{model.SchemaOperationId}\", \"pointer\": \"{pointer}\" }} }}\n"
+            + $"and set \"model\": \"<Name>\" on the '{property.Name}' row of '{model.Name}'. "
+            + "A free-form object with no declared properties takes \"type\" instead, such as \"Dictionary<string, double>\" (D-N6).");
+    }
+
+    /// <summary>
+    /// Composes the type for a property whose row names a model: the model, or an array of it,
+    /// nullable when the schema does not require the property (D-N2).
+    /// </summary>
+    private string ModelReferenceType(MapModel owner, SpecProperty property, string modelName)
+    {
+        MapModel target = map.Models.Find(m => m.Name == modelName)
+            ?? throw new InvalidOperationException(
+                $"Model '{owner.Name}' (operation '{owner.SchemaOperationId}'): property '{property.Name}' names model "
+                + $"'{modelName}', which is not declared in \"models\" in specs/endpoints.map.json.");
+
+        SchemaShape shape = Spec.Shape(property.Schema);
+
+        if (shape is not (SchemaShape.Object or SchemaShape.ArrayOfObjects))
+        {
+            throw new InvalidOperationException(
+                $"Model '{owner.Name}' (operation '{owner.SchemaOperationId}'): property '{property.Name}' names model "
+                + $"'{modelName}', but its schema is {Spec.Describe(shape)}, not an object or an array of objects. "
+                + "Use \"type\" for anything else.");
+        }
+
+        // A name may cover only one shape. The site is compared with the schema the model was
+        // generated from, so a reused model is proven identical everywhere it appears (D-N4).
+        // The comparison also runs where the site is the origin itself; a schema always matches
+        // itself, so that costs nothing and needs no special case.
+        JsonElement site = shape == SchemaShape.ArrayOfObjects ? property.Schema.GetProperty("items") : property.Schema;
+        JsonElement origin = Spec.Navigate(Spec.SuccessSchema(spec.Operation(target.SchemaOperationId)), target.SchemaPointer);
+        List<string> differences = Spec.StructuralDifferences(origin, site);
+
+        if (differences.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Model '{owner.Name}' (operation '{owner.SchemaOperationId}'): property '{property.Name}' names model "
+                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at '{target.SchemaPointer}', "
+                + "but the schema at this site differs:\n  "
+                + string.Join("\n  ", differences)
+                + "\nA model name may cover only one shape. Declare a second model for this site, or fix the row.");
+        }
+
+        string type = shape == SchemaShape.ArrayOfObjects ? $"{target.Name}[]" : target.Name;
+
+        return property.Required ? type : $"{type}?";
+    }
+
+    /// <summary>
+    /// Verifies an endpoint's <c>result</c> row against the schema its named model was generated
+    /// from, the same structural check <see cref="ModelReferenceType"/> runs where a model is
+    /// named on a property (D-N4). A model name may cover only one shape, whether it is reused on
+    /// a property or as an endpoint's own top-level result. Runs once per endpoint, from
+    /// <see cref="EmitEnvelopes"/>, so it is order-independent and rule 6 holds.
+    /// </summary>
+    private void ValidateResultReuse(MapEndpoint endpoint, SpecOperation operation)
+    {
+        MapModel target = map.Models.Find(m => m.Name == endpoint.Result.Model)
+            ?? throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
+                + $"'{endpoint.Result.Model}', which is not declared in \"models\" in specs/endpoints.map.json.");
+
+        // "array" is the only result kind the map declares today. A new kind needs its own site
+        // pointer added here rather than silently skipping the check.
+        JsonElement site = endpoint.Result.Kind switch
+        {
+            "array" => Spec.Navigate(Spec.SuccessSchema(operation), $"{endpoint.Result.Property}/items"),
+            _ => throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result kind "
+                + $"'{endpoint.Result.Kind}' has no structural reuse check. Add one for it in "
+                + "Emitter.ValidateResultReuse before using this kind."),
+        };
+
+        JsonElement origin = Spec.Navigate(Spec.SuccessSchema(spec.Operation(target.SchemaOperationId)), target.SchemaPointer);
+        List<string> differences = Spec.StructuralDifferences(origin, site);
+
+        if (differences.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
+                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at '{target.SchemaPointer}', "
+                + "but the schema at this site differs:\n  "
+                + string.Join("\n  ", differences)
+                + "\nA model name may cover only one shape. Declare a second model for this site, or fix the row.");
+        }
+    }
+
     private static string NullableEnvelopeType(SpecProperty property)
     {
         string type = TypeBinding.FromSchema(property.Schema);
         return type == "string" ? "string?" : $"{type}?";
+    }
+
+    /// <summary>
+    /// The type of an envelope property other than the result. Envelopes have no map rows, so an
+    /// object here has nowhere to be bound until singular results are designed (D-N3, #31).
+    /// </summary>
+    private static string EnvelopeType(MapEndpoint endpoint, SpecProperty property)
+    {
+        if (TypeBinding.NeedsModel(property.Schema))
+        {
+            throw new InvalidOperationException(
+                $"Operation '{endpoint.OperationId}': envelope property '{property.Name}' is {Spec.Describe(Spec.Shape(property.Schema))}. "
+                + "Envelope-level objects have no binding until singular results are designed (issue #31); only the "
+                + "result property, named by the endpoint's \"result\" row, is bound.");
+        }
+
+        return NullableEnvelopeType(property);
     }
 
     private static string Nullable(string type, bool required) =>

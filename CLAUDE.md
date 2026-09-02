@@ -54,6 +54,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D11 | The endpoint catalog served by the Massive MCP server is a **build-time** input to the map only. It is never a runtime dependency, and never a test fixture source for wire formats. | Its `call_api` flattens JSON into DataFrames, so it cannot represent the wire envelope. Its docs *do* carry asset-class ownership and comparator groupings the OpenAPI description lacks. |
 | D14 | Pagination cursors are followed **verbatim**, but only when `next_url` names the same origin as the configured `BaseAddress`. A mismatch throws rather than following. | `next_url` is absolute, carries no key, and is chosen by the response body — so following it unconditionally sends the caller's API key to whatever host a server names, which is rule 11's concern arriving by another route. Verbatim matters independently: the aggregates cursor rewrites a path segment (`2024-01-01` becomes `1704776400000`), so rebuilding a cursor from the original arguments silently restarts the traversal. An opt-out was rejected — it is an option nobody finds before filing a bug, and everybody finds after reading a workaround online. The cost is understood: if Massive ever shards pagination onto a second hostname this throws where a naive client would keep working, which is the correct failure. |
 | D15 | Comparator variants (`.gt` `.gte` `.lt` `.lte` `.any_of` `.all_of`) collapse to **one filter-typed parameter per field**: `RangeFilter<T>`, `SetFilter<T>`, `Filter<T>`, or `ArrayFilter<T>`, chosen by the generator from the exact suffix set the spec declares. Equality is the implicit conversion from `T`. Rendering lives in `RequestUriBuilder`, not in generated code. | 1,182 flat parameters gave one endpoint a 114-argument method. The field is the unit the platform documents; typing it by capability makes an unsupported comparator a compile error rather than a silently dropped parameter. Grouping is read from the spec so it cannot drift, and an unrecognised suffix set fails generation instead of guessing. One rendering implementation is tested once rather than in 93 generated files. Element types are a closed set (`string`, `int`, `long`, `double`, `LocalDate`, `DateOrTimestamp`); `Instant` is excluded because it carries no wire precision. |
+| D16 | Nested object schemas bind to **named models in the map**, generated from the spec and verified structurally at every site that names them. An object with no binding fails generation. | 184 nested sites across 55 operations collapse to 60 shapes, and their public names (`Greeks`, `NewsPublisher`) are worth a human's row in the map: path-derived names would give the three stocks snapshot operations three identical `Day` types. A name may cover only one shape, so every reuse site is checked — property names must match exactly and the model may not require what the site makes optional — while scalar types are trusted from the model row, because the description's own formats disagree at sites that are plainly the same thing. Failing on an unbound object is what stops a required nested object from shipping as a `string` that throws at deserialization. |
 
 ---
 
@@ -66,7 +67,7 @@ specs/endpoints.map.json    Curated map: what the spec does NOT say (asset class
 tools/MassiveDotNet.CodeGen Build-time generator. Never shipped, never a consumer dependency.
 src/MassiveDotNet           Core: options, transport, auth, exceptions, enums, pooled URI building.
 src/MassiveDotNet.Rest      REST client. Generated/ is machine-owned; everything else is hand-written.
-tests/                      Unit tests and the endpoint-coverage contract tests.
+tests/                      Unit tests, the endpoint-coverage contract tests, and the generator's diagnostic tests.
 samples/MassiveDotNet.AotSmokeTest
                             Publishes Native AOT in CI to prove rules 3 and 4.
 ```
@@ -79,6 +80,8 @@ samples/MassiveDotNet.AotSmokeTest
 
 1. Add a row to `specs/endpoints.map.json`. Supply only what the spec lacks: `group`, `method`,
    .NET parameter names and types, and property names for anonymous result schemas.
+   A nested object, or the element of a nested array of objects, needs its own `models` row with a
+   pointer through its parent and a `model` reference on the parent's property row (D16).
    Everything else — paths, parameters, requiredness, enum members, nullability, prose — is read
    from the spec so it cannot drift.
 2. Regenerate: `dotnet run --project tools/MassiveDotNet.CodeGen`
@@ -119,7 +122,7 @@ boundary. NodaTime keeps them distinct types, so the wrong one does not compile.
 
 | Domain concept | Type | Example in this SDK |
 |----------------|------|---------------------|
-| A moment on the global timeline | `Instant` | `Agg.Timestamp`, trade and quote SIP timestamps |
+| A moment on the global timeline | `Instant` | `Agg.Timestamp`, trade and quote SIP timestamps, `NewsArticle.PublishedUtc` |
 | A calendar date with no time or zone | `LocalDate` | Ex-dividend date, split execution date, IPO date |
 | A wall-clock time in a named zone | `ZonedDateTime` | Session open and close in `America/New_York` |
 | A date and time with no zone attached | `LocalDateTime` | Rare; prefer `Instant` or `ZonedDateTime` |
@@ -221,6 +224,7 @@ for convenience.
 | Tier | Project | Runs in CI | Needs a key |
 |------|---------|------------|-------------|
 | Offline | `MassiveDotNet.Rest.Tests` | yes | no |
+| Offline | `MassiveDotNet.CodeGen.Tests` | yes | no |
 | Live | `MassiveDotNet.IntegrationTests` | **no** — compiled only | yes |
 
 ```bash
@@ -304,7 +308,16 @@ learns what the live tier found.
   (`"ex_dividend_date": { "type": "LocalDate" }`), never the filter type, and never a row keyed by
   a variant. Grouping is detected from the spec, never declared in the map (D15). Calendar dates
   (`format: date`) are `LocalDate` on parameters and models alike, read by
-  `LocalDateJsonConverter`.
+  `LocalDateJsonConverter`, and date-times are `Instant`, read by `InstantJsonConverter`.
+- **Models**: a nested object, or the element of a nested array of objects, is its own `models`
+  row with a pointer through its parent (`results/items/publisher`,
+  `results/items/insights/items`), and the parent's property row names it with `model`; the
+  generator composes `T`, `T?`, `T[]`, or `T[]?` from the spec, so the map never restates
+  requiredness or array-ness. A free-form object with no declared properties takes an explicit
+  `type` of `Dictionary<string, T>`. `format: date-time` properties are `Instant`, read by
+  `InstantJsonConverter`. Names are domain nouns, prefixed by family only where it
+  disambiguates; reuse a model across operations only where the generator's structural check
+  passes (D16).
 - **Nullability**: enabled everywhere. Optional query parameters are nullable and omitted from the
   request when `null` — never sent as empty.
 - **Temporal**: see [Temporal types](#temporal-types). Rule 12 is strict and machine-checked.
