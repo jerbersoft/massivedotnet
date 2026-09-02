@@ -210,7 +210,7 @@
         "c":   { "name": "Close" },
         "v":   { "name": "Volume" },
         "vw":  { "name": "VolumeWeightedAveragePrice" },
-        "t":   { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp for the start of the aggregate window. The description declares a bare integer; every value overflows int32." },
+        "t":   { "name": "TimestampMilliseconds", "type": "long" },
         "n":   { "name": "TransactionCount", "type": "long?" },
         "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
       }
@@ -228,7 +228,7 @@
         "c":  { "name": "Close" },
         "v":  { "name": "Volume" },
         "vw": { "name": "VolumeWeightedAveragePrice" },
-        "t":  { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp for the start of the aggregate window. The description declares a bare integer; every value overflows int32." },
+        "t":  { "name": "TimestampMilliseconds", "type": "long" },
         "n":  { "name": "TransactionCount", "type": "long?" }
       }
     },

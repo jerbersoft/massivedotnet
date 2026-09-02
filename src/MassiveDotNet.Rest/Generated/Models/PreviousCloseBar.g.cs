@@ -48,10 +48,7 @@ public readonly partial record struct PreviousCloseBar
     [JsonPropertyName("vw")]
     public double? VolumeWeightedAveragePrice { get; init; }
 
-    /// <summary>
-    /// The Unix millisecond timestamp for the start of the aggregate window. The description declares a
-    /// bare integer; every value overflows int32.
-    /// </summary>
+    /// <summary>The Unix millisecond timestamp for the start of the aggregate window.</summary>
     [JsonPropertyName("t")]
     public long TimestampMilliseconds { get; init; }
 
