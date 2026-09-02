@@ -71,6 +71,82 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// The documented sample for GET /v2/reference/news, verbatim. Its <c>next_url</c> names the
+    /// origin with an explicit <c>:443</c>, which the same-origin check (D14) must treat as the
+    /// configured base address.
+    /// </summary>
+    public const string ReferenceNews = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com:443/v2/reference/news?cursor=eyJsaW1pdCI6MSwic29ydCI6InB1Ymxpc2hlZF91dGMiLCJvcmRlciI6ImFzY2VuZGluZyIsInRpY2tlciI6e30sInB1Ymxpc2hlZF91dGMiOnsiZ3RlIjoiMjAyMS0wNC0yNiJ9LCJzZWFyY2hfYWZ0ZXIiOlsxNjE5NDA0Mzk3MDAwLG51bGxdfQ",
+          "request_id": "831afdb0b8078549fed053476984947a",
+          "results": [
+            {
+              "amp_url": "https://m.uk.investing.com/news/stock-market-news/markets-are-underestimating-fed-cuts-ubs-3559968?ampMode=1",
+              "article_url": "https://uk.investing.com/news/stock-market-news/markets-are-underestimating-fed-cuts-ubs-3559968",
+              "author": "Sam Boughedda",
+              "description": "UBS analysts warn that markets are underestimating the extent of future interest rate cuts by the Federal Reserve, as the weakening economy is likely to justify more cuts than currently anticipated.",
+              "id": "8ec638777ca03b553ae516761c2a22ba2fdd2f37befae3ab6fdab74e9e5193eb",
+              "image_url": "https://i-invdn-com.investing.com/news/LYNXNPEC4I0AL_L.jpg",
+              "insights": [
+                {
+                  "sentiment": "positive",
+                  "sentiment_reasoning": "UBS analysts are providing a bullish outlook on the extent of future Federal Reserve rate cuts, suggesting that markets are underestimating the number of cuts that will occur.",
+                  "ticker": "UBS"
+                }
+              ],
+              "keywords": [
+                "Federal Reserve",
+                "interest rates",
+                "economic data"
+              ],
+              "published_utc": "2024-06-24T18:33:53Z",
+              "publisher": {
+                "favicon_url": "https://s3.massive.com/public/assets/news/favicons/investing.ico",
+                "homepage_url": "https://www.investing.com/",
+                "logo_url": "https://s3.massive.com/public/assets/news/logos/investing.png",
+                "name": "Investing.com"
+              },
+              "tickers": [
+                "UBS"
+              ],
+              "title": "Markets are underestimating Fed cuts: UBS By Investing.com - Investing.com UK"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the news envelope's shape, with no <c>next_url</c>, so a
+    /// traversal that starts from <see cref="ReferenceNews"/> ends after two requests. The service
+    /// cannot be asked for "the page after the published sample", which is why this is written
+    /// rather than captured.
+    /// </summary>
+    public const string ReferenceNewsLastPage = """
+        {
+          "count": 1,
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": [
+            {
+              "article_url": "https://example.com/second",
+              "author": "Second Author",
+              "id": "second",
+              "published_utc": "2024-06-25T09:00:00Z",
+              "publisher": {
+                "homepage_url": "https://example.com/",
+                "logo_url": "https://example.com/logo.png",
+                "name": "Example News"
+              },
+              "tickers": ["UBS"],
+              "title": "Second article"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An error body in the shape Massive returns for an unauthorized request.</summary>
     public const string Unauthorized = """
         {

@@ -7,7 +7,7 @@
     "    only by the *name* of their path parameter)",
     "  * which SDK group and method name an operation surfaces as",
     "  * .NET-friendly parameter names and strong types",
-    "  * property names for anonymous result schemas (no operation uses $ref)",
+    "  * property names for anonymous result schemas, and a name for every nested object",
     "",
     "Everything else -- paths, parameter lists, requiredness, enum members, nullability --",
     "is read from specs/openapi.json at generation time so it cannot drift.",
@@ -18,6 +18,9 @@
   "groups": {
     "Stocks": {
       "summary": "Endpoints covering US equities: aggregates, trades, quotes, snapshots, and technical indicators."
+    },
+    "Reference": {
+      "summary": "Reference data across asset classes: tickers, news, corporate actions, exchanges, and conditions."
     }
   },
 
@@ -62,6 +65,47 @@
         "distribution_type":            { "name": "DistributionType" },
         "id":                           { "name": "Id" }
       }
+    },
+
+    "NewsArticle": {
+      "summary": "A news article associated with one or more tickers, with its publisher and per-ticker sentiment insights.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4). <see cref=\"PublishedUtc\"/> is a moment on the global timeline, hence <see cref=\"NodaTime.Instant\"/>; the nested <see cref=\"Publisher\"/> and <see cref=\"Insights\"/> are models of their own (decision D16).",
+      "schema": { "operationId": "ListNews", "pointer": "results/items" },
+      "properties": {
+        "id":            { "name": "Id" },
+        "title":         { "name": "Title" },
+        "author":        { "name": "Author" },
+        "published_utc": { "name": "PublishedUtc" },
+        "article_url":   { "name": "ArticleUrl" },
+        "amp_url":       { "name": "AmpUrl" },
+        "image_url":     { "name": "ImageUrl" },
+        "description":   { "name": "Description" },
+        "tickers":       { "name": "Tickers" },
+        "keywords":      { "name": "Keywords" },
+        "publisher":     { "name": "Publisher", "model": "NewsPublisher" },
+        "insights":      { "name": "Insights",  "model": "NewsInsight" }
+      }
+    },
+
+    "NewsPublisher": {
+      "summary": "The outlet that published a news article: its name, homepage, and branding assets.",
+      "schema": { "operationId": "ListNews", "pointer": "results/items/publisher" },
+      "properties": {
+        "name":         { "name": "Name" },
+        "homepage_url": { "name": "HomepageUrl" },
+        "logo_url":     { "name": "LogoUrl" },
+        "favicon_url":  { "name": "FaviconUrl" }
+      }
+    },
+
+    "NewsInsight": {
+      "summary": "Sentiment attributed to one ticker mentioned in a news article, with the reasoning behind it.",
+      "schema": { "operationId": "ListNews", "pointer": "results/items/insights/items" },
+      "properties": {
+        "ticker":              { "name": "Ticker" },
+        "sentiment":           { "name": "Sentiment" },
+        "sentiment_reasoning": { "name": "SentimentReasoning" }
+      }
     }
   },
 
@@ -98,6 +142,21 @@
         "distribution_type": { "name": "distributionType" },
         "limit":             { "name": "limit" },
         "sort":              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListNews",
+      "group": "Reference",
+      "method": "ListNews",
+      "summary": "Retrieves recent news articles associated with a ticker, with each article's publisher and per-ticker sentiment insights.",
+      "remarks": "Filter by <paramref name=\"ticker\"/> for one symbol or a lexical range, and by <paramref name=\"publishedUtc\"/> for a calendar-date window. Results sort by <c>published_utc</c> only; set <paramref name=\"order\"/> to choose the direction.",
+      "result": { "kind": "array", "model": "NewsArticle", "property": "results" },
+      "parameters": {
+        "ticker":        { "name": "ticker" },
+        "published_utc": { "name": "publishedUtc", "type": "LocalDate" },
+        "order":         { "name": "order", "type": "SortOrder" },
+        "limit":         { "name": "limit" },
+        "sort":          { "name": "sort" }
       }
     }
   ]

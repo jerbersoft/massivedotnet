@@ -27,4 +27,5 @@ namespace MassiveDotNet.Rest.Serialization;
 [JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter), typeof(InstantJsonConverter) })]
 [JsonSerializable(typeof(GetStocksAggregatesResponse))]
 [JsonSerializable(typeof(GetStocksV1DividendsResponse))]
+[JsonSerializable(typeof(ListNewsResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;
