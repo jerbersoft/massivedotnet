@@ -195,6 +195,65 @@
         "open":     { "name": "Open",  "type": "Instant?" },
         "close":    { "name": "Close", "type": "Instant?" }
       }
+    },
+
+    "GroupedDailyBar": {
+      "kind": "struct",
+      "summary": "One ticker's bar from the grouped daily endpoint: open, high, low, close, and volume for a whole trading day, with the ticker it belongs to.",
+      "remarks": "<see cref=\"Agg\"/>'s shape plus <see cref=\"Ticker\"/>, which this endpoint carries on every row because one response spans the whole market. A separate model because the generator refuses a model at a site that carries a property the model lacks (decision D16). <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5).",
+      "schema": { "operationId": "GetGroupedStocksAggregates", "pointer": "results/items" },
+      "properties": {
+        "T":   { "name": "Ticker" },
+        "o":   { "name": "Open" },
+        "h":   { "name": "High" },
+        "l":   { "name": "Low" },
+        "c":   { "name": "Close" },
+        "v":   { "name": "Volume" },
+        "vw":  { "name": "VolumeWeightedAveragePrice" },
+        "t":   { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp for the start of the aggregate window. The description declares a bare integer; every value overflows int32." },
+        "n":   { "name": "TransactionCount", "type": "long?" },
+        "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
+      }
+    },
+
+    "PreviousCloseBar": {
+      "kind": "struct",
+      "summary": "The previous trading day's bar for one ticker: open, high, low, close, and volume.",
+      "remarks": "<see cref=\"Agg\"/>'s shape without the OTC flag, which this endpoint's schema does not declare. A separate model because the generator refuses a model whose properties the site does not declare (decision D16). The schema also omits the ticker its example carries, so none is bound; the caller named it in the request. <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5).",
+      "schema": { "operationId": "GetPreviousStocksAggregates", "pointer": "results/items" },
+      "properties": {
+        "o":  { "name": "Open" },
+        "h":  { "name": "High" },
+        "l":  { "name": "Low" },
+        "c":  { "name": "Close" },
+        "v":  { "name": "Volume" },
+        "vw": { "name": "VolumeWeightedAveragePrice" },
+        "t":  { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp for the start of the aggregate window. The description declares a bare integer; every value overflows int32." },
+        "n":  { "name": "TransactionCount", "type": "long?" }
+      }
+    },
+
+    "LastQuote": {
+      "kind": "struct",
+      "summary": "The most recent NBBO quote for a ticker: bid and ask price, size, and exchange, with three nanosecond timestamps.",
+      "remarks": "A tick-level type, so a struct (decision D4). The v2 wire keys are single letters, which the map names. The description declares the timestamps as bare integers, which every published value overflows, so the map types them <see cref=\"long\"/>; they are exposed as <see cref=\"NodaTime.Instant\"/> only when read (decision D5).",
+      "schema": { "operationId": "LastQuote", "pointer": "results" },
+      "properties": {
+        "T": { "name": "Ticker" },
+        "t": { "name": "SipTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the SIP received this quote from the exchange that produced it." },
+        "y": { "name": "ParticipantTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the quote was generated at the exchange." },
+        "f": { "name": "TrfTimestampNanoseconds", "type": "long?", "summary": "The nanosecond Unix timestamp at which the trade reporting facility received this quote, when it passed through one." },
+        "q": { "name": "SequenceNumber" },
+        "p": { "name": "BidPrice" },
+        "s": { "name": "BidSize" },
+        "x": { "name": "BidExchangeId" },
+        "P": { "name": "AskPrice" },
+        "S": { "name": "AskSize" },
+        "X": { "name": "AskExchangeId" },
+        "c": { "name": "Conditions" },
+        "i": { "name": "Indicators" },
+        "z": { "name": "Tape" }
+      }
     }
   },
 
@@ -297,6 +356,42 @@
       "method": "ListMarketHolidays",
       "summary": "Retrieves upcoming market holidays and early closes, one entry per exchange.",
       "result": { "kind": "array", "model": "MarketHoliday" }
+    },
+    {
+      "operationId": "GetGroupedStocksAggregates",
+      "group": "Stocks",
+      "method": "ListGroupedDaily",
+      "summary": "Retrieves the daily bar for every US stock on one trading day.",
+      "remarks": "One request returns the whole market, so each bar carries its own <see cref=\"GroupedDailyBar.Ticker\"/>. OTC securities are excluded unless <paramref name=\"includeOtc\"/> is set.",
+      "result": { "kind": "array", "model": "GroupedDailyBar", "property": "results" },
+      "parameters": {
+        "date":        { "name": "date", "type": "LocalDate" },
+        "adjusted":    { "name": "adjusted" },
+        "include_otc": { "name": "includeOtc" }
+      }
+    },
+    {
+      "operationId": "GetPreviousStocksAggregates",
+      "group": "Stocks",
+      "method": "ListPreviousClose",
+      "summary": "Retrieves the previous trading day's bar for a stock.",
+      "remarks": "The description declares an array, and the service answers with an array of one bar; it is returned as it arrives rather than unwrapped, so the shape cannot drift silently if the service ever sends more.",
+      "result": { "kind": "array", "model": "PreviousCloseBar", "property": "results" },
+      "parameters": {
+        "stocksTicker": { "name": "ticker" },
+        "adjusted":     { "name": "adjusted" }
+      }
+    },
+    {
+      "operationId": "LastQuote",
+      "group": "Stocks",
+      "method": "GetLastQuote",
+      "summary": "Retrieves the most recent NBBO quote for a stock.",
+      "remarks": "A 200 without its payload is reported as <see cref=\"MassiveApiException\"/> rather than as <see langword=\"null\"/> (decision D17).",
+      "result": { "kind": "object", "model": "LastQuote", "property": "results" },
+      "parameters": {
+        "stocksTicker": { "name": "ticker" }
+      }
     }
   ]
 }

@@ -33,4 +33,7 @@ namespace MassiveDotNet.Rest.Serialization;
 [JsonSerializable(typeof(LastTradeResponse))]
 [JsonSerializable(typeof(DailyOpenClose))]
 [JsonSerializable(typeof(MarketHoliday[]))]
+[JsonSerializable(typeof(GetGroupedStocksAggregatesResponse))]
+[JsonSerializable(typeof(GetPreviousStocksAggregatesResponse))]
+[JsonSerializable(typeof(LastQuoteResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

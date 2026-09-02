@@ -135,3 +135,78 @@ internal sealed class LastTradeResponse
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v2/aggs/grouped/locale/us/market/stocks/{date}.</summary>
+internal sealed class GetGroupedStocksAggregatesResponse
+{
+    /// <summary>Whether or not this response was adjusted for splits.</summary>
+    [JsonPropertyName("adjusted")]
+    public bool? Adjusted { get; init; }
+
+    /// <summary>The number of aggregates (minute or day) used to generate the response.</summary>
+    [JsonPropertyName("queryCount")]
+    public int? QueryCount { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("resultsCount")]
+    public int? ResultsCount { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public GroupedDailyBar[]? Results { get; init; }
+}
+
+/// <summary>The response envelope returned by /v2/aggs/ticker/{stocksTicker}/prev.</summary>
+internal sealed class GetPreviousStocksAggregatesResponse
+{
+    /// <summary>The exchange symbol that this item is traded under.</summary>
+    [JsonPropertyName("ticker")]
+    public string? Ticker { get; init; }
+
+    /// <summary>Whether or not this response was adjusted for splits.</summary>
+    [JsonPropertyName("adjusted")]
+    public bool? Adjusted { get; init; }
+
+    /// <summary>The number of aggregates (minute or day) used to generate the response.</summary>
+    [JsonPropertyName("queryCount")]
+    public int? QueryCount { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("resultsCount")]
+    public int? ResultsCount { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public PreviousCloseBar[]? Results { get; init; }
+}
+
+/// <summary>The response envelope returned by /v2/last/nbbo/{stocksTicker}.</summary>
+internal sealed class LastQuoteResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    [JsonPropertyName("results")]
+    public LastQuote? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

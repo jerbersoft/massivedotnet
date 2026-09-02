@@ -586,4 +586,146 @@ public readonly partial struct StocksGroup
                 HttpStatusCode.OK,
                 $"The response from '{requestUri}' carried no payload.");
     }
+
+    /// <summary>Retrieves the daily bar for every US stock on one trading day.</summary>
+    /// <remarks>
+    /// One request returns the whole market, so each bar carries its own <see
+    /// cref="GroupedDailyBar.Ticker"/>. OTC securities are excluded unless <paramref
+    /// name="includeOtc"/> is set.
+    /// </remarks>
+    /// <param name="date">The beginning date for the aggregate window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the results are adjusted for splits. By default, results are adjusted. Set this
+    /// to false to get results that are NOT adjusted for splits.
+    /// </param>
+    /// <param name="includeOtc">Include OTC securities in the response. Default is false (don't include OTC securities).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<GroupedDailyBar[]> ListGroupedDailyAsync(
+        LocalDate date,
+        bool? adjusted = null,
+        bool? includeOtc = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListGroupedDailyUri(date, adjusted, includeOtc);
+        return SendListGroupedDailyAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListGroupedDailyUri(
+        LocalDate date,
+        bool? adjusted,
+        bool? includeOtc)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/aggs/grouped/locale/us/market/stocks/");
+        builder.AppendPathLiteral(date.ToWireValue());
+
+        builder.AppendQuery("adjusted", adjusted);
+        builder.AppendQuery("include_otc", includeOtc);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<GroupedDailyBar[]> SendListGroupedDailyAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetGroupedStocksAggregatesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetGroupedStocksAggregatesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>Retrieves the previous trading day's bar for a stock.</summary>
+    /// <remarks>
+    /// The description declares an array, and the service answers with an array of one bar; it is
+    /// returned as it arrives rather than unwrapped, so the shape cannot drift silently if the service
+    /// ever sends more.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="adjusted">
+    /// Whether or not the results are adjusted for splits. By default, results are adjusted. Set this
+    /// to false to get results that are NOT adjusted for splits.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<PreviousCloseBar[]> ListPreviousCloseAsync(
+        string ticker,
+        bool? adjusted = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListPreviousCloseUri(ticker, adjusted);
+        return SendListPreviousCloseAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListPreviousCloseUri(
+        string ticker,
+        bool? adjusted)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/aggs/ticker/");
+        builder.AppendPathSegment(ticker);
+        builder.AppendPathLiteral("/prev");
+
+        builder.AppendQuery("adjusted", adjusted);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<PreviousCloseBar[]> SendListPreviousCloseAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetPreviousStocksAggregatesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetPreviousStocksAggregatesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>Retrieves the most recent NBBO quote for a stock.</summary>
+    /// <remarks>
+    /// A 200 without its payload is reported as <see cref="MassiveApiException"/> rather than as <see
+    /// langword="null"/> (decision D17).
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<LastQuote> GetLastQuoteAsync(
+        string ticker,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildGetLastQuoteUri(ticker);
+        return SendGetLastQuoteAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetLastQuoteUri(
+        string ticker)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/last/nbbo/");
+        builder.AppendPathSegment(ticker);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<LastQuote> SendGetLastQuoteAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        LastQuoteResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.LastQuoteResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
 }

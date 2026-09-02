@@ -302,6 +302,108 @@ internal static class Fixtures
         ]
         """;
 
+    /// <summary>
+    /// The documented sample for GET /v2/aggs/grouped/locale/us/market/stocks/{date}, with one
+    /// departure from the published text: the sample's <c>request_id</c> is a schema fragment (an
+    /// object carrying a <c>description</c> and a <c>type</c>) pasted where a value belongs, while
+    /// the envelope schema declares a string and every other endpoint returns one. The fixture
+    /// uses a string; the object would fail deserialization, which is the sample's error rather
+    /// than the service's.
+    /// </summary>
+    public const string StocksGroupedDaily = """
+        {
+          "adjusted": true,
+          "queryCount": 3,
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "T": "KIMpL",
+              "c": 25.9102,
+              "h": 26.25,
+              "l": 25.91,
+              "n": 74,
+              "o": 26.07,
+              "t": 1602705600000,
+              "v": 4369,
+              "vw": 26.0407
+            },
+            {
+              "T": "TANH",
+              "c": 23.4,
+              "h": 24.763,
+              "l": 22.65,
+              "n": 1096,
+              "o": 24.5,
+              "t": 1602705600000,
+              "v": 25933.6,
+              "vw": 23.493
+            },
+            {
+              "T": "VSAT",
+              "c": 34.24,
+              "h": 35.47,
+              "l": 34.21,
+              "n": 4966,
+              "o": 34.9,
+              "t": 1602705600000,
+              "v": 312583,
+              "vw": 34.4736
+            }
+          ],
+          "resultsCount": 3,
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/aggs/ticker/{stocksTicker}/prev, verbatim. The result
+    /// carries a <c>T</c> the schema does not declare; the model follows the schema, so the field
+    /// is ignored on the way in.
+    /// </summary>
+    public const string StocksPreviousClose = """
+        {
+          "adjusted": true,
+          "queryCount": 1,
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "T": "AAPL",
+              "c": 115.97,
+              "h": 117.59,
+              "l": 114.13,
+              "o": 115.55,
+              "t": 1605042000000,
+              "v": 131704427,
+              "vw": 116.3058
+            }
+          ],
+          "resultsCount": 1,
+          "status": "OK",
+          "ticker": "AAPL"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v2/last/nbbo/{stocksTicker}, verbatim.</summary>
+    public const string StocksLastQuote = """
+        {
+          "request_id": "b84e24636301f19f88e0dfbf9a45ed5c",
+          "results": {
+            "P": 127.98,
+            "S": 7,
+            "T": "AAPL",
+            "X": 19,
+            "p": 127.96,
+            "q": 83480742,
+            "s": 1,
+            "t": 1617827221349730300,
+            "x": 11,
+            "y": 1617827221349366000,
+            "z": 3
+          },
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {
