@@ -54,6 +54,47 @@ public sealed class HarnessTests
         Assert.Null(row.Type);
     }
 
+    [Fact]
+    public void ReadsAnOmittedPropertyAsTheBody()
+    {
+        Map map = Map.Parse(Harness.MapDocument(
+            """
+            "Thing": { "schema": { "operationId": "GetThing" } }
+            """,
+            """
+            {
+              "operationId": "GetThing",
+              "group": "Reference",
+              "method": "GetThing",
+              "result": { "kind": "object", "model": "Thing" }
+            }
+            """));
+
+        Assert.Null(map.Endpoints[0].Result.Property);
+        Assert.Equal("object", map.Endpoints[0].Result.Kind);
+
+        // An omitted pointer is the success schema's root, which Spec.Navigate reads as "" (D-S1).
+        Assert.Equal("", map.Models[0].SchemaPointer);
+        Assert.Null(map.Models[0].Items);
+    }
+
+    [Fact]
+    public void ReadsItemsFromAModelRow()
+    {
+        Map map = Map.Parse(Harness.MapDocument(
+            """
+            "Series": {
+              "schema": { "operationId": "ListSeries", "pointer": "results" },
+              "items": "values",
+              "properties": { "values": { "name": "Values", "model": "Value" } }
+            }
+            """,
+            Harness.Endpoint("ListSeries", "Series")));
+
+        Assert.Equal("values", map.Models[0].Items);
+        Assert.Equal("results", map.Endpoints[0].Result.Property);
+    }
+
     // The expected shape travels as a string: SchemaShape is internal to the generator, and an
     // internal type cannot appear in a public test method's signature.
     [Theory]

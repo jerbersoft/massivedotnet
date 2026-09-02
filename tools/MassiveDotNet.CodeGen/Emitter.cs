@@ -22,6 +22,15 @@ internal sealed class Emitter(Spec spec, Map map)
 
     private const int UriBufferLength = 256;
 
+    /// <summary>
+    /// Why a blank cursor is reported as no further pages, emitted by both paged shapes. Written
+    /// once here so the two sites cannot drift into saying different things.
+    /// </summary>
+    private const string BlankCursorComment = """
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        """;
+
     public Dictionary<string, string> Emit()
     {
         Dictionary<string, string> files = new(StringComparer.Ordinal);
@@ -31,7 +40,12 @@ internal sealed class Emitter(Spec spec, Map map)
             files[Path.Combine("Models", $"{model.Name}.g.cs")] = EmitModel(model);
         }
 
-        files["Envelopes.g.cs"] = EmitEnvelopes();
+        // A map of body payloads alone has no envelope, and a file holding only usings would
+        // fail the build under IDE0005.
+        if (EmitEnvelopes() is { } envelopes)
+        {
+            files["Envelopes.g.cs"] = envelopes;
+        }
 
         foreach (MapGroup group in map.Groups)
         {
@@ -111,26 +125,35 @@ internal sealed class Emitter(Spec spec, Map map)
         return writer.ToString();
     }
 
-    private string EmitEnvelopes()
+    private string? EmitEnvelopes()
     {
         // Hoisted for the reason EmitModel hoists its members: the file's usings depend on the
         // types it emits, so those have to be resolved before the first line is written.
-        List<(MapEndpoint Endpoint, SpecOperation Operation, bool Paginated, List<(SpecProperty Property, string Type)> Members)> envelopes =
-            [.. map.Endpoints.Select(endpoint =>
+        List<(MapEndpoint Endpoint, SpecOperation Operation, ResultShape Shape, string ResultsProperty, List<(SpecProperty Property, string Type)> Members)> envelopes = [];
+
+        foreach (MapEndpoint endpoint in map.Endpoints)
+        {
+            SpecOperation operation = spec.Operation(endpoint.OperationId);
+
+            ValidateResultReuse(endpoint, operation);
+            ResultShape shape = Shape(endpoint, operation);
+
+            // A body payload deserializes as the model itself, so there is no envelope (D-S5).
+            if (shape.Property is not { } property)
             {
-                SpecOperation operation = spec.Operation(endpoint.OperationId);
+                continue;
+            }
 
-                ValidateResultReuse(endpoint, operation);
+            List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
+                .Select(p => (p, p.Name == property ? $"{shape.PayloadType}?" : EnvelopeType(endpoint, p)))];
 
-                List<(SpecProperty Property, string Type)> members = [.. Spec.Properties(Spec.SuccessSchema(operation))
-                    .Select(property => (
-                        property,
-                        property.Name == endpoint.Result.Property
-                            ? $"{endpoint.Result.Model}[]?"
-                            : EnvelopeType(endpoint, property)))];
+            envelopes.Add((endpoint, operation, shape, Naming.Pascal(property), members));
+        }
 
-                return (endpoint, operation, Spec.IsPaginated(operation), members);
-            })];
+        if (envelopes.Count == 0)
+        {
+            return null;
+        }
 
         CodeWriter writer = new();
         writer.Line(Header);
@@ -139,15 +162,15 @@ internal sealed class Emitter(Spec spec, Map map)
 
         // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
         // Exists is order-independent, so rule 6 holds.
-        if (envelopes.Exists(e => e.Paginated))
+        if (envelopes.Exists(e => e.Shape.Enumerates))
         {
             writer.Line("using MassiveDotNet.Http;");
         }
 
         writer.Line("using MassiveDotNet.Rest.Models;");
 
-        // An envelope can name a NodaTime type in its own right: the open/close operations declare
-        // a format: date property at the top level of their response, which binds to LocalDate.
+        // An envelope can name a NodaTime type in its own right, when the description declares a
+        // format: date or date-time property beside the payload.
         if (envelopes.Exists(e => e.Members.Exists(m => NamesNodaTime(m.Type))))
         {
             writer.Line("using NodaTime;");
@@ -156,13 +179,13 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
 
-        foreach ((MapEndpoint endpoint, SpecOperation operation, bool paginated, List<(SpecProperty Property, string Type)> members) in envelopes)
+        foreach ((MapEndpoint endpoint, SpecOperation operation, ResultShape shape, string resultsProperty, List<(SpecProperty Property, string Type)> members) in envelopes)
         {
             writer.Line();
             writer.Doc("summary", $"The response envelope returned by {operation.Path}.");
 
-            string declaration = paginated
-                ? $"internal sealed class {EnvelopeName(endpoint)} : IPagedEnvelope<{endpoint.Result.Model}>"
+            string declaration = shape.Enumerates
+                ? $"internal sealed class {EnvelopeName(endpoint)} : IPagedEnvelope<{shape.ItemType}>"
                 : $"internal sealed class {EnvelopeName(endpoint)}";
 
             using (writer.Block(declaration))
@@ -183,16 +206,20 @@ internal sealed class Emitter(Spec spec, Map map)
                     writer.Line($"public {type} {Naming.Pascal(property.Name)} {{ get; init; }}");
                 }
 
-                // The interface names the results property `Results`. When the endpoint's result
-                // property maps to some other name, satisfy it explicitly rather than renaming
-                // the public property away from the wire shape.
-                string resultsProperty = Naming.Pascal(endpoint.Result.Property);
-
-                if (paginated && resultsProperty != "Results")
+                if (shape.Items is { } items)
                 {
+                    // The page's items sit one level down, inside the result object, so the
+                    // interface is satisfied explicitly through it (D-S2).
                     writer.Line();
-                    writer.Line(
-                        $"{endpoint.Result.Model}[]? IPagedEnvelope<{endpoint.Result.Model}>.Results => {resultsProperty};");
+                    writer.Line($"{items.Model}[]? IPagedEnvelope<{items.Model}>.Results => {resultsProperty}?.{items.Property};");
+                }
+                else if (shape.Enumerates && resultsProperty != "Results")
+                {
+                    // The interface names the results property `Results`. When the endpoint's result
+                    // property maps to some other name, satisfy it explicitly rather than renaming
+                    // the public property away from the wire shape.
+                    writer.Line();
+                    writer.Line($"{shape.ItemType}[]? IPagedEnvelope<{shape.ItemType}>.Results => {resultsProperty};");
                 }
             }
         }
@@ -211,6 +238,15 @@ internal sealed class Emitter(Spec spec, Map map)
         // Any is order-independent, so rule 6 holds.
         bool needsNodaTime = endpoints.Any(e =>
             Arguments(e, spec.Operation(e.OperationId)).Exists(a => NamesNodaTime(a.CSharpType)));
+
+        // HttpStatusCode is named only by the throw a singular Send method emits (D-S4). Exists is
+        // order-independent, so rule 6 holds.
+        bool needsSystemNet = endpoints.Exists(e => Shape(e, spec.Operation(e.OperationId)).ThrowsOnMissingPayload);
+
+        if (needsSystemNet)
+        {
+            writer.Line("using System.Net;");
+        }
 
         writer.Line("using MassiveDotNet.Http;");
         writer.Line("using MassiveDotNet.Rest.Models;");
@@ -248,27 +284,25 @@ internal sealed class Emitter(Spec spec, Map map)
     {
         SpecOperation operation = spec.Operation(endpoint.OperationId);
         List<Argument> arguments = Arguments(endpoint, operation);
-        bool paginated = Spec.IsPaginated(operation);
+        ResultShape shape = Shape(endpoint, operation);
 
         // A request identifier is not universal: the futures AggregatesV1 envelope declares only
         // next_url, results, and status, so emitting response?.RequestId unconditionally would not
         // compile for it. The question asked is exactly the one that matters -- will the emitted
         // envelope have a RequestId property -- and Exists is order-independent, so rule 6 holds.
-        bool hasRequestId = paginated
+        bool hasRequestId = shape.HasEnvelope
             && Spec.Properties(Spec.SuccessSchema(operation))
                 .Exists(p => Naming.Pascal(p.Name) == "RequestId");
 
-        string model = endpoint.Result.Model;
-        string returnType = paginated ? $"MassivePage<{model}>" : $"{model}[]";
         // Derived once: it is what both generated methods cross-reference, and deriving it is
         // what rejects a paginated endpoint whose mapped method is not List-prefixed.
-        string enumerate = paginated ? Naming.Enumerate(endpoint.Method, endpoint.OperationId) : string.Empty;
+        string enumerate = shape.Enumerates ? Naming.Enumerate(endpoint.Method, endpoint.OperationId) : string.Empty;
         string callArguments = string.Join(", ", arguments.Select(a => a.Identifier));
         // Nullable because Prose.Clean returns null for blank prose; Doc skips blank content.
         string? summary = endpoint.Summary ?? Prose.Clean(Summary(operation));
         bool preserve = endpoint.Summary is not null;
 
-        if (paginated)
+        if (shape.Enumerates)
         {
             // The two entry points share an endpoint but not a shape, so the enumerating one names
             // its own nature rather than repeating the summary verbatim: identical summaries are
@@ -278,9 +312,16 @@ internal sealed class Emitter(Spec spec, Map map)
                 AppendClause(summary, "enumerating every page as a single lazy sequence."),
                 preserveMarkup: preserve);
 
-            string remarks =
-                "Walks every page, requesting the next only once the previous one has been consumed. "
-                + $"Use <see cref=\"{endpoint.Method}Async\"/> to retrieve a single page instead.";
+            // A paginated object's other members belong to each page, and a flat sequence has
+            // nowhere to attach them; the remark says so and points at List (D-S2).
+            string remarks = shape.Items is { } items
+                ? "Walks every page, requesting the next only once the previous one has been consumed, and "
+                    + $"yields each page's <c>{items.WireName}</c> in turn; the other members of each page's "
+                    + $"<c>{shape.Property}</c> are not observable through this sequence. "
+                    + $"A page that carries no <c>{shape.Property}</c> contributes nothing. "
+                : "Walks every page, requesting the next only once the previous one has been consumed. ";
+
+            remarks += $"Use <see cref=\"{endpoint.Method}Async\"/> to retrieve a single page instead.";
 
             // Emitted only where the endpoint declares the parameter, since not every paginated
             // operation has one. Exists is order-independent, so rule 6 holds.
@@ -303,19 +344,21 @@ internal sealed class Emitter(Spec spec, Map map)
             EmitParameterDocs(writer, arguments, "A token to cancel the traversal.");
             writer.Doc(
                 "returns",
-                $"Every <c>{endpoint.Result.Property}</c> item across every page.",
+                shape.Items is { } enumerated
+                    ? $"Every <c>{enumerated.WireName}</c> entry across every page."
+                    : $"Every <c>{shape.Property}</c> item across every page.",
                 preserveMarkup: true);
             writer.Doc("exception", "The server responded with an error status.", "cref=\"MassiveApiException\"");
 
             List<string> enumerateSignature = Signature(
-                $"public IAsyncEnumerable<{model}> {enumerate}Async",
+                $"public IAsyncEnumerable<{shape.ItemType}> {enumerate}Async",
                 [.. arguments.Select(a => a.Declaration), "CancellationToken cancellationToken = default"]);
 
             using (writer.Block(enumerateSignature))
             {
                 EmitGuards(writer, arguments);
                 writer.Line($"string requestUri = Build{endpoint.Method}Uri({callArguments});");
-                writer.Line($"return _transport.EnumerateAsync<{EnvelopeName(endpoint)}, {model}>(");
+                writer.Line($"return _transport.EnumerateAsync<{EnvelopeName(endpoint)}, {shape.ItemType}>(");
                 writer.Line($"    requestUri, MassiveRestJsonContext.Default.{EnvelopeName(endpoint)}, cancellationToken);");
             }
 
@@ -328,7 +371,7 @@ internal sealed class Emitter(Spec spec, Map map)
         // likely not to know the other exists. The cross-reference points both ways.
         string? listRemarks = endpoint.Remarks;
 
-        if (paginated)
+        if (shape.Enumerates)
         {
             string pointer =
                 $"Returns the first page only. Use <see cref=\"{enumerate}Async\"/> "
@@ -340,17 +383,22 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Doc("remarks", listRemarks, preserveMarkup: true);
 
         EmitParameterDocs(writer, arguments, "A token to cancel the request.");
+        writer.Doc("returns", Returns(shape), preserveMarkup: true);
+        // The cursor case belongs to the guarded Get alone (D-S3): every other shape either follows
+        // a cursor or has none to refuse.
+        string thrown = shape switch
+        {
+            { ThrowsOnMissingPayload: false } => "The server responded with an error status.",
+            { Paginated: true, Items: null } =>
+                "The server responded with an error status, with a success that carried no payload, or with "
+                + "a success that carried a <c>next_url</c> cursor this operation cannot follow.",
+            _ => "The server responded with an error status, or with a success that carried no payload.",
+        };
 
-        writer.Doc(
-            "returns",
-            paginated
-                ? $"A single page of <c>{endpoint.Result.Property}</c>, reporting whether more exist."
-                : $"The <c>{endpoint.Result.Property}</c> array from the response, empty when the server returned none.",
-            preserveMarkup: true);
-        writer.Doc("exception", "The server responded with an error status.", "cref=\"MassiveApiException\"");
+        writer.Doc("exception", thrown, "cref=\"MassiveApiException\"", preserveMarkup: true);
 
         List<string> signature = Signature(
-            $"public Task<{returnType}> {endpoint.Method}Async",
+            $"public Task<{shape.ReturnType}> {endpoint.Method}Async",
             [.. arguments.Select(a => a.Declaration), "CancellationToken cancellationToken = default"]);
 
         using (writer.Block(signature))
@@ -375,9 +423,19 @@ internal sealed class Emitter(Spec spec, Map map)
 
             EmitPath(writer, operation.Path, arguments);
 
-            foreach (Argument argument in arguments.Where(a => a.In == "query"))
+            List<Argument> query = [.. arguments.Where(a => a.In == "query")];
+
+            // Separation is the caller's job rather than each section's, because an operation
+            // with no query parameters has one section to separate and would otherwise be given
+            // the blank line twice.
+            if (query.Count > 0)
             {
-                writer.Line($"builder.AppendQuery(\"{argument.WireName}\", {argument.QueryExpression});");
+                writer.Line();
+
+                foreach (Argument argument in query)
+                {
+                    writer.Line($"builder.AppendQuery(\"{argument.WireName}\", {argument.QueryExpression});");
+                }
             }
 
             writer.Line();
@@ -386,35 +444,158 @@ internal sealed class Emitter(Spec spec, Map map)
 
         writer.Line();
 
-        using (writer.Block($"private async Task<{returnType}> Send{endpoint.Method}Async(string requestUri, CancellationToken cancellationToken)"))
+        EmitSend(writer, endpoint, shape, hasRequestId);
+    }
+
+    /// <summary>The <c>returns</c> sentence of the <c>List</c> or <c>Get</c> method, one per row of the D-S1 table.</summary>
+    private static string Returns(ResultShape shape)
+    {
+        if (shape.Property is not { } property)
         {
-            writer.Line($"{EnvelopeName(endpoint)}? response = await _transport");
-            writer.Line($"    .GetAsync(requestUri, MassiveRestJsonContext.Default.{EnvelopeName(endpoint)}, cancellationToken)");
+            return shape.IsArray
+                ? "The response body, an array that is empty when the server returned none."
+                : "The response body, deserialized as one object.";
+        }
+
+        return (shape.IsArray, shape.Paginated, shape.Items) switch
+        {
+            (true, true, _) => $"A single page of <c>{property}</c>, reporting whether more exist.",
+            (true, false, _) => $"The <c>{property}</c> array from the response, empty when the server returned none.",
+            (false, true, not null) => $"A single page: the <c>{property}</c> object, reporting whether more exist.",
+            _ => $"The <c>{property}</c> object from the response.",
+        };
+    }
+
+    /// <summary>Emits the <c>Send</c> method: the one place a response is turned into the return type.</summary>
+    private static void EmitSend(CodeWriter writer, MapEndpoint endpoint, ResultShape shape, bool hasRequestId)
+    {
+        using (writer.Block($"private async Task<{shape.ReturnType}> Send{endpoint.Method}Async(string requestUri, CancellationToken cancellationToken)"))
+        {
+            if (shape.Property is not { } property)
+            {
+                EmitBodySend(writer, shape);
+                return;
+            }
+
+            string envelope = EnvelopeName(endpoint);
+            string results = Naming.Pascal(property);
+            string requestId = hasRequestId ? "response?.RequestId" : "requestId: null";
+
+            writer.Line($"{envelope}? response = await _transport");
+            writer.Line($"    .GetAsync(requestUri, MassiveRestJsonContext.Default.{envelope}, cancellationToken)");
             writer.Line("    .ConfigureAwait(false);");
             writer.Line();
 
-            if (paginated)
+            if (shape.IsArray && shape.Paginated)
             {
                 // Emitted, not just reasoned about here: a reader of the generated file meets
                 // a whitespace test on a URL and deserves to know it is load-bearing.
-                writer.Line("// A blank next_url is not a cursor. EnumerateAsync stops on one, so this");
-                writer.Line("// reports the same thing rather than promising a page that is never fetched.");
+                foreach (string line in BlankCursorComment.Split('\n'))
+                {
+                    writer.Line(line);
+                }
 
                 if (!hasRequestId)
                 {
                     writer.Line("// This operation's envelope declares no request_id, so there is none to report.");
                 }
 
-                writer.Line($"return new MassivePage<{model}>(");
-                writer.Line($"    response?.{Naming.Pascal(endpoint.Result.Property)},");
+                writer.Line($"return new MassivePage<{shape.Model.Name}>(");
+                writer.Line($"    response?.{results},");
                 writer.Line("    !string.IsNullOrWhiteSpace(response?.NextUrl),");
-                writer.Line(hasRequestId ? "    response?.RequestId);" : "    requestId: null);");
+                writer.Line($"    {requestId});");
+                return;
             }
-            else
+
+            if (shape.IsArray)
             {
-                writer.Line($"return response?.{Naming.Pascal(endpoint.Result.Property)} ?? [];");
+                writer.Line($"return response?.{results} ?? [];");
+                return;
             }
+
+            if (shape.Paginated && shape.Items is null)
+            {
+                writer.Line("// The schema declares next_url, but one object cannot be paged, so a cursor here is a");
+                writer.Line("// page the caller would never receive. A blank one passes; a real one throws (D17).");
+                writer.Line($"MassiveHttpTransport.ThrowIfUnfollowableCursor(response?.NextUrl, requestUri, {requestId});");
+                writer.Line();
+            }
+
+            // The throw for a missing payload, shared by the paged and plain singular shapes. Its
+            // request id line is emitted only where the envelope has one to report.
+            string[] missingPayload = hasRequestId
+                ? [
+                    "    ?? throw new MassiveApiException(",
+                    "        HttpStatusCode.OK,",
+                    $"        $\"The response from '{{requestUri}}' carried no '{property}' payload.\",",
+                    "        response?.RequestId);",
+                ]
+                : [
+                    "    ?? throw new MassiveApiException(",
+                    "        HttpStatusCode.OK,",
+                    $"        $\"The response from '{{requestUri}}' carried no '{property}' payload.\");",
+                ];
+
+            writer.Line("// A 200 without its payload is a success the caller cannot use, so it is reported the");
+            writer.Line("// same way as a body that fails to deserialize rather than as null on every call (D17).");
+
+            if (shape.Items is null)
+            {
+                writer.Line($"return response?.{results}");
+
+                foreach (string line in missingPayload)
+                {
+                    writer.Line(line);
+                }
+
+                return;
+            }
+
+            // The local is what lets the page below read `response` without a null-conditional:
+            // a non-null `response?.Results` proves `response` non-null to the compiler.
+            writer.Line($"{shape.Model.Name} result = response?.{results}");
+
+            foreach (string line in missingPayload)
+            {
+                writer.Line(line);
+            }
+
+            writer.Line();
+            foreach (string line in BlankCursorComment.Split('\n'))
+            {
+                writer.Line(line);
+            }
+
+            writer.Line($"return new MassivePagedResult<{shape.Model.Name}>(");
+            writer.Line("    result,");
+            writer.Line("    !string.IsNullOrWhiteSpace(response.NextUrl),");
+            writer.Line(hasRequestId ? "    response.RequestId);" : "    requestId: null);");
         }
+    }
+
+    /// <summary>Emits the body of a <c>Send</c> method whose payload is the response body itself (D-S5).</summary>
+    private static void EmitBodySend(CodeWriter writer, ResultShape shape)
+    {
+        // The context names an array's metadata property by its element type plus Array.
+        string typeInfo = shape.IsArray ? $"{shape.Model.Name}Array" : shape.Model.Name;
+
+        writer.Line($"{shape.PayloadType}? response = await _transport");
+        writer.Line($"    .GetAsync(requestUri, MassiveRestJsonContext.Default.{typeInfo}, cancellationToken)");
+        writer.Line("    .ConfigureAwait(false);");
+        writer.Line();
+
+        if (shape.IsArray)
+        {
+            writer.Line("return response ?? [];");
+            return;
+        }
+
+        writer.Line("// An empty body is a success the caller cannot use, reported the same way as a body that");
+        writer.Line("// fails to deserialize (D17). There is no envelope here, so no request id can be reported.");
+        writer.Line("return response");
+        writer.Line("    ?? throw new MassiveApiException(");
+        writer.Line("        HttpStatusCode.OK,");
+        writer.Line("        $\"The response from '{requestUri}' carried no payload.\");");
     }
 
     /// <summary>
@@ -517,6 +698,137 @@ internal sealed class Emitter(Spec spec, Map map)
         "Instant",
     };
 
+    /// <summary>The array inside a paginated object that carries the page's items (D-S2).</summary>
+    /// <param name="WireName">The property's wire name, as the model row's <c>items</c> declares it.</param>
+    /// <param name="Property">The property's C# name on the model.</param>
+    /// <param name="Model">The item model, which <c>Enumerate</c> yields.</param>
+    private sealed record ItemBinding(string WireName, string Property, string Model);
+
+    /// <summary>How an endpoint delivers its payload, and therefore what its methods return (D-S1).</summary>
+    /// <param name="Model">The row of the model the payload is made of.</param>
+    /// <param name="IsArray">Whether the payload is an array of the model rather than one of it.</param>
+    /// <param name="Property">The envelope property holding the payload, or <see langword="null"/> when the body is the payload (D-S5).</param>
+    /// <param name="Paginated">Whether the success schema declares <c>next_url</c> (D-P6).</param>
+    /// <param name="Items">For a paginated object whose model row names <c>items</c>: the array <c>Enumerate</c> walks. Otherwise <see langword="null"/>.</param>
+    private sealed record ResultShape(MapModel Model, bool IsArray, string? Property, bool Paginated, ItemBinding? Items)
+    {
+        /// <summary>Whether the payload sits on an envelope. Body payloads have none.</summary>
+        public bool HasEnvelope => Property is not null;
+
+        /// <summary>Whether an <c>Enumerate</c> counterpart is emitted: a paginated array, or a paginated object with <c>items</c>.</summary>
+        public bool Enumerates => Paginated && (IsArray || Items is not null);
+
+        /// <summary>The type <c>Enumerate</c> yields, and the envelope's <c>IPagedEnvelope</c> argument.</summary>
+        public string ItemType => Items?.Model ?? Model.Name;
+
+        /// <summary>The C# type of the payload itself: the model, or an array of it.</summary>
+        public string PayloadType => IsArray ? $"{Model.Name}[]" : Model.Name;
+
+        /// <summary>What the <c>List</c> or <c>Get</c> method returns: the D-S1 table, one arm per row.</summary>
+        public string ReturnType => (IsArray, Paginated, Items) switch
+        {
+            (true, true, _) => $"MassivePage<{Model.Name}>",
+            (true, false, _) => $"{Model.Name}[]",
+            (false, true, not null) => $"MassivePagedResult<{Model.Name}>",
+            _ => Model.Name,
+        };
+
+        /// <summary>Whether the <c>Send</c> method throws for an absent payload: every singular shape does (D-S4); arrays coalesce to empty.</summary>
+        public bool ThrowsOnMissingPayload => !IsArray;
+    }
+
+    /// <summary>
+    /// Resolves an endpoint's result row into the shape its methods take (D-S1). Every emitter that
+    /// touches an endpoint reads this rather than the row, so the table lives in one place.
+    /// </summary>
+    private ResultShape Shape(MapEndpoint endpoint, SpecOperation operation)
+    {
+        MapModel model = ResultModel(endpoint);
+        bool isArray = IsArrayKind(endpoint);
+        bool paginated = Spec.IsPaginated(operation);
+
+        // A body payload has no envelope to carry a cursor, so a root-level next_url is a shape the
+        // D-S1 table has no row for. Refusing is what keeps that cursor from being dropped silently.
+        if (paginated && endpoint.Result.Property is null)
+        {
+            throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result declares no \"property\", so the "
+                + "body is the payload, but the success schema declares next_url at its root. A body payload cannot "
+                + "carry a cursor; name the payload property in \"result\" instead.");
+        }
+
+        // items matters only where the spec says there is a cursor and the payload is one object;
+        // on any other model the key is harmless and ignored (D-S2).
+        ItemBinding? items = !isArray && paginated ? ItemsOf(model) : null;
+
+        return new ResultShape(model, isArray, endpoint.Result.Property, paginated, items);
+    }
+
+    /// <summary>The model an endpoint's result row names, which must be declared.</summary>
+    private MapModel ResultModel(MapEndpoint endpoint) =>
+        map.Models.Find(m => m.Name == endpoint.Result.Model)
+            ?? throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
+                + $"'{endpoint.Result.Model}', which is not declared in \"models\" in specs/endpoints.map.json.");
+
+    /// <summary>Whether the result row's kind is <c>array</c>; <c>object</c> is the only other kind, and anything else is refused (D-S1).</summary>
+    private static bool IsArrayKind(MapEndpoint endpoint) => endpoint.Result.Kind switch
+    {
+        "array" => true,
+        "object" => false,
+        _ => throw new InvalidOperationException(
+            $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result kind '{endpoint.Result.Kind}' is not "
+            + "recognised. Use \"array\" for an array of the model or \"object\" for a single one (D-S1)."),
+    };
+
+    /// <summary>
+    /// The array a paginated object enumerates, read from the model row's <c>items</c> (D-S2) and
+    /// verified against the schema (D-S6): the property exists, is an array of objects, and its
+    /// row names a model. <see langword="null"/> when the row declares no <c>items</c>.
+    /// </summary>
+    private ItemBinding? ItemsOf(MapModel model)
+    {
+        if (model.Items is not { } items)
+        {
+            return null;
+        }
+
+        JsonElement schema = Spec.Navigate(Spec.SuccessSchema(spec.Operation(model.SchemaOperationId)), model.SchemaPointer);
+        SpecProperty? property = Spec.Properties(schema).Find(p => p.Name == items);
+
+        if (property is null)
+        {
+            throw new InvalidOperationException(
+                $"Model '{model.Name}' (operation '{model.SchemaOperationId}'): \"items\" names '{items}', which the schema at "
+                + $"{Located(model.SchemaPointer)} does not declare. Name the array property that carries the page's items.");
+        }
+
+        if (Spec.Shape(property.Schema) != SchemaShape.ArrayOfObjects)
+        {
+            throw new InvalidOperationException(
+                $"Model '{model.Name}' (operation '{model.SchemaOperationId}'): \"items\" names '{items}', which is "
+                + $"{Spec.Describe(Spec.Shape(property.Schema))}, not an array of objects. The items of a paginated object "
+                + "are objects with a model of their own.");
+        }
+
+        if (!model.Properties.TryGetValue(items, out MapProperty? row) || row.Model is not { } itemModel)
+        {
+            throw new InvalidOperationException(
+                $"Model '{model.Name}' (operation '{model.SchemaOperationId}'): \"items\" names '{items}', whose row does not "
+                + $"name a \"model\". Add \"model\" to the '{items}' row; that model is what Enumerate yields.");
+        }
+
+        return new ItemBinding(items, row.Name ?? Naming.Pascal(items), itemModel);
+    }
+
+    /// <summary>A model's origin as it reads in a diagnostic: its pointer, or the response body for the root.</summary>
+    private static string Located(string pointer) =>
+        pointer.Length == 0 ? "the response body" : $"'{pointer}'";
+
+    /// <summary>The pointer to a property of the schema at <paramref name="parent"/>, which may be the root.</summary>
+    private static string ChildPointer(string parent, string segment) =>
+        parent.Length == 0 ? segment : $"{parent}/{segment}";
+
     private static void EmitGuards(CodeWriter writer, List<Argument> arguments)
     {
         foreach (Argument argument in arguments.Where(a => a is { Required: true, CSharpType: "string" }))
@@ -566,16 +878,37 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             writer.Line($"builder.AppendPathLiteral(\"{literal}\");");
         }
-
-        writer.Line();
     }
 
     private string EmitJsonContext()
     {
+        // An envelope carries its payload; a body payload has none, so the model itself, or an
+        // array of it, is registered instead (D-S5). Kept in map order and deduplicated, since two
+        // operations may share a body model, so rule 6 holds.
+        List<string> registered = [];
+
+        foreach (MapEndpoint endpoint in map.Endpoints)
+        {
+            ResultShape shape = Shape(endpoint, spec.Operation(endpoint.OperationId));
+            string type = shape.HasEnvelope ? EnvelopeName(endpoint) : shape.PayloadType;
+
+            if (!registered.Contains(type))
+            {
+                registered.Add(type);
+            }
+        }
+
         CodeWriter writer = new();
         writer.Line(Header);
         writer.Line();
         writer.Line("using System.Text.Json.Serialization;");
+
+        // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
+        if (map.Endpoints.Exists(e => e.Result.Property is null))
+        {
+            writer.Line("using MassiveDotNet.Rest.Models;");
+        }
+
         writer.Line("using MassiveDotNet.Serialization;");
         writer.Line();
         writer.Line("namespace MassiveDotNet.Rest.Serialization;");
@@ -584,9 +917,9 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Doc("remarks", "Calendar dates are read by <see cref=\"LocalDateJsonConverter\"/> and RFC 3339 timestamps by <see cref=\"InstantJsonConverter\"/>, registered here once so no model property needs its own attribute.", preserveMarkup: true);
         writer.Line("[JsonSourceGenerationOptions(Converters = new[] { typeof(LocalDateJsonConverter), typeof(InstantJsonConverter) })]");
 
-        foreach (MapEndpoint endpoint in map.Endpoints)
+        foreach (string type in registered)
         {
-            writer.Line($"[JsonSerializable(typeof({EnvelopeName(endpoint)}))]");
+            writer.Line($"[JsonSerializable(typeof({type}))]");
         }
 
         writer.Line("internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;");
@@ -597,6 +930,15 @@ internal sealed class Emitter(Spec spec, Map map)
     /// <summary>Wraps a parameter list one-per-line so long signatures stay readable.</summary>
     private static List<string> Signature(string prefix, IReadOnlyList<string> parameters)
     {
+        // The closing paren rides on the last parameter below, so an empty list would never
+        // produce one. Only the private Build...Uri of a parameterless operation reaches this:
+        // every public entry point carries a cancellation token, which is why it went unnoticed
+        // until the first such operation was mapped.
+        if (parameters.Count == 0)
+        {
+            return [$"{prefix}()"];
+        }
+
         List<string> lines = [$"{prefix}("];
 
         for (int i = 0; i < parameters.Count; i++)
@@ -679,8 +1021,8 @@ internal sealed class Emitter(Spec spec, Map map)
         }
 
         string pointer = shape == SchemaShape.ArrayOfObjects
-            ? $"{model.SchemaPointer}/{property.Name}/items"
-            : $"{model.SchemaPointer}/{property.Name}";
+            ? $"{ChildPointer(model.SchemaPointer, property.Name)}/items"
+            : ChildPointer(model.SchemaPointer, property.Name);
 
         return new InvalidOperationException(
             $"Operation '{model.SchemaOperationId}': property '{property.Name}' of model '{model.Name}' is {described} with no binding.\n"
@@ -723,7 +1065,7 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             throw new InvalidOperationException(
                 $"Model '{owner.Name}' (operation '{owner.SchemaOperationId}'): property '{property.Name}' names model "
-                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at '{target.SchemaPointer}', "
+                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at {Located(target.SchemaPointer)}, "
                 + "but the schema at this site differs:\n  "
                 + string.Join("\n  ", differences)
                 + "\nA model name may cover only one shape. Declare a second model for this site, or fix the row.");
@@ -737,28 +1079,50 @@ internal sealed class Emitter(Spec spec, Map map)
     /// <summary>
     /// Verifies an endpoint's <c>result</c> row against the schema its named model was generated
     /// from, the same structural check <see cref="ModelReferenceType"/> runs where a model is
-    /// named on a property (D-N4). A model name may cover only one shape, whether it is reused on
-    /// a property or as an endpoint's own top-level result. Runs once per endpoint, from
-    /// <see cref="EmitEnvelopes"/>, so it is order-independent and rule 6 holds.
+    /// named on a property (D-N4). The site is resolved by kind and location (D-S6): an object
+    /// result is the named property or the body itself; an array result is that array's element.
+    /// Runs once per endpoint, from <see cref="EmitEnvelopes"/>, so it is order-independent and
+    /// rule 6 holds.
     /// </summary>
     private void ValidateResultReuse(MapEndpoint endpoint, SpecOperation operation)
     {
-        MapModel target = map.Models.Find(m => m.Name == endpoint.Result.Model)
-            ?? throw new InvalidOperationException(
-                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
-                + $"'{endpoint.Result.Model}', which is not declared in \"models\" in specs/endpoints.map.json.");
+        MapModel target = ResultModel(endpoint);
+        bool isArray = IsArrayKind(endpoint);
+        JsonElement success = Spec.SuccessSchema(operation);
+        JsonElement located = success;
 
-        // "array" is the only result kind the map declares today. A new kind needs its own site
-        // pointer added here rather than silently skipping the check.
-        JsonElement site = endpoint.Result.Kind switch
+        if (endpoint.Result.Property is { } property)
         {
-            "array" => Spec.Navigate(Spec.SuccessSchema(operation), $"{endpoint.Result.Property}/items"),
-            _ => throw new InvalidOperationException(
-                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result kind "
-                + $"'{endpoint.Result.Kind}' has no structural reuse check. Add one for it in "
-                + "Emitter.ValidateResultReuse before using this kind."),
-        };
+            SpecProperty declared = Spec.Properties(success).Find(p => p.Name == property)
+                ?? throw new InvalidOperationException(
+                    $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names property '{property}', "
+                    + "which the success schema does not declare. Name the property that carries the payload, or omit "
+                    + "\"property\" when the body itself is the payload.");
 
+            located = declared.Schema;
+        }
+
+        // A kind that disagrees with the schema is refused with the kind that would agree, so the
+        // fix is a word rather than a search.
+        SchemaShape expected = isArray ? SchemaShape.ArrayOfObjects : SchemaShape.Object;
+        SchemaShape actual = Spec.Shape(located);
+
+        if (actual != expected)
+        {
+            string where = endpoint.Result.Property is { } named ? $"'{named}'" : "the response body";
+            string fix = actual switch
+            {
+                SchemaShape.Object => "Use kind \"object\" for a single model.",
+                SchemaShape.ArrayOfObjects => "Use kind \"array\" for an array of the model.",
+                _ => "Only an object or an array of objects can be a result.",
+            };
+
+            throw new InvalidOperationException(
+                $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result kind '{endpoint.Result.Kind}' "
+                + $"expects {Spec.Describe(expected)} at {where}, but the schema there is {Spec.Describe(actual)}. {fix}");
+        }
+
+        JsonElement site = isArray ? located.GetProperty("items") : located;
         JsonElement origin = Spec.Navigate(Spec.SuccessSchema(spec.Operation(target.SchemaOperationId)), target.SchemaPointer);
         List<string> differences = Spec.StructuralDifferences(origin, site);
 
@@ -766,7 +1130,7 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             throw new InvalidOperationException(
                 $"Endpoint '{endpoint.Method}' (operation '{endpoint.OperationId}'): result names model "
-                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at '{target.SchemaPointer}', "
+                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at {Located(target.SchemaPointer)}, "
                 + "but the schema at this site differs:\n  "
                 + string.Join("\n  ", differences)
                 + "\nA model name may cover only one shape. Declare a second model for this site, or fix the row.");
@@ -780,17 +1144,18 @@ internal sealed class Emitter(Spec spec, Map map)
     }
 
     /// <summary>
-    /// The type of an envelope property other than the result. Envelopes have no map rows, so an
-    /// object here has nowhere to be bound until singular results are designed (D-N3, #31).
+    /// The type of an envelope property other than the payload. Envelopes have no map rows, so an
+    /// object here is bound only by naming it as the result, or by making the body the result (D-S5).
     /// </summary>
     private static string EnvelopeType(MapEndpoint endpoint, SpecProperty property)
     {
         if (TypeBinding.NeedsModel(property.Schema))
         {
             throw new InvalidOperationException(
-                $"Operation '{endpoint.OperationId}': envelope property '{property.Name}' is {Spec.Describe(Spec.Shape(property.Schema))}. "
-                + "Envelope-level objects have no binding until singular results are designed (issue #31); only the "
-                + "result property, named by the endpoint's \"result\" row, is bound.");
+                $"Operation '{endpoint.OperationId}': envelope property '{property.Name}' is {Spec.Describe(Spec.Shape(property.Schema))}, "
+                + "and only the payload named by the endpoint's \"result\" row is bound. If this property is the payload, "
+                + $"set \"property\": \"{property.Name}\" on the result row; if the whole body is the payload, omit "
+                + "\"property\" and declare the body as the result (D-S5).");
         }
 
         return NullableEnvelopeType(property);

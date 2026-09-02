@@ -184,6 +184,37 @@ public sealed class MassiveHttpTransport : IDisposable
         return EnumerateCoreAsync<TEnvelope, TItem>(requestUri, typeInfo, cancellationToken);
     }
 
+    /// <summary>
+    /// Throws when a response offered a pagination cursor that this SDK cannot follow, because the
+    /// operation's result is a single object rather than a page of items.
+    /// </summary>
+    /// <param name="nextUrl">The response's <c>next_url</c>, or <see langword="null"/> when it sent none.</param>
+    /// <param name="requestUri">The request that produced the response, named in the exception.</param>
+    /// <param name="requestId">The response's request identifier, carried by the exception when present.</param>
+    /// <remarks>
+    /// Called by generated code for the operations whose OpenAPI success schema declares
+    /// <c>next_url</c> on a result that is one object (decision D17). A blank cursor is the absence
+    /// it means, as it is everywhere else in this transport. A real one is a page the caller will
+    /// never receive, and missing data is reported loudly in this SDK rather than dropped.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="requestUri"/> is empty or whitespace.</exception>
+    /// <exception cref="MassiveApiException"><paramref name="nextUrl"/> is a cursor.</exception>
+    public static void ThrowIfUnfollowableCursor(string? nextUrl, string requestUri, string? requestId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestUri);
+
+        if (string.IsNullOrWhiteSpace(nextUrl))
+        {
+            return;
+        }
+
+        throw new MassiveApiException(
+            HttpStatusCode.OK,
+            $"The response from '{requestUri}' offered a 'next_url' cursor, but this operation returns a "
+            + "single object that cannot be paged, so the further page was not retrieved.",
+            requestId);
+    }
+
     private async IAsyncEnumerable<TItem> EnumerateCoreAsync<TEnvelope, TItem>(
         string requestUri,
         JsonTypeInfo<TEnvelope> typeInfo,

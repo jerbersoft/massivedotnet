@@ -55,6 +55,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D14 | Pagination cursors are followed **verbatim**, but only when `next_url` names the same origin as the configured `BaseAddress`. A mismatch throws rather than following. | `next_url` is absolute, carries no key, and is chosen by the response body — so following it unconditionally sends the caller's API key to whatever host a server names, which is rule 11's concern arriving by another route. Verbatim matters independently: the aggregates cursor rewrites a path segment (`2024-01-01` becomes `1704776400000`), so rebuilding a cursor from the original arguments silently restarts the traversal. An opt-out was rejected — it is an option nobody finds before filing a bug, and everybody finds after reading a workaround online. The cost is understood: if Massive ever shards pagination onto a second hostname this throws where a naive client would keep working, which is the correct failure. |
 | D15 | Comparator variants (`.gt` `.gte` `.lt` `.lte` `.any_of` `.all_of`) collapse to **one filter-typed parameter per field**: `RangeFilter<T>`, `SetFilter<T>`, `Filter<T>`, or `ArrayFilter<T>`, chosen by the generator from the exact suffix set the spec declares. Equality is the implicit conversion from `T`. Rendering lives in `RequestUriBuilder`, not in generated code. | 1,182 flat parameters gave one endpoint a 114-argument method. The field is the unit the platform documents; typing it by capability makes an unsupported comparator a compile error rather than a silently dropped parameter. Grouping is read from the spec so it cannot drift, and an unrecognised suffix set fails generation instead of guessing. One rendering implementation is tested once rather than in 93 generated files. Element types are a closed set (`string`, `int`, `long`, `double`, `LocalDate`, `DateOrTimestamp`); `Instant` is excluded because it carries no wire precision. |
 | D16 | Nested object schemas bind to **named models in the map**, generated from the spec and verified structurally at every site that names them. An object with no binding fails generation. | 184 nested sites across 55 operations collapse to 60 shapes, and their public names (`Greeks`, `NewsPublisher`) are worth a human's row in the map: path-derived names would give the three stocks snapshot operations three identical `Day` types. A name may cover only one shape, so every reuse site is checked — property names must match exactly and the model may not require what the site makes optional — while scalar types are trusted from the model row, because the description's own formats disagree at sites that are plainly the same thing. Failing on an unbound object is what stops a required nested object from shipping as a `string` that throws at deserialization. |
+| D17 | The `result` row has two kinds, `array` and `object`, and an omitted `property` means the body is the payload. A paginated object result returns `MassivePagedResult<T>` and enumerates the array its model row names as `items`; a paginated object with no `items` keeps a `Get` whose cursor, if one ever arrives, throws. Every singular `Get` returns `T`, and a 200 without its payload throws. | Fifty operations are not an array under `results`: 28 return one object there, 20 of which — the indicators — genuinely paginate over `results.values` with a per-page `underlying`, and 22 have no `results` at all. `MassivePage<T>` cannot hold an object with two halves, and discarding `underlying` would silently drop what `expand_underlying` asked for. Pagination stays spec-detected: the map only says where the items are, so it cannot drift. `Task<T?>` on every `Get` was rejected because the description's requiredness is unreliable and every unknown-ticker probe returned 404; a 200 without a payload is the same class of failure as a body that will not deserialize, and is reported the same way. |
 
 ---
 
@@ -82,6 +83,9 @@ samples/MassiveDotNet.AotSmokeTest
    .NET parameter names and types, and property names for anonymous result schemas.
    A nested object, or the element of a nested array of objects, needs its own `models` row with a
    pointer through its parent and a `model` reference on the parent's property row (D16).
+   The `result` row says whether the payload is one model or an array of it (`kind`) and where it
+   sits (`property`, omitted when the body itself is the payload); a paginated object's model row
+   names the array it enumerates as `items` (D17).
    Everything else — paths, parameters, requiredness, enum members, nullability, prose — is read
    from the spec so it cannot drift.
 2. Regenerate: `dotnet run --project tools/MassiveDotNet.CodeGen`
@@ -122,7 +126,7 @@ boundary. NodaTime keeps them distinct types, so the wrong one does not compile.
 
 | Domain concept | Type | Example in this SDK |
 |----------------|------|---------------------|
-| A moment on the global timeline | `Instant` | `Agg.Timestamp`, trade and quote SIP timestamps, `NewsArticle.PublishedUtc` |
+| A moment on the global timeline | `Instant` | `Agg.Timestamp`, `LastTrade.SipTimestamp`, `NewsArticle.PublishedUtc` |
 | A calendar date with no time or zone | `LocalDate` | Ex-dividend date, split execution date, IPO date |
 | A wall-clock time in a named zone | `ZonedDateTime` | Session open and close in `America/New_York` |
 | A date and time with no zone attached | `LocalDateTime` | Rare; prefer `Instant` or `ZonedDateTime` |
@@ -299,8 +303,12 @@ learns what the live tier found.
 - **Pagination**: the 100 operations whose success schema declares `next_url` get two methods —
   `ListXxxAsync` returning `MassivePage<T>` (one page, reporting whether more exist) and
   `EnumerateXxxAsync` returning `IAsyncEnumerable<T>` (every page, one in flight at a time).
-  The 47 that do not paginate keep returning `T[]`. Pagination is detected from the spec, never
-  declared in the map. `Enumerate`/`List` follows the BCL's `Directory.EnumerateFiles` /
+  When the page is one object rather than an array, `List` returns `MassivePagedResult<T>` and
+  `Enumerate` yields the elements of the array the model row names as `items` (D17). A paginated
+  object whose model names no `items` has nothing to enumerate, so it keeps a single `Get`
+  returning `T` that throws if the server ever sends a cursor it cannot follow. The 47 that do
+  not paginate return `T[]`, or `T` for a singular result. Pagination is detected from the spec,
+  never declared in the map. `Enumerate`/`List` follows the BCL's `Directory.EnumerateFiles` /
   `Directory.GetFiles` distinction; avoid "Stream", which in this SDK means WebSockets.
 - **Filters**: a field that carries comparator variants becomes one optional parameter typed
   `RangeFilter<T>`, `SetFilter<T>`, `Filter<T>`, or `ArrayFilter<T>` by its suffix set; a plain
@@ -315,7 +323,11 @@ learns what the live tier found.
   generator composes `T`, `T?`, `T[]`, or `T[]?` from the spec, so the map never restates
   requiredness or array-ness. A free-form object with no declared properties takes an explicit
   `type` of `Dictionary<string, T>`. `format: date-time` properties are `Instant`, read by
-  `InstantJsonConverter`. Names are domain nouns, prefixed by family only where it
+  `InstantJsonConverter`. A model may also be an endpoint's whole payload: `kind: object` with a
+  `property` binds one object on the envelope, and an omitted `property` binds the body itself,
+  whose model row omits `pointer` (or points at `items` for a body array). A paginated object's
+  model row names its `items` once, and the generator refuses one that is absent, not an array of
+  objects, or unbound (D17). Names are domain nouns, prefixed by family only where it
   disambiguates; reuse a model across operations only where the generator's structural check
   passes (D16).
 - **Nullability**: enabled everywhere. Optional query parameters are nullable and omitted from the

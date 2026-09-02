@@ -140,7 +140,7 @@ public sealed class ModelBindingTests
     }
 
     [Fact]
-    public void AnUnboundEnvelopeObjectPointsAtSingularResults()
+    public void AnUnboundEnvelopeObjectSaysHowToBindIt()
     {
         string spec = Harness.Document(new Operation("ListThings", "/v1/things", """
             {
@@ -155,7 +155,8 @@ public sealed class ModelBindingTests
         string message = Harness.Refusal(spec, MapDocument());
 
         Assert.Contains("Operation 'ListThings': envelope property 'meta' is an object", message, StringComparison.Ordinal);
-        Assert.Contains("#31", message, StringComparison.Ordinal);
+        Assert.Contains("set \"property\": \"meta\" on the result row", message, StringComparison.Ordinal);
+        Assert.Contains("omit \"property\" and declare the body as the result", message, StringComparison.Ordinal);
     }
 
     [Fact]

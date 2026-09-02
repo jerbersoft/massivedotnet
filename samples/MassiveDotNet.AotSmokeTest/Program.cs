@@ -131,6 +131,92 @@ if (news.Results is not [NewsArticle article]
     return 1;
 }
 
+// Singular results are new generic instantiations and new context registrations, each of which a
+// clean publish says nothing about unless something here reaches it: MassivePagedResult<T>, the
+// explicit IPagedEnvelope<IndicatorValue> path that EnumerateAsync walks through Results?.Values,
+// a struct payload under results, a body object, and a body array's MarketHoliday[] type info.
+Console.WriteLine("\nsma, one page with its underlying:");
+
+MassivePagedResult<IndicatorSeries> sma = await client.Stocks.ListSmaAsync(
+    "AAPL",
+    timespan: AggregateTimespan.Day,
+    window: 10,
+    seriesType: SeriesType.Close,
+    expandUnderlying: true,
+    limit: 1);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+Console.WriteLine($"values  : {sma.Result.Values?.Length} (more: {sma.HasMore}, underlying: {sma.Result.Underlying?.Aggregates?.Length} aggregates)");
+
+const string ExpectedSmaQuery = "?timespan=day&window=10&series_type=close&expand_underlying=true&limit=1";
+
+if (handler.LastRequestUri?.Query != ExpectedSmaQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the SMA query {ExpectedSmaQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (!sma.HasMore
+    || sma.Result.Values is not [{ TimestampMilliseconds: 1517562000016 }]
+    || sma.Result.Underlying?.Aggregates is not { Length: 2 })
+{
+    Console.Error.WriteLine("FAIL: expected one SMA value at 1517562000016 with two underlying aggregates and more pages.");
+    return 1;
+}
+
+Console.WriteLine("\nsma, enumerating every value:");
+
+int smaValues = 0;
+
+await foreach (IndicatorValue value in client.Stocks.EnumerateSmaAsync("AAPL", limit: 1))
+{
+    smaValues++;
+    Console.WriteLine($"  {LocalDatePattern.Iso.Format(value.Timestamp.InUtc().Date)}  {value.Value,9:F3}");
+}
+
+if (smaValues != 2)
+{
+    Console.Error.WriteLine($"FAIL: expected 2 SMA values across two pages; got {smaValues}.");
+    return 1;
+}
+
+Console.WriteLine("\nlast trade:");
+
+LastTrade trade = await client.Stocks.GetLastTradeAsync("AAPL");
+Console.WriteLine($"  {trade.Ticker}  {trade.Price:F4} x {trade.Size}  at {InstantPattern.ExtendedIso.Format(trade.SipTimestamp)}");
+
+if (trade.Ticker != "AAPL" || trade.SipTimestampNanoseconds != 1617901342969834000)
+{
+    Console.Error.WriteLine("FAIL: expected the AAPL trade at 1617901342969834000.");
+    return 1;
+}
+
+Console.WriteLine("\ndaily open/close:");
+
+DailyOpenClose day = await client.Stocks.GetDailyOpenCloseAsync("AAPL", new LocalDate(2023, 1, 9));
+Console.WriteLine($"  {day.Symbol}  {LocalDatePattern.Iso.Format(day.From)}  O {day.Open:F2}  C {day.Close:F2}  {day.Status}");
+
+if (day.From != new LocalDate(2023, 1, 9) || day.Close != 325.12)
+{
+    Console.Error.WriteLine("FAIL: expected AAPL on 2023-01-09 closing at 325.12.");
+    return 1;
+}
+
+Console.WriteLine("\nmarket holidays:");
+
+MarketHoliday[] holidays = await client.Reference.ListMarketHolidaysAsync();
+
+foreach (MarketHoliday holiday in holidays)
+{
+    Console.WriteLine($"  {LocalDatePattern.Iso.Format(holiday.Date)}  {holiday.Exchange,-6}  {holiday.Status,-11}  {holiday.Name}");
+}
+
+if (holidays is not [.., { Status: "early-close", Open: not null }])
+{
+    Console.Error.WriteLine("FAIL: expected the last holiday to be an early close with an open time.");
+    return 1;
+}
+
 Console.WriteLine($"\nrequests: {handler.Requests}");
 
 if (bars.Length != 2 || !page.HasMore)
@@ -139,12 +225,13 @@ if (bars.Length != 2 || !page.HasMore)
     return 1;
 }
 
-// Two pages of the enumeration, the single-page aggregates call, the dividends call, and the
-// news call.
-if (enumerated != 3 || handler.Requests != 5)
+// Two pages of the aggregates enumeration, the single-page aggregates call, the dividends call,
+// the news call, one SMA page, two SMA pages enumerated, the last trade, the open/close day, and
+// the holidays.
+if (enumerated != 3 || handler.Requests != 11)
 {
     Console.Error.WriteLine(
-        $"FAIL: expected 3 enumerated bars over 5 requests; got {enumerated} over {handler.Requests}.");
+        $"FAIL: expected 3 enumerated bars over 11 requests; got {enumerated} over {handler.Requests}.");
     return 1;
 }
 
@@ -252,6 +339,86 @@ internal sealed class StubHandler : HttpMessageHandler
         }
         """;
 
+    private const string Sma = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/sma/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "aggregates": [
+                { "c": 75.0875, "h": 75.15, "l": 73.7975, "n": 1, "o": 74.06, "t": 1577941200000, "v": 135647456, "vw": 74.6099 },
+                { "c": 74.3575, "h": 75.145, "l": 74.125, "n": 1, "o": 74.2875, "t": 1578027600000, "v": 146535512, "vw": 74.7026 }
+              ],
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              { "timestamp": 1517562000016, "value": 140.139 }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    private const string SmaLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-24"
+            },
+            "values": [
+              { "timestamp": 1517475600016, "value": 139.871 }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    private const string LastTradeBody = """
+        {
+          "request_id": "f05562305bd26ced64b98ed68b3c5d96",
+          "results": {
+            "T": "AAPL",
+            "c": [ 37 ],
+            "ds": "25.0",
+            "f": 1617901342969796400,
+            "i": "118749",
+            "p": 129.8473,
+            "q": 3135876,
+            "r": 202,
+            "s": 25,
+            "t": 1617901342969834000,
+            "x": 4,
+            "y": 1617901342968000000,
+            "z": 3
+          },
+          "status": "OK"
+        }
+        """;
+
+    private const string OpenClose = """
+        {
+          "afterHours": 322.1,
+          "close": 325.12,
+          "from": "2023-01-09",
+          "high": 326.2,
+          "low": 322.3,
+          "open": 324.66,
+          "preMarket": 324.5,
+          "status": "OK",
+          "symbol": "AAPL",
+          "volume": 26122646
+        }
+        """;
+
+    private const string Holidays = """
+        [
+          { "date": "2020-11-26", "exchange": "NYSE", "name": "Thanksgiving", "status": "closed" },
+          { "date": "2020-11-26", "exchange": "NASDAQ", "name": "Thanksgiving", "status": "closed" },
+          { "close": "2020-11-27T18:00:00.000Z", "date": "2020-11-27", "exchange": "NYSE", "name": "Thanksgiving", "open": "2020-11-27T14:30:00.000Z", "status": "early-close" }
+        ]
+        """;
+
     public Uri? LastRequestUri { get; private set; }
 
     public int Requests { get; private set; }
@@ -263,23 +430,20 @@ internal sealed class StubHandler : HttpMessageHandler
         LastRequestUri = request.RequestUri;
         Requests++;
 
-        string body;
+        // Keyed on the cursor rather than on a request counter, so the single-page calls and the
+        // traversals stay independent of the order they happen to run in.
+        bool cursored = request.RequestUri?.Query.Contains("cursor=", StringComparison.Ordinal) == true;
 
-        if (request.RequestUri?.AbsolutePath == "/stocks/v1/dividends")
+        string body = request.RequestUri?.AbsolutePath switch
         {
-            body = Dividends;
-        }
-        else if (request.RequestUri?.AbsolutePath == "/v2/reference/news")
-        {
-            body = News;
-        }
-        else
-        {
-            // Keyed on the cursor rather than on a request counter, so the single-page call and the
-            // traversal stay independent of the order they happen to run in.
-            bool cursored = request.RequestUri?.Query.Contains("cursor=", StringComparison.Ordinal) == true;
-            body = cursored ? FinalPage : FirstPage;
-        }
+            "/stocks/v1/dividends" => Dividends,
+            "/v2/reference/news" => News,
+            "/v1/indicators/sma/AAPL" => cursored ? SmaLastPage : Sma,
+            "/v2/last/trade/AAPL" => LastTradeBody,
+            "/v1/open-close/AAPL/2023-01-09" => OpenClose,
+            "/v1/marketstatus/upcoming" => Holidays,
+            _ => cursored ? FinalPage : FirstPage,
+        };
 
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {

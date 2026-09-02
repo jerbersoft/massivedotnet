@@ -56,6 +56,19 @@ public static class MassiveEnumValues
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
     };
 
+    /// <summary>Returns the wire representation of a <see cref="SeriesType"/>.</summary>
+    /// <param name="value">The value to convert.</param>
+    /// <returns>The literal accepted by the API, for example <c>"close"</c>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a defined enum member.</exception>
+    public static string ToWireValue(this SeriesType value) => value switch
+    {
+        SeriesType.Open => "open",
+        SeriesType.High => "high",
+        SeriesType.Low => "low",
+        SeriesType.Close => "close",
+        _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
+    };
+
     /// <summary>Returns the wire representation of a calendar date.</summary>
     /// <param name="value">The date to convert.</param>
     /// <returns>The date in ISO <c>YYYY-MM-DD</c> form.</returns>

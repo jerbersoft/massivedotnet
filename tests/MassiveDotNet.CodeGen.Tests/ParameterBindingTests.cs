@@ -79,4 +79,16 @@ public sealed class ParameterBindingTests
 
         Assert.Contains("string[]? tickers = null", files["ReferenceGroup.g.cs"], StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ASeriesTypeParameterRendersItsWireValue()
+    {
+        string spec = Document("""[ { "name": "series_type", "in": "query", "schema": { "type": "string", "enum": ["open", "high", "low", "close"] } } ]""");
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument("""{ "series_type": { "name": "seriesType", "type": "SeriesType" } }"""));
+
+        string group = files["ReferenceGroup.g.cs"];
+        Assert.Contains("SeriesType? seriesType = null", group, StringComparison.Ordinal);
+        Assert.Contains("builder.AppendQuery(\"series_type\", seriesType?.ToWireValue());", group, StringComparison.Ordinal);
+    }
 }
