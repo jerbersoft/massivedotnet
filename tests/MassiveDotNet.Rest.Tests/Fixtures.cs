@@ -709,6 +709,70 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// A live movers response captured on 2026-09-02 and trimmed to one ticker, kept because the
+    /// description marks <c>lastTrade.c</c> required while the service omits it.
+    /// </summary>
+    public const string StocksMoversWithoutConditions = """
+        {
+          "status": "OK",
+          "request_id": "9620b682d70299e8f7d2a3983e388728",
+          "tickers": [
+            {
+              "ticker": "KTTAW",
+              "todaysChangePerc": 174.07407407407408,
+              "todaysChange": 0.0047,
+              "updated": 1788364320000000000,
+              "day": {
+                "dv": "10900.0",
+                "o": 0.0035,
+                "h": 0.0074,
+                "l": 0.0035,
+                "c": 0.0074,
+                "v": 10900,
+                "vw": 0.0037
+              },
+              "lastQuote": {
+                "P": 0.0074,
+                "S": 17900,
+                "p": 0.0036,
+                "s": 10000,
+                "t": 1788379210421010190
+              },
+              "lastTrade": {
+                "i": "1",
+                "p": 0.0074,
+                "s": 200,
+                "t": 1788364314024650914,
+                "x": 11,
+                "ds": "200.0"
+              },
+              "min": {
+                "dv": "200.0",
+                "dav": "10900.0",
+                "av": 10900,
+                "t": 1788364260000,
+                "n": 1,
+                "o": 0.0074,
+                "h": 0.0074,
+                "l": 0.0074,
+                "c": 0.0074,
+                "v": 200,
+                "vw": 0.0074
+              },
+              "prevDay": {
+                "o": 0.0049,
+                "h": 0.0049,
+                "l": 0.0027,
+                "c": 0.0027,
+                "v": 30000,
+                "vw": 0.003096
+              }
+            }
+          ]
+        }
+        """;
+
     /// <summary>The documented sample for GET /v1/indicators/ema/{stockTicker}, verbatim.</summary>
     public const string StocksEma = """
         {

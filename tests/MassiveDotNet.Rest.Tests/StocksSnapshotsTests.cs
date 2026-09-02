@@ -152,7 +152,7 @@ public sealed class StocksSnapshotsTests
         Assert.Equal(236, lastTrade.Size);
         Assert.Equal("236.0", lastTrade.DecimalSize);
         Assert.Equal(10, lastTrade.ExchangeId);
-        Assert.Equal([14, 41], lastTrade.Conditions);
+        Assert.Equal([14, 41], lastTrade.Conditions!);
         Assert.Equal(NodaConstants.UnixEpoch + Duration.FromNanoseconds(1605195918306274000), lastTrade.SipTimestamp);
     }
 
@@ -195,7 +195,30 @@ public sealed class StocksSnapshotsTests
         Assert.Equal("PDS", snapshot.Ticker);
         Assert.Equal(1849.096, snapshot.TodaysChangePercent);
         Assert.NotNull(snapshot.LastTrade);
-        Assert.Equal([63], snapshot.LastTrade.Value.Conditions);
+        Assert.Equal([63], snapshot.LastTrade.Value.Conditions!);
+    }
+
+    [Fact]
+    public async Task ATradeWithoutConditionsDeserializesWithNullConditions()
+    {
+        // The description marks lastTrade.c required, but a live movers response can omit it
+        // when the trade carried no conditions; the map types Conditions as int[]? for exactly
+        // this reason (fix round 1, D-G5 precedent).
+        StubHandler handler = new(Fixtures.StocksMoversWithoutConditions);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        TickerSnapshot[] snapshots;
+
+        using (client)
+        using (transport)
+        {
+            snapshots = await client.Stocks.ListMoversAsync(SnapshotDirection.Gainers, cancellationToken: Ct);
+        }
+
+        TickerSnapshot snapshot = Assert.Single(snapshots);
+        Assert.NotNull(snapshot.LastTrade);
+        Assert.Equal("1", snapshot.LastTrade.Value.TradeId);
+        Assert.Null(snapshot.LastTrade.Value.Conditions);
     }
 
     [Fact]

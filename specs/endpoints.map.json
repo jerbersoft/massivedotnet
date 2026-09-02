@@ -380,7 +380,7 @@
         "s":  { "name": "Size" },
         "ds": { "name": "DecimalSize" },
         "x":  { "name": "ExchangeId" },
-        "c":  { "name": "Conditions" }
+        "c":  { "name": "Conditions", "type": "int[]?", "summary": "The condition codes of the trade. The description marks it required; the service omits it when the trade carried no conditions." }
       }
     },
 

@@ -58,7 +58,10 @@ public readonly partial record struct SnapshotLastTrade
     [JsonPropertyName("x")]
     public int ExchangeId { get; init; }
 
-    /// <summary>The trade conditions.</summary>
+    /// <summary>
+    /// The condition codes of the trade. The description marks it required; the service omits it when
+    /// the trade carried no conditions.
+    /// </summary>
     [JsonPropertyName("c")]
-    public required int[] Conditions { get; init; }
+    public int[]? Conditions { get; init; }
 }
