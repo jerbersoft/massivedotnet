@@ -224,6 +224,26 @@ public sealed class SingularResultTests
     }
 
     [Fact]
+    public void AParameterlessOperationClosesItsBuilderSignature()
+    {
+        // The public entry point always carries a cancellation token, so the private builder is
+        // the only signature that can be empty, and market holidays was the first operation to
+        // reach it. An unclosed paren is a syntax error in a file nothing else compiles first.
+        string spec = Harness.Document(new Operation("GetHolidays", "/v1/holidays", """
+            { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" } } } }
+            """));
+        string map = Harness.MapDocument(
+            """
+            "Holiday": { "schema": { "operationId": "GetHolidays", "pointer": "items" } }
+            """,
+            Endpoint("GetHolidays", "ListHolidays", "array", "Holiday", property: null));
+
+        string group = Group(Harness.Generate(spec, map));
+
+        Assert.Contains("private static string BuildListHolidaysUri()", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ABodyModelSharedByTwoOperationsIsRegisteredOnce()
     {
         const string Day = """{ "type": "object", "properties": { "symbol": { "type": "string" } } }""";

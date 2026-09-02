@@ -901,6 +901,15 @@ internal sealed class Emitter(Spec spec, Map map)
     /// <summary>Wraps a parameter list one-per-line so long signatures stay readable.</summary>
     private static List<string> Signature(string prefix, IReadOnlyList<string> parameters)
     {
+        // The closing paren rides on the last parameter below, so an empty list would never
+        // produce one. Only the private Build...Uri of a parameterless operation reaches this:
+        // every public entry point carries a cancellation token, which is why it went unnoticed
+        // until the first such operation was mapped.
+        if (parameters.Count == 0)
+        {
+            return [$"{prefix}()"];
+        }
+
         List<string> lines = [$"{prefix}("];
 
         for (int i = 0; i < parameters.Count; i++)
