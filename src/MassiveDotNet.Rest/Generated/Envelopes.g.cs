@@ -210,3 +210,43 @@ internal sealed class LastQuoteResponse
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v3/trades/{stockTicker}.</summary>
+internal sealed class TradesResponse : IPagedEnvelope<Trade>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public Trade[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/quotes/{stockTicker}.</summary>
+internal sealed class QuotesResponse : IPagedEnvelope<Quote>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public Quote[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

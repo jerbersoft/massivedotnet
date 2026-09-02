@@ -404,6 +404,117 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>The documented sample for GET /v3/trades/{stockTicker}, verbatim.</summary>
+    public const string StocksTrades = """
+        {
+          "next_url": "https://api.massive.com/v3/trades/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": [
+            {
+              "conditions": [
+                12,
+                41
+              ],
+              "decimal_size": "100.0",
+              "exchange": 11,
+              "id": "1",
+              "participant_timestamp": 1517562000015577000,
+              "price": 171.55,
+              "sequence_number": 1063,
+              "sip_timestamp": 1517562000016036600,
+              "size": 100,
+              "tape": 3
+            },
+            {
+              "conditions": [
+                12,
+                41
+              ],
+              "decimal_size": "100.0",
+              "exchange": 11,
+              "id": "2",
+              "participant_timestamp": 1517562000015577600,
+              "price": 171.55,
+              "sequence_number": 1064,
+              "sip_timestamp": 1517562000016038100,
+              "size": 100,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the trades envelope's shape, with no <c>next_url</c> and one
+    /// trade later than the sample's, so a traversal that starts from <see cref="StocksTrades"/>
+    /// ends after two requests. The service cannot be asked for "the page after the published
+    /// sample".
+    /// </summary>
+    public const string StocksTradesLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": [
+            {
+              "conditions": [
+                12
+              ],
+              "decimal_size": "50.0",
+              "exchange": 11,
+              "id": "3",
+              "participant_timestamp": 1517562000015580000,
+              "price": 171.56,
+              "sequence_number": 1065,
+              "sip_timestamp": 1517562000016040000,
+              "size": 50,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/quotes/{stockTicker}, verbatim.</summary>
+    public const string StocksQuotes = """
+        {
+          "next_url": "https://api.massive.com/v3/quotes/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": [
+            {
+              "ask_exchange": 0,
+              "ask_price": 0,
+              "ask_size": 0,
+              "bid_exchange": 11,
+              "bid_price": 102.7,
+              "bid_size": 60,
+              "conditions": [
+                1
+              ],
+              "participant_timestamp": 1517562000065321200,
+              "sequence_number": 2060,
+              "sip_timestamp": 1517562000065700400,
+              "tape": 3
+            },
+            {
+              "ask_exchange": 0,
+              "ask_price": 0,
+              "ask_size": 0,
+              "bid_exchange": 11,
+              "bid_price": 170,
+              "bid_size": 2,
+              "conditions": [
+                1
+              ],
+              "participant_timestamp": 1517562000065408300,
+              "sequence_number": 2061,
+              "sip_timestamp": 1517562000065791500,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {

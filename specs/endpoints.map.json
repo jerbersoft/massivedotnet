@@ -254,6 +254,50 @@
         "i": { "name": "Indicators" },
         "z": { "name": "Tape" }
       }
+    },
+
+    "Trade": {
+      "kind": "struct",
+      "summary": "One trade from the v3 trades feed: price, size, exchange, conditions, and three nanosecond timestamps.",
+      "remarks": "A tick-level type, so a struct (decision D4). Timestamps are stored as nanosecond <see cref=\"long\"/> values and exposed as <see cref=\"NodaTime.Instant\"/> only when read (decision D5).",
+      "schema": { "operationId": "Trades", "pointer": "results/items" },
+      "properties": {
+        "id":                    { "name": "TradeId" },
+        "sip_timestamp":         { "name": "SipTimestampNanoseconds" },
+        "participant_timestamp": { "name": "ParticipantTimestampNanoseconds" },
+        "trf_timestamp":         { "name": "TrfTimestampNanoseconds" },
+        "sequence_number":       { "name": "SequenceNumber" },
+        "price":                 { "name": "Price" },
+        "size":                  { "name": "Size" },
+        "decimal_size":          { "name": "DecimalSize" },
+        "exchange":              { "name": "ExchangeId" },
+        "trf_id":                { "name": "TrfId" },
+        "conditions":            { "name": "Conditions" },
+        "correction":            { "name": "CorrectionIndicator" },
+        "tape":                  { "name": "Tape" }
+      }
+    },
+
+    "Quote": {
+      "kind": "struct",
+      "summary": "One NBBO quote from the v3 quotes feed: bid and ask price, size, and exchange, with conditions, indicators, and three nanosecond timestamps.",
+      "remarks": "A tick-level type, so a struct (decision D4). Timestamps are stored as nanosecond <see cref=\"long\"/> values and exposed as <see cref=\"NodaTime.Instant\"/> only when read (decision D5).",
+      "schema": { "operationId": "Quotes", "pointer": "results/items" },
+      "properties": {
+        "sip_timestamp":         { "name": "SipTimestampNanoseconds" },
+        "participant_timestamp": { "name": "ParticipantTimestampNanoseconds" },
+        "trf_timestamp":         { "name": "TrfTimestampNanoseconds" },
+        "sequence_number":       { "name": "SequenceNumber" },
+        "bid_price":             { "name": "BidPrice" },
+        "bid_size":              { "name": "BidSize" },
+        "bid_exchange":          { "name": "BidExchangeId" },
+        "ask_price":             { "name": "AskPrice" },
+        "ask_size":              { "name": "AskSize" },
+        "ask_exchange":          { "name": "AskExchangeId" },
+        "conditions":            { "name": "Conditions" },
+        "indicators":            { "name": "Indicators" },
+        "tape":                  { "name": "Tape" }
+      }
     }
   },
 
@@ -391,6 +435,36 @@
       "result": { "kind": "object", "model": "LastQuote", "property": "results" },
       "parameters": {
         "stocksTicker": { "name": "ticker" }
+      }
+    },
+    {
+      "operationId": "Trades",
+      "group": "Stocks",
+      "method": "ListTrades",
+      "summary": "Retrieves tick-level trades for a stock, filtered by timestamp.",
+      "remarks": "<paramref name=\"timestamp\"/> takes a calendar date for a whole session or a <see cref=\"DateOrNanoseconds\"/> for a moment within one; an <see cref=\"NodaTime.Instant\"/> converts implicitly and renders as Unix nanoseconds (decision D20). A busy session is millions of trades, so set <paramref name=\"limit\"/> and let <see cref=\"EnumerateTradesAsync\"/> follow the cursor.",
+      "result": { "kind": "array", "model": "Trade", "property": "results" },
+      "parameters": {
+        "stockTicker": { "name": "ticker" },
+        "timestamp":   { "name": "timestamp", "type": "DateOrNanoseconds" },
+        "order":       { "name": "order", "type": "SortOrder" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "Quotes",
+      "group": "Stocks",
+      "method": "ListQuotes",
+      "summary": "Retrieves tick-level NBBO quotes for a stock, filtered by timestamp.",
+      "remarks": "<paramref name=\"timestamp\"/> takes a calendar date for a whole session or a <see cref=\"DateOrNanoseconds\"/> for a moment within one; an <see cref=\"NodaTime.Instant\"/> converts implicitly and renders as Unix nanoseconds (decision D20). Quotes outnumber trades many times over, so set <paramref name=\"limit\"/> and let <see cref=\"EnumerateQuotesAsync\"/> follow the cursor.",
+      "result": { "kind": "array", "model": "Quote", "property": "results" },
+      "parameters": {
+        "stockTicker": { "name": "ticker" },
+        "timestamp":   { "name": "timestamp", "type": "DateOrNanoseconds" },
+        "order":       { "name": "order", "type": "SortOrder" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
       }
     }
   ]

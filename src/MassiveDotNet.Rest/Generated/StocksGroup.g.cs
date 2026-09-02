@@ -728,4 +728,216 @@ public readonly partial struct StocksGroup
                 $"The response from '{requestUri}' carried no 'results' payload.",
                 response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves tick-level trades for a stock, filtered by timestamp, enumerating every page as a
+    /// single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListTradesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. <paramref name="timestamp"/> takes a
+    /// calendar date for a whole session or a <see cref="DateOrNanoseconds"/> for a moment within one;
+    /// an <see cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision
+    /// D20). A busy session is millions of trades, so set <paramref name="limit"/> and let <see
+    /// cref="EnumerateTradesAsync"/> follow the cursor.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="timestamp">
+    /// Query by trade timestamp. Either a date with the format YYYY-MM-DD or a nanosecond timestamp.
+    /// Accepts an exact value or a range.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 1000 and max is 50000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Trade> EnumerateTradesAsync(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? timestamp = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListTradesUri(ticker, timestamp, order, limit, sort);
+        return _transport.EnumerateAsync<TradesResponse, Trade>(
+            requestUri, MassiveRestJsonContext.Default.TradesResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves tick-level trades for a stock, filtered by timestamp.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateTradesAsync"/> to walk every page without
+    /// handling cursors yourself. <paramref name="timestamp"/> takes a calendar date for a whole
+    /// session or a <see cref="DateOrNanoseconds"/> for a moment within one; an <see
+    /// cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision D20). A
+    /// busy session is millions of trades, so set <paramref name="limit"/> and let <see
+    /// cref="EnumerateTradesAsync"/> follow the cursor.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="timestamp">
+    /// Query by trade timestamp. Either a date with the format YYYY-MM-DD or a nanosecond timestamp.
+    /// Accepts an exact value or a range.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 1000 and max is 50000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Trade>> ListTradesAsync(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? timestamp = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListTradesUri(ticker, timestamp, order, limit, sort);
+        return SendListTradesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListTradesUri(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? timestamp,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/trades/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Trade>> SendListTradesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        TradesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.TradesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Trade>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves tick-level NBBO quotes for a stock, filtered by timestamp, enumerating every page as a
+    /// single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListQuotesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. <paramref name="timestamp"/> takes a
+    /// calendar date for a whole session or a <see cref="DateOrNanoseconds"/> for a moment within one;
+    /// an <see cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision
+    /// D20). Quotes outnumber trades many times over, so set <paramref name="limit"/> and let <see
+    /// cref="EnumerateQuotesAsync"/> follow the cursor.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a nanosecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 1000 and max is 50000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Quote> EnumerateQuotesAsync(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? timestamp = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListQuotesUri(ticker, timestamp, order, limit, sort);
+        return _transport.EnumerateAsync<QuotesResponse, Quote>(
+            requestUri, MassiveRestJsonContext.Default.QuotesResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves tick-level NBBO quotes for a stock, filtered by timestamp.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateQuotesAsync"/> to walk every page without
+    /// handling cursors yourself. <paramref name="timestamp"/> takes a calendar date for a whole
+    /// session or a <see cref="DateOrNanoseconds"/> for a moment within one; an <see
+    /// cref="NodaTime.Instant"/> converts implicitly and renders as Unix nanoseconds (decision D20).
+    /// Quotes outnumber trades many times over, so set <paramref name="limit"/> and let <see
+    /// cref="EnumerateQuotesAsync"/> follow the cursor.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a nanosecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 1000 and max is 50000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Quote>> ListQuotesAsync(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? timestamp = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListQuotesUri(ticker, timestamp, order, limit, sort);
+        return SendListQuotesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListQuotesUri(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? timestamp,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/quotes/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Quote>> SendListQuotesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        QuotesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.QuotesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Quote>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }
