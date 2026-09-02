@@ -123,6 +123,34 @@ public ref struct RequestUriBuilder
     }
 
     /// <summary>
+    /// Appends an array-typed query parameter as one comma-joined value, skipping it when
+    /// <see langword="null"/> or empty.
+    /// </summary>
+    /// <remarks>
+    /// This is the field itself as a list, such as the snapshot operations' <c>tickers</c>, not a
+    /// comparator set: there is no <c>.any_of</c> suffix. The OpenAPI description declares no
+    /// <c>style</c> or <c>explode</c> for these parameters, and the default that implies is the
+    /// repeated-key form, but the service reads only one value from that form (D19). An empty
+    /// array is omitted rather than sent as <c>name=</c>, like every other optional parameter.
+    /// </remarks>
+    /// <typeparam name="T">
+    /// The element type: <see cref="string"/>, <see cref="int"/>, <see cref="long"/>,
+    /// <see cref="double"/>, <see cref="LocalDate"/>, or <see cref="DateOrTimestamp"/>.
+    /// </typeparam>
+    /// <param name="name">The parameter name, which must already be URI-safe.</param>
+    /// <param name="values">The values, or <see langword="null"/> or empty to omit the parameter.</param>
+    /// <exception cref="NotSupportedException"><typeparamref name="T"/> is not one of the supported element types.</exception>
+    public void AppendQuery<T>(scoped ReadOnlySpan<char> name, T[]? values)
+    {
+        if (values is null || values.Length == 0)
+        {
+            return;
+        }
+
+        AppendSet(name, "", values);
+    }
+
+    /// <summary>
     /// Appends a range filter as its comparator parameters, skipping it when <see langword="null"/>
     /// or unset.
     /// </summary>
@@ -301,7 +329,7 @@ public ref struct RequestUriBuilder
     /// </summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="name">The field's base name.</param>
-    /// <param name="suffix">The comparator suffix, <c>.any_of</c> or <c>.all_of</c>.</param>
+    /// <param name="suffix">The comparator suffix, <c>.any_of</c> or <c>.all_of</c>, or empty for a bare array parameter.</param>
     /// <param name="values">The values to render, comma-joined.</param>
     private void AppendSet<T>(scoped ReadOnlySpan<char> name, scoped ReadOnlySpan<char> suffix, T[] values)
     {
