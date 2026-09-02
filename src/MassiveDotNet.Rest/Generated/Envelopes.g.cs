@@ -360,3 +360,49 @@ internal sealed class MACDResponse : IPagedEnvelope<MacdValue>
 
     MacdValue[]? IPagedEnvelope<MacdValue>.Results => Results?.Values;
 }
+
+/// <summary>The response envelope returned by /v2/ticks/stocks/trades/{ticker}/{date}.</summary>
+internal sealed class DeprecatedGetHistoricStocksTradesResponse
+{
+    /// <summary>Latency in milliseconds for the query results from the database.</summary>
+    [JsonPropertyName("db_latency")]
+    public int? DbLatency { get; init; }
+
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("results_count")]
+    public int? ResultsCount { get; init; }
+
+    /// <summary>Whether or not this query was executed successfully.</summary>
+    [JsonPropertyName("success")]
+    public bool? Success { get; init; }
+
+    /// <summary>The exchange symbol that this item is traded under.</summary>
+    [JsonPropertyName("ticker")]
+    public string? Ticker { get; init; }
+
+    [JsonPropertyName("results")]
+    public HistoricTrade[]? Results { get; init; }
+}
+
+/// <summary>The response envelope returned by /v2/ticks/stocks/nbbo/{ticker}/{date}.</summary>
+internal sealed class DeprecatedGetHistoricStocksQuotesResponse
+{
+    /// <summary>Latency in milliseconds for the query results from the database.</summary>
+    [JsonPropertyName("db_latency")]
+    public int? DbLatency { get; init; }
+
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("results_count")]
+    public int? ResultsCount { get; init; }
+
+    /// <summary>Whether or not this query was executed successfully.</summary>
+    [JsonPropertyName("success")]
+    public bool? Success { get; init; }
+
+    /// <summary>The exchange symbol that this item is traded under.</summary>
+    [JsonPropertyName("ticker")]
+    public string? Ticker { get; init; }
+
+    [JsonPropertyName("results")]
+    public HistoricQuote[]? Results { get; init; }
+}

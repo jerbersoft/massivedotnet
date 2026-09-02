@@ -424,6 +424,51 @@
         "signal":    { "name": "Signal", "type": "double", "summary": "The signal line: an exponential moving average of the MACD line over the signal window." },
         "histogram": { "name": "Histogram", "type": "double", "summary": "The MACD line minus the signal line." }
       }
+    },
+
+    "HistoricTrade": {
+      "kind": "struct",
+      "summary": "One trade from the deprecated v2 historic ticks endpoint. Prefer <see cref=\"Trade\"/>, which the v3 endpoint returns.",
+      "remarks": "Generated members only: no computed instants are added, because a consumer who wants them is meant to move to <see cref=\"Trade\"/>. The description marks <c>T</c>, <c>f</c>, <c>e</c>, and <c>r</c> required although its own example omits all four, and declares the nanosecond timestamps as bare integers; the map corrects both, and each corrected row says so.",
+      "schema": { "operationId": "DeprecatedGetHistoricStocksTrades", "pointer": "results/items" },
+      "properties": {
+        "T": { "name": "Ticker", "type": "string?", "summary": "The exchange symbol that this item is traded under. The description marks it required; the published example omits it." },
+        "t": { "name": "SipTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the SIP received this trade. The description declares a bare integer; every value overflows int32." },
+        "y": { "name": "ParticipantTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the trade was generated at the exchange. The description declares a bare integer; every value overflows int32." },
+        "f": { "name": "TrfTimestampNanoseconds", "type": "long?", "summary": "The nanosecond Unix timestamp at which the trade reporting facility received this trade, when it passed through one. The description marks it required; the published example omits it." },
+        "q": { "name": "SequenceNumber" },
+        "i": { "name": "TradeId" },
+        "p": { "name": "Price" },
+        "s": { "name": "Size" },
+        "x": { "name": "ExchangeId" },
+        "r": { "name": "TrfId", "type": "int?", "summary": "The ID for the Trade Reporting Facility where the trade took place. The description marks it required; the published example omits it." },
+        "c": { "name": "Conditions" },
+        "e": { "name": "CorrectionIndicator", "type": "int?", "summary": "The trade correction indicator. The description marks it required; the published example omits it." },
+        "z": { "name": "Tape" }
+      }
+    },
+
+    "HistoricQuote": {
+      "kind": "struct",
+      "summary": "One NBBO quote from the deprecated v2 historic ticks endpoint. Prefer <see cref=\"Quote\"/>, which the v3 endpoint returns.",
+      "remarks": "Generated members only: no computed instants are added, because a consumer who wants them is meant to move to <see cref=\"Quote\"/>. The description marks <c>T</c>, <c>f</c>, and <c>i</c> required although its own example omits all three, and declares the nanosecond timestamps as bare integers; the map corrects both, and each corrected row says so.",
+      "schema": { "operationId": "DeprecatedGetHistoricStocksQuotes", "pointer": "results/items" },
+      "properties": {
+        "T": { "name": "Ticker", "type": "string?", "summary": "The exchange symbol that this item is traded under. The description marks it required; the published example omits it." },
+        "t": { "name": "SipTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the SIP received this quote. The description declares a bare integer; every value overflows int32." },
+        "y": { "name": "ParticipantTimestampNanoseconds", "type": "long", "summary": "The nanosecond Unix timestamp at which the quote was generated at the exchange. The description declares a bare integer; every value overflows int32." },
+        "f": { "name": "TrfTimestampNanoseconds", "type": "long?", "summary": "The nanosecond Unix timestamp at which the trade reporting facility received this quote, when it passed through one. The description marks it required; the published example omits it." },
+        "q": { "name": "SequenceNumber" },
+        "p": { "name": "BidPrice" },
+        "s": { "name": "BidSize" },
+        "x": { "name": "BidExchangeId" },
+        "P": { "name": "AskPrice" },
+        "S": { "name": "AskSize" },
+        "X": { "name": "AskExchangeId" },
+        "c": { "name": "Conditions" },
+        "i": { "name": "Indicators", "type": "int[]?", "summary": "The indicator codes. The description marks it required; the published example omits it." },
+        "z": { "name": "Tape" }
+      }
     }
   },
 
@@ -685,6 +730,38 @@
         "expand_underlying": { "name": "expandUnderlying" },
         "order":             { "name": "order", "type": "SortOrder" },
         "limit":             { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "DeprecatedGetHistoricStocksTrades",
+      "group": "Stocks",
+      "method": "ListHistoricTrades",
+      "summary": "Retrieves tick-level trades for a stock on one trading day from the deprecated v2 endpoint.",
+      "remarks": "Pagination here is manual: pass the last result's <see cref=\"HistoricTrade.SipTimestampNanoseconds\"/> as <paramref name=\"timestamp\"/> to fetch the next page. <see cref=\"ListTradesAsync\"/> replaces this with a cursor the SDK follows for you.",
+      "result": { "kind": "array", "model": "HistoricTrade", "property": "results" },
+      "parameters": {
+        "ticker":         { "name": "ticker" },
+        "date":           { "name": "date" },
+        "timestamp":      { "name": "timestamp", "type": "long" },
+        "timestampLimit": { "name": "timestampLimit", "type": "long" },
+        "reverse":        { "name": "reverse" },
+        "limit":          { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "DeprecatedGetHistoricStocksQuotes",
+      "group": "Stocks",
+      "method": "ListHistoricQuotes",
+      "summary": "Retrieves tick-level NBBO quotes for a stock on one trading day from the deprecated v2 endpoint.",
+      "remarks": "Pagination here is manual: pass the last result's <see cref=\"HistoricQuote.SipTimestampNanoseconds\"/> as <paramref name=\"timestamp\"/> to fetch the next page. <see cref=\"ListQuotesAsync\"/> replaces this with a cursor the SDK follows for you.",
+      "result": { "kind": "array", "model": "HistoricQuote", "property": "results" },
+      "parameters": {
+        "ticker":         { "name": "ticker" },
+        "date":           { "name": "date" },
+        "timestamp":      { "name": "timestamp", "type": "long" },
+        "timestampLimit": { "name": "timestampLimit", "type": "long" },
+        "reverse":        { "name": "reverse" },
+        "limit":          { "name": "limit" }
       }
     }
   ]

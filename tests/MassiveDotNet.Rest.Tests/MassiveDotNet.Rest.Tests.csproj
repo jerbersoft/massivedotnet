@@ -7,6 +7,15 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      The deprecated tick endpoints are exercised here on purpose (constitution rule 2): the SDK
+      ships them marked Obsolete, and a test has to call them to prove that. The suppression is
+      scoped to this project; nothing is ever suppressed inside generated code (D18).
+    -->
+    <NoWarn>$(NoWarn);MASSIVE0002</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />

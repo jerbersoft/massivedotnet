@@ -44,4 +44,6 @@ namespace MassiveDotNet.Rest.Serialization;
 [JsonSerializable(typeof(EMAResponse))]
 [JsonSerializable(typeof(RSIResponse))]
 [JsonSerializable(typeof(MACDResponse))]
+[JsonSerializable(typeof(DeprecatedGetHistoricStocksTradesResponse))]
+[JsonSerializable(typeof(DeprecatedGetHistoricStocksQuotesResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

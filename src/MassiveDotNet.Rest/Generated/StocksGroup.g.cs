@@ -1580,4 +1580,134 @@ public readonly partial struct StocksGroup
             !string.IsNullOrWhiteSpace(response.NextUrl),
             response.RequestId);
     }
+
+    /// <summary>Retrieves tick-level trades for a stock on one trading day from the deprecated v2 endpoint.</summary>
+    /// <remarks>
+    /// Pagination here is manual: pass the last result's <see
+    /// cref="HistoricTrade.SipTimestampNanoseconds"/> as <paramref name="timestamp"/> to fetch the next
+    /// page. <see cref="ListTradesAsync"/> replaces this with a cursor the SDK follows for you.
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol we want trades for.</param>
+    /// <param name="date">The date/day of the trades to retrieve in the format YYYY-MM-DD.</param>
+    /// <param name="timestamp">
+    /// The timestamp offset, used for pagination. This is the offset at which to start the results.
+    /// Using the timestamp of the last result as the offset will give you the next page of results.
+    /// </param>
+    /// <param name="timestampLimit">The maximum timestamp allowed in the results.</param>
+    /// <param name="reverse">Reverse the order of the results.</param>
+    /// <param name="limit">Limit the size of the response, max 50000 and default 5000.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Obsolete("Massive has deprecated this operation. Use Stocks.ListTradesAsync instead.", DiagnosticId = "MASSIVE0002")]
+    public Task<HistoricTrade[]> ListHistoricTradesAsync(
+        string ticker,
+        LocalDate date,
+        long? timestamp = null,
+        long? timestampLimit = null,
+        bool? reverse = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListHistoricTradesUri(ticker, date, timestamp, timestampLimit, reverse, limit);
+        return SendListHistoricTradesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListHistoricTradesUri(
+        string ticker,
+        LocalDate date,
+        long? timestamp,
+        long? timestampLimit,
+        bool? reverse,
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/ticks/stocks/trades/");
+        builder.AppendPathSegment(ticker);
+        builder.AppendPathLiteral("/");
+        builder.AppendPathLiteral(date.ToWireValue());
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("timestampLimit", timestampLimit);
+        builder.AppendQuery("reverse", reverse);
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<HistoricTrade[]> SendListHistoricTradesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        DeprecatedGetHistoricStocksTradesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.DeprecatedGetHistoricStocksTradesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>Retrieves tick-level NBBO quotes for a stock on one trading day from the deprecated v2 endpoint.</summary>
+    /// <remarks>
+    /// Pagination here is manual: pass the last result's <see
+    /// cref="HistoricQuote.SipTimestampNanoseconds"/> as <paramref name="timestamp"/> to fetch the next
+    /// page. <see cref="ListQuotesAsync"/> replaces this with a cursor the SDK follows for you.
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol we want quotes for.</param>
+    /// <param name="date">The date/day of the quotes to retrieve in the format YYYY-MM-DD.</param>
+    /// <param name="timestamp">
+    /// The timestamp offset, used for pagination. This is the offset at which to start the results.
+    /// Using the timestamp of the last result as the offset will give you the next page of results.
+    /// </param>
+    /// <param name="timestampLimit">The maximum timestamp allowed in the results.</param>
+    /// <param name="reverse">Reverse the order of the results.</param>
+    /// <param name="limit">Limit the size of the response, max 50000 and default 5000.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Obsolete("Massive has deprecated this operation. Use Stocks.ListQuotesAsync instead.", DiagnosticId = "MASSIVE0002")]
+    public Task<HistoricQuote[]> ListHistoricQuotesAsync(
+        string ticker,
+        LocalDate date,
+        long? timestamp = null,
+        long? timestampLimit = null,
+        bool? reverse = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListHistoricQuotesUri(ticker, date, timestamp, timestampLimit, reverse, limit);
+        return SendListHistoricQuotesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListHistoricQuotesUri(
+        string ticker,
+        LocalDate date,
+        long? timestamp,
+        long? timestampLimit,
+        bool? reverse,
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v2/ticks/stocks/nbbo/");
+        builder.AppendPathSegment(ticker);
+        builder.AppendPathLiteral("/");
+        builder.AppendPathLiteral(date.ToWireValue());
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("timestampLimit", timestampLimit);
+        builder.AppendQuery("reverse", reverse);
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<HistoricQuote[]> SendListHistoricQuotesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        DeprecatedGetHistoricStocksQuotesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.DeprecatedGetHistoricStocksQuotesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
 }

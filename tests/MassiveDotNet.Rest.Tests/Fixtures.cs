@@ -801,6 +801,205 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>
+    /// The documented sample for GET /v2/ticks/stocks/trades/{ticker}/{date}, verbatim. The
+    /// schema marks <c>T</c>, <c>f</c>, <c>e</c>, and <c>r</c> required; the sample omits all
+    /// four, which is why the map types them nullable (D-G5). The <c>map</c> member is a key
+    /// legend the schema does not declare, and is ignored on the way in.
+    /// </summary>
+    public const string StocksHistoricTrades = """
+        {
+          "db_latency": 11,
+          "map": {
+            "I": {
+              "name": "orig_id",
+              "type": "string"
+            },
+            "c": {
+              "name": "conditions",
+              "type": "int"
+            },
+            "e": {
+              "name": "correction",
+              "type": "int"
+            },
+            "f": {
+              "name": "trf_timestamp",
+              "type": "int64"
+            },
+            "i": {
+              "name": "id",
+              "type": "string"
+            },
+            "p": {
+              "name": "price",
+              "type": "float64"
+            },
+            "q": {
+              "name": "sequence_number",
+              "type": "int64"
+            },
+            "r": {
+              "name": "trf_id",
+              "type": "int"
+            },
+            "s": {
+              "name": "size",
+              "type": "int"
+            },
+            "t": {
+              "name": "sip_timestamp",
+              "type": "int64"
+            },
+            "x": {
+              "name": "exchange",
+              "type": "int"
+            },
+            "y": {
+              "name": "participant_timestamp",
+              "type": "int64"
+            },
+            "z": {
+              "name": "tape",
+              "type": "int"
+            }
+          },
+          "results": [
+            {
+              "c": [
+                12,
+                41
+              ],
+              "i": "1",
+              "p": 171.55,
+              "q": 1063,
+              "s": 100,
+              "t": 1517562000016036600,
+              "x": 11,
+              "y": 1517562000015577000,
+              "z": 3
+            },
+            {
+              "c": [
+                12,
+                41
+              ],
+              "i": "2",
+              "p": 171.55,
+              "q": 1064,
+              "s": 100,
+              "t": 1517562000016038100,
+              "x": 11,
+              "y": 1517562000015577600,
+              "z": 3
+            }
+          ],
+          "results_count": 2,
+          "success": true,
+          "ticker": "AAPL"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/ticks/stocks/nbbo/{ticker}/{date}, verbatim. The schema
+    /// marks <c>T</c>, <c>f</c>, and <c>i</c> required; the sample omits all three, which is why
+    /// the map types them nullable (D-G5).
+    /// </summary>
+    public const string StocksHistoricQuotes = """
+        {
+          "db_latency": 43,
+          "map": {
+            "P": {
+              "name": "ask_price",
+              "type": "float64"
+            },
+            "S": {
+              "name": "ask_size",
+              "type": "int"
+            },
+            "X": {
+              "name": "ask_exchange",
+              "type": "int"
+            },
+            "c": {
+              "name": "conditions",
+              "type": "int"
+            },
+            "f": {
+              "name": "trf_timestamp",
+              "type": "int64"
+            },
+            "i": {
+              "name": "indicators",
+              "type": "int"
+            },
+            "p": {
+              "name": "bid_price",
+              "type": "float64"
+            },
+            "q": {
+              "name": "sequence_number",
+              "type": "int"
+            },
+            "s": {
+              "name": "bid_size",
+              "type": "int"
+            },
+            "t": {
+              "name": "sip_timestamp",
+              "type": "int64"
+            },
+            "x": {
+              "name": "bid_exchange",
+              "type": "int"
+            },
+            "y": {
+              "name": "participant_timestamp",
+              "type": "int64"
+            },
+            "z": {
+              "name": "tape",
+              "type": "int"
+            }
+          },
+          "results": [
+            {
+              "P": 0,
+              "S": 0,
+              "X": 0,
+              "c": [
+                1
+              ],
+              "p": 102.7,
+              "q": 2060,
+              "s": 60,
+              "t": 1517562000065700400,
+              "x": 11,
+              "y": 1517562000065321200,
+              "z": 3
+            },
+            {
+              "P": 0,
+              "S": 0,
+              "X": 0,
+              "c": [
+                1
+              ],
+              "p": 170,
+              "q": 2061,
+              "s": 2,
+              "t": 1517562000065791500,
+              "x": 11,
+              "y": 1517562000065408300,
+              "z": 3
+            }
+          ],
+          "results_count": 2,
+          "success": true,
+          "ticker": "AAPL"
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {
