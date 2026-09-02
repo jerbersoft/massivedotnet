@@ -77,4 +77,194 @@ public sealed class ModelBindingTests
 
         Assert.Contains("typeof(LocalDateJsonConverter), typeof(InstantJsonConverter)", context, StringComparison.Ordinal);
     }
+
+    private const string Publisher = """
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" },
+            "url":  { "type": "string" }
+          }
+        }
+        """;
+
+    private const string Insight = """
+        {
+          "type": "object",
+          "required": ["ticker"],
+          "properties": { "ticker": { "type": "string" } }
+        }
+        """;
+
+    private static string Article(string requiredNames) => $$"""
+        {
+          "type": "object",
+          "required": [{{requiredNames}}],
+          "properties": {
+            "title":     { "type": "string" },
+            "publisher": {{Publisher}},
+            "insights":  { "type": "array", "items": {{Insight}} }
+          }
+        }
+        """;
+
+    private const string NestedModels = """
+        "Publisher": { "schema": { "operationId": "ListThings", "pointer": "results/items/publisher" } },
+        "Insight":   { "schema": { "operationId": "ListThings", "pointer": "results/items/insights/items" } }
+        """;
+
+    private const string NestedRows = """
+        { "publisher": { "model": "Publisher" }, "insights": { "model": "Insight" } }
+        """;
+
+    [Fact]
+    public void AnUnboundObjectPropertyNamesTheRowToAdd()
+    {
+        string message = Harness.Refusal(Document(Article("\"publisher\"")), MapDocument());
+
+        Assert.Contains("Operation 'ListThings': property 'publisher' of model 'Thing' is an object with no binding", message, StringComparison.Ordinal);
+        Assert.Contains("\"schema\": { \"operationId\": \"ListThings\", \"pointer\": \"results/items/publisher\" }", message, StringComparison.Ordinal);
+        Assert.Contains("set \"model\": \"<Name>\" on the 'publisher' row of 'Thing'", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnboundArrayOfObjectsNamesTheItemsPointer()
+    {
+        string map = MapDocument("""{ "publisher": { "model": "Publisher" } }""", NestedModels);
+
+        string message = Harness.Refusal(Document(Article("")), map);
+
+        Assert.Contains("property 'insights' of model 'Thing' is an array of objects with no binding", message, StringComparison.Ordinal);
+        Assert.Contains("\"pointer\": \"results/items/insights/items\"", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnboundEnvelopeObjectPointsAtSingularResults()
+    {
+        string spec = Harness.Document(new Operation("ListThings", "/v1/things", """
+            {
+              "type": "object",
+              "properties": {
+                "results": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" } } } },
+                "meta":    { "type": "object", "properties": { "count": { "type": "integer" } } }
+              }
+            }
+            """));
+
+        string message = Harness.Refusal(spec, MapDocument());
+
+        Assert.Contains("Operation 'ListThings': envelope property 'meta' is an object", message, StringComparison.Ordinal);
+        Assert.Contains("#31", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ComposesARequiredObjectAndAnOptionalArray()
+    {
+        Dictionary<string, string> files = Harness.Generate(Document(Article("\"publisher\"")), MapDocument(NestedRows, NestedModels));
+
+        string thing = Thing(files);
+        Assert.Contains("public required Publisher Publisher { get; init; }", thing, StringComparison.Ordinal);
+        Assert.Contains("public Insight[]? Insights { get; init; }", thing, StringComparison.Ordinal);
+
+        string publisher = files[Path.Combine("Models", "Publisher.g.cs")];
+        Assert.Contains("public sealed partial record Publisher", publisher, StringComparison.Ordinal);
+        Assert.Contains("public required string Name { get; init; }", publisher, StringComparison.Ordinal);
+        Assert.Contains("public string? Url { get; init; }", publisher, StringComparison.Ordinal);
+        Assert.Contains("public required string Ticker { get; init; }", files[Path.Combine("Models", "Insight.g.cs")], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ComposesAnOptionalObjectAndARequiredArray()
+    {
+        string thing = Thing(Harness.Generate(Document(Article("\"insights\"")), MapDocument(NestedRows, NestedModels)));
+
+        Assert.Contains("public Publisher? Publisher { get; init; }", thing, StringComparison.Ordinal);
+        Assert.Contains("public required Insight[] Insights { get; init; }", thing, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStructModelIsNeverMarkedRequired()
+    {
+        string models = """
+            "Publisher": { "kind": "struct", "schema": { "operationId": "ListThings", "pointer": "results/items/publisher" } },
+            "Insight":   { "schema": { "operationId": "ListThings", "pointer": "results/items/insights/items" } }
+            """;
+
+        string thing = Thing(Harness.Generate(Document(Article("\"publisher\"")), MapDocument(NestedRows, models)));
+
+        Assert.Contains("public Publisher Publisher { get; init; }", thing, StringComparison.Ordinal);
+        Assert.DoesNotContain("required Publisher", thing, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ModelAndTypeOnOneRowConflict()
+    {
+        string map = MapDocument("""{ "publisher": { "model": "Publisher", "type": "Publisher" }, "insights": { "model": "Insight" } }""", NestedModels);
+
+        string message = Harness.Refusal(Document(Article("")), map);
+
+        Assert.Contains("property 'publisher' carries both \"model\" and \"type\"", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AModelMustBeDeclared()
+    {
+        string map = MapDocument("""{ "publisher": { "model": "Nope" }, "insights": { "model": "Insight" } }""", NestedModels);
+
+        string message = Harness.Refusal(Document(Article("")), map);
+
+        Assert.Contains("property 'publisher' names model 'Nope', which is not declared", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AModelOnAScalarIsRefused()
+    {
+        string map = MapDocument("""{ "title": { "model": "Publisher" }, "publisher": { "model": "Publisher" }, "insights": { "model": "Insight" } }""", NestedModels);
+
+        string message = Harness.Refusal(Document(Article("")), map);
+
+        Assert.Contains("property 'title' names model 'Publisher', but its schema is a scalar", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFreeFormObjectTakesAVerbatimTypeAndIsARequiredReference()
+    {
+        string spec = Document("""
+            {
+              "type": "object",
+              "required": ["counts"],
+              "properties": { "counts": { "type": "object", "description": "A map of exchange id to size." } }
+            }
+            """);
+
+        string thing = Thing(Harness.Generate(spec, MapDocument("""{ "counts": { "type": "Dictionary<string, double>" } }""")));
+
+        Assert.Contains("public required Dictionary<string, double> Counts { get; init; }", thing, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AValueTypeIsNeverMarkedRequired()
+    {
+        string spec = Document("""
+            {
+              "type": "object",
+              "required": ["when", "count", "flag", "ratio"],
+              "properties": {
+                "when":  { "type": "string", "format": "date" },
+                "count": { "type": "integer" },
+                "flag":  { "type": "boolean" },
+                "ratio": { "type": "number" }
+              }
+            }
+            """);
+
+        string thing = Thing(Harness.Generate(spec, MapDocument()));
+
+        Assert.Contains("public LocalDate When { get; init; }", thing, StringComparison.Ordinal);
+        Assert.Contains("public int Count { get; init; }", thing, StringComparison.Ordinal);
+        Assert.Contains("public bool Flag { get; init; }", thing, StringComparison.Ordinal);
+        Assert.Contains("public double Ratio { get; init; }", thing, StringComparison.Ordinal);
+        Assert.DoesNotContain("required", thing, StringComparison.Ordinal);
+    }
 }
