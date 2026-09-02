@@ -107,4 +107,42 @@ public sealed class ParameterBindingTests
         Assert.Contains("SeriesType? seriesType = null", group, StringComparison.Ordinal);
         Assert.Contains("builder.AppendQuery(\"series_type\", seriesType?.ToWireValue());", group, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ASnapshotDirectionPathParameterRendersItsWireLiteral()
+    {
+        string spec = Harness.Document(new Operation(
+            "ListThings",
+            "/v1/things/{direction}",
+            Harness.Envelope(Item),
+            """[ { "name": "direction", "in": "path", "required": true, "schema": { "type": "string", "enum": ["gainers", "losers"] } } ]"""));
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument("""{ "direction": { "name": "direction", "type": "SnapshotDirection" } }"""));
+
+        string group = files["ReferenceGroup.g.cs"];
+        Assert.Contains("SnapshotDirection direction,", group, StringComparison.Ordinal);
+        // An enum wire value is a fixed literal, so it takes the unescaped path method, as
+        // AggregateTimespan does on the aggregates route.
+        Assert.Contains("builder.AppendPathLiteral(direction.ToWireValue());", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADateOrNanosecondsComparatorGroupBindsARangeFilter()
+    {
+        string spec = Document("""
+            [
+              { "name": "timestamp",     "in": "query", "schema": { "type": "string" } },
+              { "name": "timestamp.gt",  "in": "query", "schema": { "type": "string" } },
+              { "name": "timestamp.gte", "in": "query", "schema": { "type": "string" } },
+              { "name": "timestamp.lt",  "in": "query", "schema": { "type": "string" } },
+              { "name": "timestamp.lte", "in": "query", "schema": { "type": "string" } }
+            ]
+            """);
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument("""{ "timestamp": { "type": "DateOrNanoseconds" } }"""));
+
+        string group = files["ReferenceGroup.g.cs"];
+        Assert.Contains("RangeFilter<DateOrNanoseconds>? timestamp = null", group, StringComparison.Ordinal);
+        Assert.Contains("builder.AppendQuery(\"timestamp\", timestamp);", group, StringComparison.Ordinal);
+    }
 }
