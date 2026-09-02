@@ -302,6 +302,944 @@ internal static class Fixtures
         ]
         """;
 
+    /// <summary>
+    /// The documented sample for GET /v2/aggs/grouped/locale/us/market/stocks/{date}, with one
+    /// departure from the published text: the sample's <c>request_id</c> is a schema fragment (an
+    /// object carrying a <c>description</c> and a <c>type</c>) pasted where a value belongs, while
+    /// the envelope schema declares a string and every other endpoint returns one. The fixture
+    /// uses a string; the object would fail deserialization, which is the sample's error rather
+    /// than the service's.
+    /// </summary>
+    public const string StocksGroupedDaily = """
+        {
+          "adjusted": true,
+          "queryCount": 3,
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "T": "KIMpL",
+              "c": 25.9102,
+              "h": 26.25,
+              "l": 25.91,
+              "n": 74,
+              "o": 26.07,
+              "t": 1602705600000,
+              "v": 4369,
+              "vw": 26.0407
+            },
+            {
+              "T": "TANH",
+              "c": 23.4,
+              "h": 24.763,
+              "l": 22.65,
+              "n": 1096,
+              "o": 24.5,
+              "t": 1602705600000,
+              "v": 25933.6,
+              "vw": 23.493
+            },
+            {
+              "T": "VSAT",
+              "c": 34.24,
+              "h": 35.47,
+              "l": 34.21,
+              "n": 4966,
+              "o": 34.9,
+              "t": 1602705600000,
+              "v": 312583,
+              "vw": 34.4736
+            }
+          ],
+          "resultsCount": 3,
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/aggs/ticker/{stocksTicker}/prev, verbatim. The result
+    /// carries a <c>T</c> the schema does not declare; the model follows the schema, so the field
+    /// is ignored on the way in.
+    /// </summary>
+    public const string StocksPreviousClose = """
+        {
+          "adjusted": true,
+          "queryCount": 1,
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "T": "AAPL",
+              "c": 115.97,
+              "h": 117.59,
+              "l": 114.13,
+              "o": 115.55,
+              "t": 1605042000000,
+              "v": 131704427,
+              "vw": 116.3058
+            }
+          ],
+          "resultsCount": 1,
+          "status": "OK",
+          "ticker": "AAPL"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v2/last/nbbo/{stocksTicker}, verbatim.</summary>
+    public const string StocksLastQuote = """
+        {
+          "request_id": "b84e24636301f19f88e0dfbf9a45ed5c",
+          "results": {
+            "P": 127.98,
+            "S": 7,
+            "T": "AAPL",
+            "X": 19,
+            "p": 127.96,
+            "q": 83480742,
+            "s": 1,
+            "t": 1617827221349730300,
+            "x": 11,
+            "y": 1617827221349366000,
+            "z": 3
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/trades/{stockTicker}, verbatim.</summary>
+    public const string StocksTrades = """
+        {
+          "next_url": "https://api.massive.com/v3/trades/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": [
+            {
+              "conditions": [
+                12,
+                41
+              ],
+              "decimal_size": "100.0",
+              "exchange": 11,
+              "id": "1",
+              "participant_timestamp": 1517562000015577000,
+              "price": 171.55,
+              "sequence_number": 1063,
+              "sip_timestamp": 1517562000016036600,
+              "size": 100,
+              "tape": 3
+            },
+            {
+              "conditions": [
+                12,
+                41
+              ],
+              "decimal_size": "100.0",
+              "exchange": 11,
+              "id": "2",
+              "participant_timestamp": 1517562000015577600,
+              "price": 171.55,
+              "sequence_number": 1064,
+              "sip_timestamp": 1517562000016038100,
+              "size": 100,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the trades envelope's shape, with no <c>next_url</c> and one
+    /// trade later than the sample's, so a traversal that starts from <see cref="StocksTrades"/>
+    /// ends after two requests. The service cannot be asked for "the page after the published
+    /// sample".
+    /// </summary>
+    public const string StocksTradesLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": [
+            {
+              "conditions": [
+                12
+              ],
+              "decimal_size": "50.0",
+              "exchange": 11,
+              "id": "3",
+              "participant_timestamp": 1517562000015580000,
+              "price": 171.56,
+              "sequence_number": 1065,
+              "sip_timestamp": 1517562000016040000,
+              "size": 50,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/quotes/{stockTicker}, verbatim.</summary>
+    public const string StocksQuotes = """
+        {
+          "next_url": "https://api.massive.com/v3/quotes/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": [
+            {
+              "ask_exchange": 0,
+              "ask_price": 0,
+              "ask_size": 0,
+              "bid_exchange": 11,
+              "bid_price": 102.7,
+              "bid_size": 60,
+              "conditions": [
+                1
+              ],
+              "participant_timestamp": 1517562000065321200,
+              "sequence_number": 2060,
+              "sip_timestamp": 1517562000065700400,
+              "tape": 3
+            },
+            {
+              "ask_exchange": 0,
+              "ask_price": 0,
+              "ask_size": 0,
+              "bid_exchange": 11,
+              "bid_price": 170,
+              "bid_size": 2,
+              "conditions": [
+                1
+              ],
+              "participant_timestamp": 1517562000065408300,
+              "sequence_number": 2061,
+              "sip_timestamp": 1517562000065791500,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the quotes envelope's shape, with no <c>next_url</c> and one
+    /// quote later than the sample's, so a traversal that starts from <see cref="StocksQuotes"/>
+    /// ends after two requests. The service cannot be asked for "the page after the published
+    /// sample", since its own last page depends on the day's data.
+    /// </summary>
+    public const string StocksQuotesLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": [
+            {
+              "ask_exchange": 0,
+              "ask_price": 0,
+              "ask_size": 0,
+              "bid_exchange": 11,
+              "bid_price": 170.1,
+              "bid_size": 3,
+              "conditions": [
+                1
+              ],
+              "participant_timestamp": 1517562000065500000,
+              "sequence_number": 2062,
+              "sip_timestamp": 1517562000065900000,
+              "tape": 3
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v2/snapshot/locale/us/markets/stocks/tickers/{stocksTicker}, verbatim.</summary>
+    public const string StocksSnapshot = """
+        {
+          "request_id": "657e430f1ae768891f018e08e03598d8",
+          "status": "OK",
+          "ticker": {
+            "day": {
+              "c": 120.4229,
+              "dv": "28727868.0",
+              "h": 120.53,
+              "l": 118.81,
+              "o": 119.62,
+              "v": 28727868,
+              "vw": 119.725
+            },
+            "lastQuote": {
+              "P": 120.47,
+              "S": 4,
+              "p": 120.46,
+              "s": 8,
+              "t": 1605195918507251700
+            },
+            "lastTrade": {
+              "c": [
+                14,
+                41
+              ],
+              "ds": "236.0",
+              "i": "4046",
+              "p": 120.47,
+              "s": 236,
+              "t": 1605195918306274000,
+              "x": 10
+            },
+            "min": {
+              "av": 28724441,
+              "c": 120.4201,
+              "dav": "28724441.0",
+              "dv": "270796.0",
+              "h": 120.468,
+              "l": 120.37,
+              "n": 762,
+              "o": 120.435,
+              "t": 1684428720000,
+              "v": 270796,
+              "vw": 120.4129
+            },
+            "prevDay": {
+              "c": 119.49,
+              "h": 119.63,
+              "l": 116.44,
+              "o": 117.19,
+              "v": 110597265,
+              "vw": 118.4998
+            },
+            "ticker": "AAPL",
+            "todaysChange": 0.98,
+            "todaysChangePerc": 0.82,
+            "updated": 1605195918306274000
+          }
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/snapshot/locale/us/markets/stocks/tickers, verbatim. The
+    /// envelope carries a <c>count</c> and no <c>request_id</c>.
+    /// </summary>
+    public const string StocksSnapshots = """
+        {
+          "count": 1,
+          "status": "OK",
+          "tickers": [
+            {
+              "day": {
+                "c": 20.506,
+                "dv": "37216.0",
+                "h": 20.64,
+                "l": 20.506,
+                "o": 20.64,
+                "v": 37216,
+                "vw": 20.616
+              },
+              "lastQuote": {
+                "P": 20.6,
+                "S": 22,
+                "p": 20.5,
+                "s": 13,
+                "t": 1605192959994246100
+              },
+              "lastTrade": {
+                "c": [
+                  14,
+                  41
+                ],
+                "ds": "2416.0",
+                "i": "71675577320245",
+                "p": 20.506,
+                "s": 2416,
+                "t": 1605192894630916600,
+                "x": 4
+              },
+              "min": {
+                "av": 37216,
+                "c": 20.506,
+                "dav": "37216.0",
+                "dv": "5000.0",
+                "h": 20.506,
+                "l": 20.506,
+                "n": 1,
+                "o": 20.506,
+                "t": 1684428600000,
+                "v": 5000,
+                "vw": 20.5105
+              },
+              "prevDay": {
+                "c": 20.63,
+                "h": 21,
+                "l": 20.5,
+                "o": 20.79,
+                "v": 292738,
+                "vw": 20.6939
+              },
+              "ticker": "BCAT",
+              "todaysChange": -0.124,
+              "todaysChangePerc": -0.601,
+              "updated": 1605192894630916600
+            }
+          ]
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v2/snapshot/locale/us/markets/stocks/{direction}, verbatim.</summary>
+    public const string StocksMovers = """
+        {
+          "status": "OK",
+          "tickers": [
+            {
+              "day": {
+                "c": 14.2284,
+                "dv": "133963.0",
+                "h": 15.09,
+                "l": 14.2,
+                "o": 14.33,
+                "v": 133963,
+                "vw": 14.5311
+              },
+              "lastQuote": {
+                "P": 14.44,
+                "S": 11,
+                "p": 14.2,
+                "s": 25,
+                "t": 1605195929997325600
+              },
+              "lastTrade": {
+                "c": [
+                  63
+                ],
+                "ds": "536.0",
+                "i": "79372124707124",
+                "p": 14.2284,
+                "s": 536,
+                "t": 1605195848258266000,
+                "x": 4
+              },
+              "min": {
+                "av": 133963,
+                "c": 14.2284,
+                "dav": "133963.0",
+                "dv": "6108.0",
+                "h": 14.325,
+                "l": 14.2,
+                "n": 5,
+                "o": 14.28,
+                "t": 1684428600000,
+                "v": 6108,
+                "vw": 14.2426
+              },
+              "prevDay": {
+                "c": 0.73,
+                "h": 0.799,
+                "l": 0.73,
+                "o": 0.75,
+                "v": 1568097,
+                "vw": 0.7721
+              },
+              "ticker": "PDS",
+              "todaysChange": 13.498,
+              "todaysChangePerc": 1849.096,
+              "updated": 1605195848258266000
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// A live movers response captured on 2026-09-02 and trimmed to one ticker, kept because the
+    /// description marks <c>lastTrade.c</c> required while the service omits it.
+    /// </summary>
+    public const string StocksMoversWithoutConditions = """
+        {
+          "status": "OK",
+          "request_id": "9620b682d70299e8f7d2a3983e388728",
+          "tickers": [
+            {
+              "ticker": "KTTAW",
+              "todaysChangePerc": 174.07407407407408,
+              "todaysChange": 0.0047,
+              "updated": 1788364320000000000,
+              "day": {
+                "dv": "10900.0",
+                "o": 0.0035,
+                "h": 0.0074,
+                "l": 0.0035,
+                "c": 0.0074,
+                "v": 10900,
+                "vw": 0.0037
+              },
+              "lastQuote": {
+                "P": 0.0074,
+                "S": 17900,
+                "p": 0.0036,
+                "s": 10000,
+                "t": 1788379210421010190
+              },
+              "lastTrade": {
+                "i": "1",
+                "p": 0.0074,
+                "s": 200,
+                "t": 1788364314024650914,
+                "x": 11,
+                "ds": "200.0"
+              },
+              "min": {
+                "dv": "200.0",
+                "dav": "10900.0",
+                "av": 10900,
+                "t": 1788364260000,
+                "n": 1,
+                "o": 0.0074,
+                "h": 0.0074,
+                "l": 0.0074,
+                "c": 0.0074,
+                "v": 200,
+                "vw": 0.0074
+              },
+              "prevDay": {
+                "o": 0.0049,
+                "h": 0.0049,
+                "l": 0.0027,
+                "c": 0.0027,
+                "v": 30000,
+                "vw": 0.003096
+              }
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// A live whole-market snapshot captured on 2026-09-02 and trimmed to one ticker, kept because
+    /// the description marks <c>lastTrade.ds</c> and <c>min.dav</c> required while the service
+    /// omits them, along with <c>lastTrade.c</c>, on a ticker that has not traded.
+    /// </summary>
+    public const string StocksSnapshotsMissingDecimals = """
+        {
+          "status": "OK",
+          "request_id": "c9b98c194a3c8563199e44ed6238f13d",
+          "count": 1,
+          "tickers": [
+            {
+              "ticker": "AACI",
+              "todaysChangePerc": 0,
+              "todaysChange": 0,
+              "updated": 0,
+              "day": {
+                "o": 0,
+                "h": 0,
+                "l": 0,
+                "c": 0,
+                "v": 0,
+                "vw": 0
+              },
+              "lastQuote": {
+                "P": 10.14,
+                "S": 100,
+                "p": 4.02,
+                "s": 200,
+                "t": 1788385980252379425
+              },
+              "lastTrade": {
+                "i": "",
+                "p": 0,
+                "s": 0,
+                "t": 0,
+                "x": 0
+              },
+              "min": {
+                "av": 0,
+                "t": 0,
+                "n": 0,
+                "o": 0,
+                "h": 0,
+                "l": 0,
+                "c": 0,
+                "v": 0,
+                "vw": 0
+              },
+              "prevDay": {
+                "o": 10.03,
+                "h": 10.05,
+                "l": 10.03,
+                "c": 10.0499,
+                "v": 553,
+                "vw": 10.0436
+              }
+            }
+          ]
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v1/indicators/ema/{stockTicker}, verbatim.</summary>
+    public const string StocksEma = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/ema/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "timestamp": 1517562000016,
+                "value": 140.139
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v1/indicators/rsi/{stockTicker}, verbatim.</summary>
+    public const string StocksRsi = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/rsi/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "timestamp": 1517562000016,
+                "value": 82.19
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v1/indicators/macd/{stockTicker}, verbatim.</summary>
+    public const string StocksMacd = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/macd/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "histogram": 38.3801666667,
+                "signal": 106.9811666667,
+                "timestamp": 1517562000016,
+                "value": 145.3613333333
+              },
+              {
+                "histogram": 41.098859136,
+                "signal": 102.7386283473,
+                "timestamp": 1517562001016,
+                "value": 143.8374874833
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the MACD envelope's shape, with no <c>next_url</c>, so a
+    /// traversal that starts from <see cref="StocksMacd"/> ends after two requests.
+    /// </summary>
+    public const string StocksMacdLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-24"
+            },
+            "values": [
+              {
+                "histogram": 40.1,
+                "signal": 101.2,
+                "timestamp": 1517562002016,
+                "value": 141.3
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/ticks/stocks/trades/{ticker}/{date}, verbatim. The
+    /// schema marks <c>T</c>, <c>f</c>, <c>e</c>, and <c>r</c> required; the sample omits all
+    /// four, which is why the map types them nullable (D-G5). The <c>map</c> member is a key
+    /// legend the schema does not declare, and is ignored on the way in.
+    /// </summary>
+    public const string StocksHistoricTrades = """
+        {
+          "db_latency": 11,
+          "map": {
+            "I": {
+              "name": "orig_id",
+              "type": "string"
+            },
+            "c": {
+              "name": "conditions",
+              "type": "int"
+            },
+            "e": {
+              "name": "correction",
+              "type": "int"
+            },
+            "f": {
+              "name": "trf_timestamp",
+              "type": "int64"
+            },
+            "i": {
+              "name": "id",
+              "type": "string"
+            },
+            "p": {
+              "name": "price",
+              "type": "float64"
+            },
+            "q": {
+              "name": "sequence_number",
+              "type": "int64"
+            },
+            "r": {
+              "name": "trf_id",
+              "type": "int"
+            },
+            "s": {
+              "name": "size",
+              "type": "int"
+            },
+            "t": {
+              "name": "sip_timestamp",
+              "type": "int64"
+            },
+            "x": {
+              "name": "exchange",
+              "type": "int"
+            },
+            "y": {
+              "name": "participant_timestamp",
+              "type": "int64"
+            },
+            "z": {
+              "name": "tape",
+              "type": "int"
+            }
+          },
+          "results": [
+            {
+              "c": [
+                12,
+                41
+              ],
+              "i": "1",
+              "p": 171.55,
+              "q": 1063,
+              "s": 100,
+              "t": 1517562000016036600,
+              "x": 11,
+              "y": 1517562000015577000,
+              "z": 3
+            },
+            {
+              "c": [
+                12,
+                41
+              ],
+              "i": "2",
+              "p": 171.55,
+              "q": 1064,
+              "s": 100,
+              "t": 1517562000016038100,
+              "x": 11,
+              "y": 1517562000015577600,
+              "z": 3
+            }
+          ],
+          "results_count": 2,
+          "success": true,
+          "ticker": "AAPL"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v2/ticks/stocks/nbbo/{ticker}/{date}, verbatim. The schema
+    /// marks <c>T</c>, <c>f</c>, and <c>i</c> required; the sample omits all three, which is why
+    /// the map types them nullable (D-G5).
+    /// </summary>
+    public const string StocksHistoricQuotes = """
+        {
+          "db_latency": 43,
+          "map": {
+            "P": {
+              "name": "ask_price",
+              "type": "float64"
+            },
+            "S": {
+              "name": "ask_size",
+              "type": "int"
+            },
+            "X": {
+              "name": "ask_exchange",
+              "type": "int"
+            },
+            "c": {
+              "name": "conditions",
+              "type": "int"
+            },
+            "f": {
+              "name": "trf_timestamp",
+              "type": "int64"
+            },
+            "i": {
+              "name": "indicators",
+              "type": "int"
+            },
+            "p": {
+              "name": "bid_price",
+              "type": "float64"
+            },
+            "q": {
+              "name": "sequence_number",
+              "type": "int"
+            },
+            "s": {
+              "name": "bid_size",
+              "type": "int"
+            },
+            "t": {
+              "name": "sip_timestamp",
+              "type": "int64"
+            },
+            "x": {
+              "name": "bid_exchange",
+              "type": "int"
+            },
+            "y": {
+              "name": "participant_timestamp",
+              "type": "int64"
+            },
+            "z": {
+              "name": "tape",
+              "type": "int"
+            }
+          },
+          "results": [
+            {
+              "P": 0,
+              "S": 0,
+              "X": 0,
+              "c": [
+                1
+              ],
+              "p": 102.7,
+              "q": 2060,
+              "s": 60,
+              "t": 1517562000065700400,
+              "x": 11,
+              "y": 1517562000065321200,
+              "z": 3
+            },
+            {
+              "P": 0,
+              "S": 0,
+              "X": 0,
+              "c": [
+                1
+              ],
+              "p": 170,
+              "q": 2061,
+              "s": 2,
+              "t": 1517562000065791500,
+              "x": 11,
+              "y": 1517562000065408300,
+              "z": 3
+            }
+          ],
+          "results_count": 2,
+          "success": true,
+          "ticker": "AAPL"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/splits, with one departure from the published
+    /// text: the sample shows <c>"request_id": 1</c>, a number, while the envelope schema declares
+    /// a string and every other endpoint returns one. The fixture uses the string, as the
+    /// dividends fixture does for the same defect.
+    /// </summary>
+    public const string StocksSplits = """
+        {
+          "request_id": "1",
+          "results": [
+            {
+              "adjustment_type": "forward_split",
+              "execution_date": "2005-02-28",
+              "historical_adjustment_factor": 0.017857,
+              "id": "E90a77bdf742661741ed7c8fc086415f0457c2816c45899d73aaa88bdc8ff6025",
+              "split_from": 1,
+              "split_to": 2,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/exchanges, with one departure from the published
+    /// text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksSplits"/>. The <c>count</c> member is not in the schema and is ignored.
+    /// </summary>
+    public const string StocksExchanges = """
+        {
+          "count": 2,
+          "request_id": "1",
+          "results": [
+            {
+              "id": "10",
+              "locale": "US",
+              "mic": "XNYS",
+              "name": "New York Stock Exchange",
+              "operating_mic": "XNYS",
+              "participant_id": "N",
+              "type": "exchange",
+              "url": "https://www.nyse.com"
+            },
+            {
+              "id": "12",
+              "locale": "US",
+              "mic": "XNAS",
+              "name": "Nasdaq",
+              "operating_mic": "XNAS",
+              "participant_id": "T",
+              "type": "exchange",
+              "url": "https://www.nasdaq.com"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the exchanges envelope's shape, with no <c>next_url</c>, so a
+    /// traversal from a cursored copy of <see cref="StocksExchanges"/> ends after two requests.
+    /// The published sample has no cursor of its own; the test adds one.
+    /// </summary>
+    public const string StocksExchangesLastPage = """
+        {
+          "count": 1,
+          "request_id": "2",
+          "results": [
+            {
+              "id": "15",
+              "locale": "US",
+              "mic": "IEXG",
+              "name": "Investors Exchange",
+              "operating_mic": "IEXG",
+              "participant_id": "V",
+              "type": "exchange",
+              "url": "https://www.iextrading.com"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {

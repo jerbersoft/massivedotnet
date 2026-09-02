@@ -16,7 +16,7 @@ public sealed class EndpointCoverageTests
     /// The number of operations mapped so far. This may only ever increase: raise it as
     /// endpoints are added, and the test then prevents anyone silently dropping one.
     /// </summary>
-    private const int CoverageBaseline = 7;
+    private const int CoverageBaseline = 22;
 
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 

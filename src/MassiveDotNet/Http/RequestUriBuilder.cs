@@ -135,7 +135,8 @@ public ref struct RequestUriBuilder
     /// </remarks>
     /// <typeparam name="T">
     /// The element type: <see cref="string"/>, <see cref="int"/>, <see cref="long"/>,
-    /// <see cref="double"/>, <see cref="LocalDate"/>, or <see cref="DateOrTimestamp"/>.
+    /// <see cref="double"/>, <see cref="LocalDate"/>, <see cref="DateOrTimestamp"/>, or
+    /// <see cref="DateOrNanoseconds"/>.
     /// </typeparam>
     /// <param name="name">The parameter name, which must already be URI-safe.</param>
     /// <param name="values">The values, or <see langword="null"/> or empty to omit the parameter.</param>
@@ -156,7 +157,8 @@ public ref struct RequestUriBuilder
     /// </summary>
     /// <typeparam name="T">
     /// The element type: <see cref="string"/>, <see cref="int"/>, <see cref="long"/>,
-    /// <see cref="double"/>, <see cref="LocalDate"/>, or <see cref="DateOrTimestamp"/>.
+    /// <see cref="double"/>, <see cref="LocalDate"/>, <see cref="DateOrTimestamp"/>, or
+    /// <see cref="DateOrNanoseconds"/>.
     /// </typeparam>
     /// <param name="name">The field's base name, which must already be URI-safe.</param>
     /// <param name="filter">The filter, or <see langword="null"/> to omit the field entirely.</param>
@@ -177,7 +179,8 @@ public ref struct RequestUriBuilder
     /// </summary>
     /// <typeparam name="T">
     /// The element type: <see cref="string"/>, <see cref="int"/>, <see cref="long"/>,
-    /// <see cref="double"/>, <see cref="LocalDate"/>, or <see cref="DateOrTimestamp"/>.
+    /// <see cref="double"/>, <see cref="LocalDate"/>, <see cref="DateOrTimestamp"/>, or
+    /// <see cref="DateOrNanoseconds"/>.
     /// </typeparam>
     /// <param name="name">The field's base name, which must already be URI-safe.</param>
     /// <param name="filter">The filter, or <see langword="null"/> to omit the field entirely.</param>
@@ -202,7 +205,8 @@ public ref struct RequestUriBuilder
     /// </summary>
     /// <typeparam name="T">
     /// The element type: <see cref="string"/>, <see cref="int"/>, <see cref="long"/>,
-    /// <see cref="double"/>, <see cref="LocalDate"/>, or <see cref="DateOrTimestamp"/>.
+    /// <see cref="double"/>, <see cref="LocalDate"/>, <see cref="DateOrTimestamp"/>, or
+    /// <see cref="DateOrNanoseconds"/>.
     /// </typeparam>
     /// <param name="name">The field's base name, which must already be URI-safe.</param>
     /// <param name="filter">The filter, or <see langword="null"/> to omit the field entirely.</param>
@@ -223,7 +227,8 @@ public ref struct RequestUriBuilder
     /// </summary>
     /// <typeparam name="T">
     /// The element type: <see cref="string"/>, <see cref="int"/>, <see cref="long"/>,
-    /// <see cref="double"/>, <see cref="LocalDate"/>, or <see cref="DateOrTimestamp"/>.
+    /// <see cref="double"/>, <see cref="LocalDate"/>, <see cref="DateOrTimestamp"/>, or
+    /// <see cref="DateOrNanoseconds"/>.
     /// </typeparam>
     /// <param name="name">The field's base name, which must already be URI-safe.</param>
     /// <param name="filter">The filter, or <see langword="null"/> to omit the field entirely.</param>
@@ -392,10 +397,15 @@ public ref struct RequestUriBuilder
             // value or it could inject a second query parameter.
             _builder.Append(Uri.EscapeDataString(Unsafe.As<T, DateOrTimestamp>(ref value).ToString()));
         }
+        else if (typeof(T) == typeof(DateOrNanoseconds))
+        {
+            // Caller-supplied like DateOrTimestamp, and escaped for the same reason.
+            _builder.Append(Uri.EscapeDataString(Unsafe.As<T, DateOrNanoseconds>(ref value).ToString()));
+        }
         else
         {
             throw new NotSupportedException(
-                $"{typeof(T)} is not a supported filter element type. Supported: string, int, long, double, LocalDate, DateOrTimestamp.");
+                $"{typeof(T)} is not a supported filter element type. Supported: string, int, long, double, LocalDate, DateOrTimestamp, DateOrNanoseconds.");
         }
     }
 }

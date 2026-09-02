@@ -45,10 +45,10 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
         return type switch
         {
             // Enum wire values are fixed literals, so they need no percent-escaping.
-            "AggregateTimespan" or "SortOrder" or "MarketType" or "SeriesType" =>
+            "AggregateTimespan" or "SortOrder" or "MarketType" or "SeriesType" or "SnapshotDirection" =>
                 new TypeBinding(type, "AppendPathLiteral", "ToWireValue()"),
 
-            "DateOrTimestamp" =>
+            "DateOrTimestamp" or "DateOrNanoseconds" =>
                 new TypeBinding(type, "AppendPathSegment", "ToString()"),
 
             // NodaTime types are the SDK's temporal vocabulary (constitution rule 12).
@@ -70,7 +70,7 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
     /// in <c>RequestUriBuilder.AppendElement</c>; extend the two together.
     /// </summary>
     private static readonly HashSet<string> ElementTypes =
-        new(StringComparer.Ordinal) { "string", "int", "long", "double", "LocalDate", "DateOrTimestamp" };
+        new(StringComparer.Ordinal) { "string", "int", "long", "double", "LocalDate", "DateOrTimestamp", "DateOrNanoseconds" };
 
     /// <summary>
     /// Resolves the binding for a comparator group: the filter type over the field's element

@@ -4,9 +4,9 @@ using NodaTime;
 namespace MassiveDotNet.Rest.Models;
 
 /// <summary>
-/// Hand-written members of <see cref="LastTrade"/>, alongside the generated wire properties.
+/// Hand-written members of <see cref="Trade"/>, alongside the generated wire properties.
 /// </summary>
-public readonly partial record struct LastTrade
+public readonly partial record struct Trade
 {
     /// <summary>The moment the SIP received this trade, converted from <see cref="SipTimestampNanoseconds"/>.</summary>
     [JsonIgnore]

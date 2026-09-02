@@ -86,6 +86,7 @@ public sealed class FilterRenderingTests
         Assert.Equal("/x?f.gt=2026-01-01", RenderRange<LocalDate>(RangeFilter.Gt(new LocalDate(2026, 1, 1))));
         Assert.Equal("/x?f.gte=1578114000000", RenderRange<DateOrTimestamp>(RangeFilter.Gte<DateOrTimestamp>(1578114000000L)));
         Assert.Equal("/x?f.lte=2020-01-10", RenderRange<DateOrTimestamp>(RangeFilter.Lte<DateOrTimestamp>(new LocalDate(2020, 1, 10))));
+        Assert.Equal("/x?f.gte=1517562000016036600", RenderRange<DateOrNanoseconds>(RangeFilter.Gte<DateOrNanoseconds>(1517562000016036600L)));
     }
 
     [Fact]

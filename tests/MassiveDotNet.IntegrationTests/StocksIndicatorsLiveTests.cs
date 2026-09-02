@@ -71,4 +71,60 @@ public sealed class StocksIndicatorsLiveTests : LiveApiTest
         // The underlying URL is a plain aggregates request and must never carry a key (rule 11).
         Assert.DoesNotContain("apiKey", page.Result.Underlying.Url, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task EmaReturnsValuesInTheWindow()
+    {
+        MassivePagedResult<IndicatorSeries> page = await Client.Stocks.ListEmaAsync(
+            "AAPL",
+            timestamp: RangeFilter.Between(DateOrTimestamp.FromDate(WindowStart), DateOrTimestamp.FromDate(WindowEnd)),
+            timespan: AggregateTimespan.Day,
+            window: 10,
+            limit: 2,
+            cancellationToken: Ct);
+
+        Assert.NotNull(page.Result.Values);
+        Assert.Equal(2, page.Result.Values.Length);
+        Assert.All(page.Result.Values, value => Assert.True(value.Value > 0));
+    }
+
+    [Fact]
+    public async Task RsiReturnsValuesBetweenZeroAndOneHundred()
+    {
+        MassivePagedResult<IndicatorSeries> page = await Client.Stocks.ListRsiAsync(
+            "AAPL",
+            timestamp: RangeFilter.Between(DateOrTimestamp.FromDate(WindowStart), DateOrTimestamp.FromDate(WindowEnd)),
+            timespan: AggregateTimespan.Day,
+            window: 14,
+            limit: 2,
+            cancellationToken: Ct);
+
+        Assert.NotNull(page.Result.Values);
+        Assert.Equal(2, page.Result.Values.Length);
+        Assert.All(page.Result.Values, value => Assert.InRange(value.Value, 0, 100));
+    }
+
+    [Fact]
+    public async Task MacdReturnsAHistogramThatIsTheLineMinusTheSignal()
+    {
+        MassivePagedResult<MacdSeries> page = await Client.Stocks.ListMacdAsync(
+            "AAPL",
+            timestamp: RangeFilter.Between(DateOrTimestamp.FromDate(WindowStart), DateOrTimestamp.FromDate(WindowEnd)),
+            timespan: AggregateTimespan.Day,
+            shortWindow: 12,
+            longWindow: 26,
+            signalWindow: 9,
+            limit: 2,
+            cancellationToken: Ct);
+
+        Assert.NotNull(page.Result.Values);
+        Assert.Equal(2, page.Result.Values.Length);
+
+        // The histogram is defined as the MACD line minus its signal, so the three members of
+        // every point must agree with each other whatever their values are.
+        foreach (MacdValue value in page.Result.Values)
+        {
+            Assert.Equal(value.Value - value.Signal, value.Histogram, precision: 6);
+        }
+    }
 }
