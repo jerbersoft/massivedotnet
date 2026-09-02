@@ -294,3 +294,69 @@ internal sealed class GetStocksSnapshotDirectionResponse
     [JsonPropertyName("tickers")]
     public TickerSnapshot[]? Tickers { get; init; }
 }
+
+/// <summary>The response envelope returned by /v1/indicators/ema/{stockTicker}.</summary>
+internal sealed class EMAResponse : IPagedEnvelope<IndicatorValue>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results of the EMA indicator calculation.</summary>
+    [JsonPropertyName("results")]
+    public IndicatorSeries? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    IndicatorValue[]? IPagedEnvelope<IndicatorValue>.Results => Results?.Values;
+}
+
+/// <summary>The response envelope returned by /v1/indicators/rsi/{stockTicker}.</summary>
+internal sealed class RSIResponse : IPagedEnvelope<IndicatorValue>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results of the RSI indicator calculation.</summary>
+    [JsonPropertyName("results")]
+    public IndicatorSeries? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    IndicatorValue[]? IPagedEnvelope<IndicatorValue>.Results => Results?.Values;
+}
+
+/// <summary>The response envelope returned by /v1/indicators/macd/{stockTicker}.</summary>
+internal sealed class MACDResponse : IPagedEnvelope<MacdValue>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results of the MACD indicator calculation.</summary>
+    [JsonPropertyName("results")]
+    public MacdSeries? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    MacdValue[]? IPagedEnvelope<MacdValue>.Results => Results?.Values;
+}

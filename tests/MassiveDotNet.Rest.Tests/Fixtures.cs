@@ -709,6 +709,98 @@ internal static class Fixtures
         }
         """;
 
+    /// <summary>The documented sample for GET /v1/indicators/ema/{stockTicker}, verbatim.</summary>
+    public const string StocksEma = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/ema/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "timestamp": 1517562000016,
+                "value": 140.139
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v1/indicators/rsi/{stockTicker}, verbatim.</summary>
+    public const string StocksRsi = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/rsi/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "timestamp": 1517562000016,
+                "value": 82.19
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v1/indicators/macd/{stockTicker}, verbatim.</summary>
+    public const string StocksMacd = """
+        {
+          "next_url": "https://api.massive.com/v1/indicators/macd/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "a47d1beb8c11b6ae897ab76cdbbf35a3",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-25"
+            },
+            "values": [
+              {
+                "histogram": 38.3801666667,
+                "signal": 106.9811666667,
+                "timestamp": 1517562000016,
+                "value": 145.3613333333
+              },
+              {
+                "histogram": 41.098859136,
+                "signal": 102.7386283473,
+                "timestamp": 1517562001016,
+                "value": 143.8374874833
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the MACD envelope's shape, with no <c>next_url</c>, so a
+    /// traversal that starts from <see cref="StocksMacd"/> ends after two requests.
+    /// </summary>
+    public const string StocksMacdLastPage = """
+        {
+          "request_id": "0d5b6f1e9f3c4a7b8e2d1c0f9a8b7c6d",
+          "results": {
+            "underlying": {
+              "url": "https://api.massive.com/v2/aggs/ticker/AAPL/range/1/day/2003-01-01/2022-07-24"
+            },
+            "values": [
+              {
+                "histogram": 40.1,
+                "signal": 101.2,
+                "timestamp": 1517562002016,
+                "value": 141.3
+              }
+            ]
+          },
+          "status": "OK"
+        }
+        """;
+
     /// <summary>An envelope in the singular shape with its payload missing: a 200 the caller cannot use.</summary>
     public const string SingularWithoutResults = """
         {

@@ -400,6 +400,30 @@
         "updated":          { "name": "UpdatedNanoseconds", "type": "long?", "summary": "The nanosecond Unix timestamp of the last update to this snapshot. The description declares a bare integer; every value overflows int32." },
         "fmv":              { "name": "FairMarketValue" }
       }
+    },
+
+    "MacdSeries": {
+      "summary": "One page of the MACD indicator: the values computed for the page, and the aggregates they were computed from.",
+      "remarks": "<see cref=\"IndicatorSeries\"/> with a richer value: each point carries the signal line and the histogram beside the MACD line, so the values bind to <see cref=\"MacdValue\"/>. The underlying is the shape every indicator shares (decision D16). <c>Enumerate</c> yields the values and <c>List</c> returns the whole page (decision D17).",
+      "schema": { "operationId": "MACD", "pointer": "results" },
+      "items": "values",
+      "properties": {
+        "values":     { "name": "Values",     "model": "MacdValue", "summary": "The MACD values for this page, oldest or newest first as requested." },
+        "underlying": { "name": "Underlying", "model": "IndicatorUnderlying" }
+      }
+    },
+
+    "MacdValue": {
+      "kind": "struct",
+      "summary": "One point of a MACD series: the MACD line, its signal line, the histogram between them, and the timestamp of the last aggregate that produced them.",
+      "remarks": "A struct, like <see cref=\"IndicatorValue\"/> (decision D4). <see cref=\"Timestamp\"/> is computed from <see cref=\"TimestampMilliseconds\"/> only when read (decision D5).",
+      "schema": { "operationId": "MACD", "pointer": "results/values/items" },
+      "properties": {
+        "timestamp": { "name": "TimestampMilliseconds", "type": "long", "summary": "The Unix millisecond timestamp of the last aggregate used in this calculation." },
+        "value":     { "name": "Value", "type": "double", "summary": "The MACD line: the short exponential moving average minus the long one." },
+        "signal":    { "name": "Signal", "type": "double", "summary": "The signal line: an exponential moving average of the MACD line over the signal window." },
+        "histogram": { "name": "Histogram", "type": "double", "summary": "The MACD line minus the signal line." }
+      }
     }
   },
 
@@ -602,6 +626,65 @@
       "parameters": {
         "direction":   { "name": "direction", "type": "SnapshotDirection" },
         "include_otc": { "name": "includeOtc" }
+      }
+    },
+    {
+      "operationId": "EMA",
+      "group": "Stocks",
+      "method": "ListEma",
+      "summary": "Retrieves the exponential moving average (EMA) of a stock's price over a window of aggregates.",
+      "remarks": "The same page shape as <see cref=\"ListSmaAsync\"/>: each page carries the values computed for it and, with <paramref name=\"expandUnderlying\"/>, the aggregates they were computed from. <paramref name=\"timespan\"/> accepts every <see cref=\"AggregateTimespan\"/> except <see cref=\"AggregateTimespan.Second\"/>, which this endpoint does not offer and rejects with a 400.",
+      "result": { "kind": "object", "model": "IndicatorSeries", "property": "results" },
+      "parameters": {
+        "stockTicker":       { "name": "ticker" },
+        "timestamp":         { "name": "timestamp", "type": "DateOrTimestamp" },
+        "timespan":          { "name": "timespan", "type": "AggregateTimespan" },
+        "adjusted":          { "name": "adjusted" },
+        "window":            { "name": "window" },
+        "series_type":       { "name": "seriesType", "type": "SeriesType" },
+        "expand_underlying": { "name": "expandUnderlying" },
+        "order":             { "name": "order", "type": "SortOrder" },
+        "limit":             { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "RSI",
+      "group": "Stocks",
+      "method": "ListRsi",
+      "summary": "Retrieves the relative strength index (RSI) of a stock's price over a window of aggregates.",
+      "remarks": "The same page shape as <see cref=\"ListSmaAsync\"/>: each page carries the values computed for it and, with <paramref name=\"expandUnderlying\"/>, the aggregates they were computed from. <paramref name=\"timespan\"/> accepts every <see cref=\"AggregateTimespan\"/> except <see cref=\"AggregateTimespan.Second\"/>, which this endpoint does not offer and rejects with a 400.",
+      "result": { "kind": "object", "model": "IndicatorSeries", "property": "results" },
+      "parameters": {
+        "stockTicker":       { "name": "ticker" },
+        "timestamp":         { "name": "timestamp", "type": "DateOrTimestamp" },
+        "timespan":          { "name": "timespan", "type": "AggregateTimespan" },
+        "adjusted":          { "name": "adjusted" },
+        "window":            { "name": "window" },
+        "series_type":       { "name": "seriesType", "type": "SeriesType" },
+        "expand_underlying": { "name": "expandUnderlying" },
+        "order":             { "name": "order", "type": "SortOrder" },
+        "limit":             { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "MACD",
+      "group": "Stocks",
+      "method": "ListMacd",
+      "summary": "Retrieves the moving average convergence/divergence (MACD) of a stock's price: the MACD line, its signal line, and the histogram between them.",
+      "remarks": "Three windows replace the single <c>window</c> of the other indicators: <paramref name=\"shortWindow\"/> and <paramref name=\"longWindow\"/> size the two averages whose difference is the MACD line, and <paramref name=\"signalWindow\"/> sizes the average of that line. Each page carries the values computed for it and, with <paramref name=\"expandUnderlying\"/>, the aggregates they were computed from. <paramref name=\"timespan\"/> accepts every <see cref=\"AggregateTimespan\"/> except <see cref=\"AggregateTimespan.Second\"/>, which this endpoint does not offer and rejects with a 400.",
+      "result": { "kind": "object", "model": "MacdSeries", "property": "results" },
+      "parameters": {
+        "stockTicker":       { "name": "ticker" },
+        "timestamp":         { "name": "timestamp", "type": "DateOrTimestamp" },
+        "timespan":          { "name": "timespan", "type": "AggregateTimespan" },
+        "adjusted":          { "name": "adjusted" },
+        "short_window":      { "name": "shortWindow" },
+        "long_window":       { "name": "longWindow" },
+        "signal_window":     { "name": "signalWindow" },
+        "series_type":       { "name": "seriesType", "type": "SeriesType" },
+        "expand_underlying": { "name": "expandUnderlying" },
+        "order":             { "name": "order", "type": "SortOrder" },
+        "limit":             { "name": "limit" }
       }
     }
   ]

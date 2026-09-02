@@ -1076,4 +1076,508 @@ public readonly partial struct StocksGroup
 
         return response?.Tickers ?? [];
     }
+
+    /// <summary>
+    /// Retrieves the exponential moving average (EMA) of a stock's price over a window of aggregates,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed, and yields
+    /// each page's <c>values</c> in turn; the other members of each page's <c>results</c> are not
+    /// observable through this sequence. A page that carries no <c>results</c> contributes nothing. Use
+    /// <see cref="ListEmaAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The same page shape as <see
+    /// cref="ListSmaAsync"/>: each page carries the values computed for it and, with <paramref
+    /// name="expandUnderlying"/>, the aggregates they were computed from. <paramref name="timespan"/>
+    /// accepts every <see cref="AggregateTimespan"/> except <see cref="AggregateTimespan.Second"/>,
+    /// which this endpoint does not offer and rejects with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get exponential moving average (EMA) data.
+    /// For example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the exponential moving average are adjusted for
+    /// splits. By default, aggregates are adjusted. Set this to false to get results that are NOT
+    /// adjusted for splits.
+    /// </param>
+    /// <param name="window">
+    /// The window size used to calculate the exponential moving average (EMA). i.e. a window size of 10
+    /// with daily aggregates would result in a 10 day moving average.
+    /// </param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the exponential moving average. i.e.
+    /// 'close' will result in using close prices to calculate the exponential moving average (EMA).
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>values</c> entry across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<IndicatorValue> EnumerateEmaAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? window = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListEmaUri(ticker, timestamp, timespan, adjusted, window, seriesType, expandUnderlying, order, limit);
+        return _transport.EnumerateAsync<EMAResponse, IndicatorValue>(
+            requestUri, MassiveRestJsonContext.Default.EMAResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the exponential moving average (EMA) of a stock's price over a window of aggregates.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateEmaAsync"/> to walk every page without
+    /// handling cursors yourself. The same page shape as <see cref="ListSmaAsync"/>: each page carries
+    /// the values computed for it and, with <paramref name="expandUnderlying"/>, the aggregates they
+    /// were computed from. <paramref name="timespan"/> accepts every <see cref="AggregateTimespan"/>
+    /// except <see cref="AggregateTimespan.Second"/>, which this endpoint does not offer and rejects
+    /// with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get exponential moving average (EMA) data.
+    /// For example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the exponential moving average are adjusted for
+    /// splits. By default, aggregates are adjusted. Set this to false to get results that are NOT
+    /// adjusted for splits.
+    /// </param>
+    /// <param name="window">
+    /// The window size used to calculate the exponential moving average (EMA). i.e. a window size of 10
+    /// with daily aggregates would result in a 10 day moving average.
+    /// </param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the exponential moving average. i.e.
+    /// 'close' will result in using close prices to calculate the exponential moving average (EMA).
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page: the <c>results</c> object, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<MassivePagedResult<IndicatorSeries>> ListEmaAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? window = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListEmaUri(ticker, timestamp, timespan, adjusted, window, seriesType, expandUnderlying, order, limit);
+        return SendListEmaAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListEmaUri(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp,
+        AggregateTimespan? timespan,
+        bool? adjusted,
+        int? window,
+        SeriesType? seriesType,
+        bool? expandUnderlying,
+        SortOrder? order,
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/indicators/ema/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("timespan", timespan?.ToWireValue());
+        builder.AppendQuery("adjusted", adjusted);
+        builder.AppendQuery("window", window);
+        builder.AppendQuery("series_type", seriesType?.ToWireValue());
+        builder.AppendQuery("expand_underlying", expandUnderlying);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePagedResult<IndicatorSeries>> SendListEmaAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        EMAResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.EMAResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        IndicatorSeries result = response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePagedResult<IndicatorSeries>(
+            result,
+            !string.IsNullOrWhiteSpace(response.NextUrl),
+            response.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the relative strength index (RSI) of a stock's price over a window of aggregates,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed, and yields
+    /// each page's <c>values</c> in turn; the other members of each page's <c>results</c> are not
+    /// observable through this sequence. A page that carries no <c>results</c> contributes nothing. Use
+    /// <see cref="ListRsiAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The same page shape as <see
+    /// cref="ListSmaAsync"/>: each page carries the values computed for it and, with <paramref
+    /// name="expandUnderlying"/>, the aggregates they were computed from. <paramref name="timespan"/>
+    /// accepts every <see cref="AggregateTimespan"/> except <see cref="AggregateTimespan.Second"/>,
+    /// which this endpoint does not offer and rejects with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get relative strength index (RSI) data. For
+    /// example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the relative strength index are adjusted for
+    /// splits. By default, aggregates are adjusted. Set this to false to get results that are NOT
+    /// adjusted for splits.
+    /// </param>
+    /// <param name="window">The window size used to calculate the relative strength index (RSI).</param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the relative strength index. i.e.
+    /// 'close' will result in using close prices to calculate the relative strength index (RSI).
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>values</c> entry across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<IndicatorValue> EnumerateRsiAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? window = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListRsiUri(ticker, timestamp, timespan, adjusted, window, seriesType, expandUnderlying, order, limit);
+        return _transport.EnumerateAsync<RSIResponse, IndicatorValue>(
+            requestUri, MassiveRestJsonContext.Default.RSIResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the relative strength index (RSI) of a stock's price over a window of aggregates.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateRsiAsync"/> to walk every page without
+    /// handling cursors yourself. The same page shape as <see cref="ListSmaAsync"/>: each page carries
+    /// the values computed for it and, with <paramref name="expandUnderlying"/>, the aggregates they
+    /// were computed from. <paramref name="timespan"/> accepts every <see cref="AggregateTimespan"/>
+    /// except <see cref="AggregateTimespan.Second"/>, which this endpoint does not offer and rejects
+    /// with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get relative strength index (RSI) data. For
+    /// example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the relative strength index are adjusted for
+    /// splits. By default, aggregates are adjusted. Set this to false to get results that are NOT
+    /// adjusted for splits.
+    /// </param>
+    /// <param name="window">The window size used to calculate the relative strength index (RSI).</param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the relative strength index. i.e.
+    /// 'close' will result in using close prices to calculate the relative strength index (RSI).
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page: the <c>results</c> object, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<MassivePagedResult<IndicatorSeries>> ListRsiAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? window = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListRsiUri(ticker, timestamp, timespan, adjusted, window, seriesType, expandUnderlying, order, limit);
+        return SendListRsiAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListRsiUri(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp,
+        AggregateTimespan? timespan,
+        bool? adjusted,
+        int? window,
+        SeriesType? seriesType,
+        bool? expandUnderlying,
+        SortOrder? order,
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/indicators/rsi/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("timespan", timespan?.ToWireValue());
+        builder.AppendQuery("adjusted", adjusted);
+        builder.AppendQuery("window", window);
+        builder.AppendQuery("series_type", seriesType?.ToWireValue());
+        builder.AppendQuery("expand_underlying", expandUnderlying);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePagedResult<IndicatorSeries>> SendListRsiAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        RSIResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.RSIResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        IndicatorSeries result = response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePagedResult<IndicatorSeries>(
+            result,
+            !string.IsNullOrWhiteSpace(response.NextUrl),
+            response.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the moving average convergence/divergence (MACD) of a stock's price: the MACD line,
+    /// its signal line, and the histogram between them, enumerating every page as a single lazy
+    /// sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed, and yields
+    /// each page's <c>values</c> in turn; the other members of each page's <c>results</c> are not
+    /// observable through this sequence. A page that carries no <c>results</c> contributes nothing. Use
+    /// <see cref="ListMacdAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Three windows replace the single
+    /// <c>window</c> of the other indicators: <paramref name="shortWindow"/> and <paramref
+    /// name="longWindow"/> size the two averages whose difference is the MACD line, and <paramref
+    /// name="signalWindow"/> sizes the average of that line. Each page carries the values computed for
+    /// it and, with <paramref name="expandUnderlying"/>, the aggregates they were computed from.
+    /// <paramref name="timespan"/> accepts every <see cref="AggregateTimespan"/> except <see
+    /// cref="AggregateTimespan.Second"/>, which this endpoint does not offer and rejects with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get moving average convergence/divergence
+    /// (MACD) data. For example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the MACD are adjusted for splits. By default,
+    /// aggregates are adjusted. Set this to false to get results that are NOT adjusted for splits.
+    /// </param>
+    /// <param name="shortWindow">The short window size used to calculate MACD data.</param>
+    /// <param name="longWindow">The long window size used to calculate MACD data.</param>
+    /// <param name="signalWindow">The window size used to calculate the MACD signal line.</param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the MACD. i.e. 'close' will result in
+    /// using close prices to calculate the MACD.
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>values</c> entry across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<MacdValue> EnumerateMacdAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? shortWindow = null,
+        int? longWindow = null,
+        int? signalWindow = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListMacdUri(ticker, timestamp, timespan, adjusted, shortWindow, longWindow, signalWindow, seriesType, expandUnderlying, order, limit);
+        return _transport.EnumerateAsync<MACDResponse, MacdValue>(
+            requestUri, MassiveRestJsonContext.Default.MACDResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the moving average convergence/divergence (MACD) of a stock's price: the MACD line,
+    /// its signal line, and the histogram between them.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateMacdAsync"/> to walk every page without
+    /// handling cursors yourself. Three windows replace the single <c>window</c> of the other
+    /// indicators: <paramref name="shortWindow"/> and <paramref name="longWindow"/> size the two
+    /// averages whose difference is the MACD line, and <paramref name="signalWindow"/> sizes the
+    /// average of that line. Each page carries the values computed for it and, with <paramref
+    /// name="expandUnderlying"/>, the aggregates they were computed from. <paramref name="timespan"/>
+    /// accepts every <see cref="AggregateTimespan"/> except <see cref="AggregateTimespan.Second"/>,
+    /// which this endpoint does not offer and rejects with a 400.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol for which to get moving average convergence/divergence
+    /// (MACD) data. For example, AAPL represents Apple Inc.
+    /// </param>
+    /// <param name="timestamp">
+    /// Query by timestamp. Either a date with the format YYYY-MM-DD or a millisecond timestamp. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="timespan">The size of the aggregate time window.</param>
+    /// <param name="adjusted">
+    /// Whether or not the aggregates used to calculate the MACD are adjusted for splits. By default,
+    /// aggregates are adjusted. Set this to false to get results that are NOT adjusted for splits.
+    /// </param>
+    /// <param name="shortWindow">The short window size used to calculate MACD data.</param>
+    /// <param name="longWindow">The long window size used to calculate MACD data.</param>
+    /// <param name="signalWindow">The window size used to calculate the MACD signal line.</param>
+    /// <param name="seriesType">
+    /// The price in the aggregate which will be used to calculate the MACD. i.e. 'close' will result in
+    /// using close prices to calculate the MACD.
+    /// </param>
+    /// <param name="expandUnderlying">Whether or not to include the aggregates used to calculate this indicator in the response.</param>
+    /// <param name="order">The order in which to return the results, ordered by timestamp.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 5000</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page: the <c>results</c> object, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<MassivePagedResult<MacdSeries>> ListMacdAsync(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp = null,
+        AggregateTimespan? timespan = null,
+        bool? adjusted = null,
+        int? shortWindow = null,
+        int? longWindow = null,
+        int? signalWindow = null,
+        SeriesType? seriesType = null,
+        bool? expandUnderlying = null,
+        SortOrder? order = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListMacdUri(ticker, timestamp, timespan, adjusted, shortWindow, longWindow, signalWindow, seriesType, expandUnderlying, order, limit);
+        return SendListMacdAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListMacdUri(
+        string ticker,
+        RangeFilter<DateOrTimestamp>? timestamp,
+        AggregateTimespan? timespan,
+        bool? adjusted,
+        int? shortWindow,
+        int? longWindow,
+        int? signalWindow,
+        SeriesType? seriesType,
+        bool? expandUnderlying,
+        SortOrder? order,
+        int? limit)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/indicators/macd/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("timestamp", timestamp);
+        builder.AppendQuery("timespan", timespan?.ToWireValue());
+        builder.AppendQuery("adjusted", adjusted);
+        builder.AppendQuery("short_window", shortWindow);
+        builder.AppendQuery("long_window", longWindow);
+        builder.AppendQuery("signal_window", signalWindow);
+        builder.AppendQuery("series_type", seriesType?.ToWireValue());
+        builder.AppendQuery("expand_underlying", expandUnderlying);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePagedResult<MacdSeries>> SendListMacdAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        MACDResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.MACDResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        MacdSeries result = response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePagedResult<MacdSeries>(
+            result,
+            !string.IsNullOrWhiteSpace(response.NextUrl),
+            response.RequestId);
+    }
 }
