@@ -379,6 +379,74 @@ internal sealed class Spec
         _ => "a scalar",
     };
 
+    /// <summary>
+    /// The ways a reuse site's schema differs from the schema a model was generated from (D-N4).
+    /// Property names must match exactly; a property the model's schema requires must be required
+    /// at the site; both comparisons recurse through nested objects and arrays of objects. Scalar
+    /// types are not compared: the model row is the curated truth, and the description disagrees
+    /// with itself at sites that are plainly the same thing. Empty when the site matches.
+    /// </summary>
+    /// <param name="model">The schema at the model's own pointer.</param>
+    /// <param name="site">The schema at the property that names the model.</param>
+    /// <returns>One sentence per difference, in the description's declaration order.</returns>
+    public static List<string> StructuralDifferences(JsonElement model, JsonElement site)
+    {
+        List<string> differences = [];
+        Compare(model, site, "", differences);
+        return differences;
+    }
+
+    private static void Compare(JsonElement model, JsonElement site, string path, List<string> differences)
+    {
+        List<SpecProperty> modelProperties = Properties(model);
+        List<SpecProperty> siteProperties = Properties(site);
+
+        foreach (SpecProperty extra in siteProperties.Where(s => !modelProperties.Exists(m => m.Name == s.Name)))
+        {
+            differences.Add($"'{path}{extra.Name}' is declared at the site but not on the model");
+        }
+
+        foreach (SpecProperty expected in modelProperties)
+        {
+            SpecProperty? actual = siteProperties.Find(s => s.Name == expected.Name);
+
+            if (actual is null)
+            {
+                differences.Add($"'{path}{expected.Name}' is on the model but not declared at the site");
+                continue;
+            }
+
+            if (expected.Required && !actual.Required)
+            {
+                differences.Add($"'{path}{expected.Name}' is required on the model but optional at the site");
+            }
+
+            SchemaShape modelShape = Shape(expected.Schema);
+            SchemaShape siteShape = Shape(actual.Schema);
+
+            if (modelShape == SchemaShape.Object && siteShape == SchemaShape.Object)
+            {
+                Compare(expected.Schema, actual.Schema, $"{path}{expected.Name}/", differences);
+            }
+            else if (modelShape == SchemaShape.ArrayOfObjects && siteShape == SchemaShape.ArrayOfObjects)
+            {
+                Compare(
+                    expected.Schema.GetProperty("items"),
+                    actual.Schema.GetProperty("items"),
+                    $"{path}{expected.Name}/items/",
+                    differences);
+            }
+            else if (modelShape != siteShape && (IsStructured(modelShape) || IsStructured(siteShape)))
+            {
+                differences.Add(
+                    $"'{path}{expected.Name}' is {Describe(modelShape)} on the model but {Describe(siteShape)} at the site");
+            }
+        }
+    }
+
+    private static bool IsStructured(SchemaShape shape) =>
+        shape is SchemaShape.Object or SchemaShape.ArrayOfObjects;
+
     private static bool IsObject(JsonElement schema) =>
         (schema.TryGetProperty("type", out JsonElement type) && type.GetString() == "object")
         || schema.TryGetProperty("properties", out _)

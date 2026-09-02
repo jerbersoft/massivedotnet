@@ -707,6 +707,24 @@ internal sealed class Emitter(Spec spec, Map map)
                 + "Use \"type\" for anything else.");
         }
 
+        // A name may cover only one shape. The site is compared with the schema the model was
+        // generated from, so a reused model is proven identical everywhere it appears (D-N4).
+        // The comparison also runs where the site is the origin itself; a schema always matches
+        // itself, so that costs nothing and needs no special case.
+        JsonElement site = shape == SchemaShape.ArrayOfObjects ? property.Schema.GetProperty("items") : property.Schema;
+        JsonElement origin = Spec.Navigate(Spec.SuccessSchema(spec.Operation(target.SchemaOperationId)), target.SchemaPointer);
+        List<string> differences = Spec.StructuralDifferences(origin, site);
+
+        if (differences.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Model '{owner.Name}' (operation '{owner.SchemaOperationId}'): property '{property.Name}' names model "
+                + $"'{target.Name}', generated from operation '{target.SchemaOperationId}' at '{target.SchemaPointer}', "
+                + "but the schema at this site differs:\n  "
+                + string.Join("\n  ", differences)
+                + "\nA model name may cover only one shape. Declare a second model for this site, or fix the row.");
+        }
+
         string type = shape == SchemaShape.ArrayOfObjects ? $"{target.Name}[]" : target.Name;
 
         return property.Required ? type : $"{type}?";
