@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
@@ -266,5 +267,53 @@ public sealed class ReferenceSecFilingsTests
         Assert.Equal(FileUri, handler.LastRequestUri?.ToString());
         Assert.Equal(HttpStatusCode.OK, exception.StatusCode);
         Assert.IsAssignableFrom<JsonException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task DownloadFilingFileCopiesTheDocumentToTheDestination()
+    {
+        StubHandler handler = new(Html) { MediaType = "text/html" };
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        using MemoryStream destination = new();
+
+        using (client)
+        using (transport)
+        {
+            await client.Reference.DownloadFilingFileAsync(FilingId, FileId, destination, Ct);
+        }
+
+        // The same generated URI builder serves both methods, so the download cannot drift from
+        // the route the description declares (D-R4).
+        Assert.Equal(FileUri, handler.LastRequestUri?.ToString());
+        Assert.Equal(Html, Encoding.UTF8.GetString(destination.ToArray()));
+    }
+
+    [Theory]
+    [InlineData("", FileId)]
+    [InlineData(FilingId, " ")]
+    public async Task DownloadFilingFileRefusesABlankIdentifier(string filingId, string fileId)
+    {
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(new StubHandler(Html));
+
+        using MemoryStream destination = new();
+
+        using (client)
+        using (transport)
+        {
+            await Assert.ThrowsAsync<ArgumentException>(() => client.Reference.DownloadFilingFileAsync(filingId, fileId, destination, Ct));
+        }
+    }
+
+    [Fact]
+    public async Task DownloadFilingFileRefusesANullDestination()
+    {
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(new StubHandler(Html));
+
+        using (client)
+        using (transport)
+        {
+            await Assert.ThrowsAsync<ArgumentNullException>(() => client.Reference.DownloadFilingFileAsync(FilingId, FileId, null!, Ct));
+        }
     }
 }

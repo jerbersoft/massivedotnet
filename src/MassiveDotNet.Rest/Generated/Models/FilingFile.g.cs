@@ -17,7 +17,9 @@ namespace MassiveDotNet.Rest.Models;
 /// <summary>One file within an SEC filing: its identifier, name, sequence, size, type, and source.</summary>
 /// <remarks>
 /// Reference data, so a class (decision D4). Also the declared payload of <see
-/// cref="ReferenceGroup.GetFilingFileAsync"/>, where decision D16 verifies the shape.
+/// cref="ReferenceGroup.GetFilingFileAsync"/>, where decision D16 verifies the shape; that route
+/// serves the file itself rather than this object, so <see
+/// cref="ReferenceGroup.DownloadFilingFileAsync"/> is the method that retrieves one (decision D25).
 /// </remarks>
 public sealed partial record FilingFile
 {

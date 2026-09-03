@@ -2197,7 +2197,7 @@ public readonly partial struct ReferenceGroup
     /// content at this route, <c>text/html</c> for a filing document, rather than the declared JSON
     /// object, so on 2026-09-03 this method threw a <see cref="MassiveApiException"/> whose inner
     /// exception is the deserialization failure; that flips the day the service or the description
-    /// moves.
+    /// moves. Use <see cref="DownloadFilingFileAsync"/> to retrieve the file (decision D25).
     /// </remarks>
     /// <param name="filingId">Select by filing id.</param>
     /// <param name="fileId">Select by file id.</param>

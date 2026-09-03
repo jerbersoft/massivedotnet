@@ -978,7 +978,7 @@
 
     "FilingFile": {
       "summary": "One file within an SEC filing: its identifier, name, sequence, size, type, and source.",
-      "remarks": "Reference data, so a class (decision D4). Also the declared payload of <see cref=\"ReferenceGroup.GetFilingFileAsync\"/>, where decision D16 verifies the shape.",
+      "remarks": "Reference data, so a class (decision D4). Also the declared payload of <see cref=\"ReferenceGroup.GetFilingFileAsync\"/>, where decision D16 verifies the shape; that route serves the file itself rather than this object, so <see cref=\"ReferenceGroup.DownloadFilingFileAsync\"/> is the method that retrieves one (decision D25).",
       "schema": { "operationId": "ListFilingFiles", "pointer": "results/items" },
       "properties": {
         "id":          { "name": "Id" },
@@ -1630,7 +1630,7 @@
       "group": "Reference",
       "method": "GetFilingFile",
       "summary": "Retrieves the metadata object the description declares for one file within an SEC filing.",
-      "remarks": "Generated as the description declares it (decision D21). The service serves the file's own content at this route, <c>text/html</c> for a filing document, rather than the declared JSON object, so on 2026-09-03 this method threw a <see cref=\"MassiveApiException\"/> whose inner exception is the deserialization failure; that flips the day the service or the description moves.",
+      "remarks": "Generated as the description declares it (decision D21). The service serves the file's own content at this route, <c>text/html</c> for a filing document, rather than the declared JSON object, so on 2026-09-03 this method threw a <see cref=\"MassiveApiException\"/> whose inner exception is the deserialization failure; that flips the day the service or the description moves. Use <see cref=\"DownloadFilingFileAsync\"/> to retrieve the file (decision D25).",
       "result": { "kind": "object", "model": "FilingFile" },
       "parameters": {
         "filing_id": { "name": "filingId" },
