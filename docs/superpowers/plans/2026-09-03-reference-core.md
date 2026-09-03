@@ -28,7 +28,7 @@ Copied from `CLAUDE.md` and the spec. Every task inherits these.
 - **Spec D-R2** — `Spec.Shape` and `Spec.Collect` read a `oneOf` with exactly one branch as that branch. A `oneOf` whose branches are all scalars stays a scalar, as it always has (the news parameters declare one). A `oneOf` with more than one branch of which any is an object is refused.
 - **Spec D-R5** — `/vX/reference/ipos` is `ListIposAsync` / `EnumerateIposAsync`; `/v1/reference/ipos` is `ListIposV1Async` / `EnumerateIposV1Async`.
 - **Spec D-R6** — `asset_class` and `market` rows name `MarketType`; `order` rows name `SortOrder`; `contract_type` names the new `ContractType { Call = 0, Put = 1 }`, rendered `call` / `put`. Every other enum parameter stays `string`.
-- **Spec D-R7** — Models are `ReferenceDividend`, `ReferenceSplit`, `Exchange`, `Ipo`, `IpoV1`, `Ticker`, `TickerDetails`, `CompanyAddress`, `Branding`. All `partial record` classes; no `kind: struct` anywhere in this plan.
+- **Spec D-R7** — Models are `ReferenceDividend`, `ReferenceSplit`, `Exchange`, `Ipo`, `IpoV1`, `TickerSummary` (renamed from `Ticker` by the Task 3 ruling: C# forbids a `Ticker` member on a type named `Ticker`, CS0542), `TickerDetails`, `CompanyAddress`, `Branding`. All `partial record` classes; no `kind: struct` anywhere in this plan.
 - **Spec D-R9** — Bare-string dates whose example shows `yyyy-MM-dd` bind `LocalDate` from the map: `list_date`, `expiration_date`, `as_of`, the four v3 dividend dates, `execution_date`, `settlement_date`, and short volume's `date`.
 - **Spec D-R10** — `TickerEvent.event_type` is typed `string?` in the map. `IpoV1`'s three dates stay the `long?` the schema gives them, named with an `Epoch` suffix, no partial. The three `"request_id": 1` examples become `"1"` in their fixtures, commented. `MarketStatus.serverTime` is typed `Instant?`.
 - **Spec D-R12** — Fixtures are the published example verbatim except as D-R10 says. `ReferenceTickerTypes` and `ReferenceExchanges` are live captures from 2026-09-03, reviewed, embedded in this plan.
@@ -469,7 +469,7 @@ Claude-Session: https://claude.ai/code/session_01GQnnMUgFsvPrAq2DXpt6kB"
 
 **Interfaces:**
 - Consumes: the `ListNews` endpoint row and the `NewsArticle` / `NewsPublisher` model rows as the pattern for a paginated list with nested models; `MarketType` and `SortOrder` as map types; `LocalDate` as a map type on a bare-string date (D-R9).
-- Produces: `client.Reference.ListTickersAsync(RangeFilter<string>? ticker = null, string? type = null, MarketType? market = null, string? exchange = null, string? cusip = null, string? cik = null, LocalDate? date = null, string? search = null, bool? active = null, SortOrder? order = null, int? limit = null, string? sort = null, CancellationToken cancellationToken = default)` returning `Task<MassivePage<Ticker>>`, with `EnumerateTickersAsync` returning `IAsyncEnumerable<Ticker>`; `client.Reference.GetTickerAsync(string ticker, LocalDate? date = null, CancellationToken cancellationToken = default)` returning `Task<TickerDetails>`; `client.Reference.ListTickerTypesAsync(MarketType? assetClass = null, string? locale = null, CancellationToken cancellationToken = default)` returning `Task<TickerType[]>`. Models: `sealed partial record Ticker` (`required string Ticker`, `required string Name`, `required string Market`, `required string Locale`, `string? PrimaryExchange`, `string? Type`, `bool? IsActive`, `string? CurrencySymbol`, `string? CurrencyName`, `string? BaseCurrencySymbol`, `string? BaseCurrencyName`, `string? Cik`, `string? CompositeFigi`, `string? ShareClassFigi`, `Instant? LastUpdatedUtc`, `Instant? DelistedUtc`); `sealed partial record TickerDetails` (the same identity members plus `CompanyAddress? Address`, `Branding? Branding`, `string? Description`, `string? HomepageUrl`, `LocalDate? ListDate`, `double? MarketCap`, `string? PhoneNumber`, `double? RoundLot`, `double? ShareClassSharesOutstanding`, `string? SicCode`, `string? SicDescription`, `string? TickerRoot`, `string? TickerSuffix`, `double? TotalEmployees`, `double? WeightedSharesOutstanding`, with `bool IsActive` and `required string CurrencyName`); `sealed partial record CompanyAddress` (`Address1`, `Address2`, `City`, `State`, `PostalCode`, all `string?`); `sealed partial record Branding` (`string? LogoUrl`, `string? IconUrl`); `sealed partial record TickerType` (`required string Code`, `required string Description`, `required string AssetClass`, `required string Locale`). No partials. Tasks 10 and 11 call `ListTickersAsync`; Task 11 calls the other two.
+- Produces: `client.Reference.ListTickersAsync(RangeFilter<string>? ticker = null, string? type = null, MarketType? market = null, string? exchange = null, string? cusip = null, string? cik = null, LocalDate? date = null, string? search = null, bool? active = null, SortOrder? order = null, int? limit = null, string? sort = null, CancellationToken cancellationToken = default)` returning `Task<MassivePage<TickerSummary>>`, with `EnumerateTickersAsync` returning `IAsyncEnumerable<TickerSummary>`; `client.Reference.GetTickerAsync(string ticker, LocalDate? date = null, CancellationToken cancellationToken = default)` returning `Task<TickerDetails>`; `client.Reference.ListTickerTypesAsync(MarketType? assetClass = null, string? locale = null, CancellationToken cancellationToken = default)` returning `Task<TickerType[]>`. Models: `sealed partial record TickerSummary` (`required string Ticker`, `required string Name`, `required string Market`, `required string Locale`, `string? PrimaryExchange`, `string? Type`, `bool? IsActive`, `string? CurrencySymbol`, `string? CurrencyName`, `string? BaseCurrencySymbol`, `string? BaseCurrencyName`, `string? Cik`, `string? CompositeFigi`, `string? ShareClassFigi`, `Instant? LastUpdatedUtc`, `Instant? DelistedUtc`); `sealed partial record TickerDetails` (the same identity members plus `CompanyAddress? Address`, `Branding? Branding`, `string? Description`, `string? HomepageUrl`, `LocalDate? ListDate`, `double? MarketCap`, `string? PhoneNumber`, `double? RoundLot`, `double? ShareClassSharesOutstanding`, `string? SicCode`, `string? SicDescription`, `string? TickerRoot`, `string? TickerSuffix`, `double? TotalEmployees`, `double? WeightedSharesOutstanding`, with `bool IsActive` and `required string CurrencyName`); `sealed partial record CompanyAddress` (`Address1`, `Address2`, `City`, `State`, `PostalCode`, all `string?`); `sealed partial record Branding` (`string? LogoUrl`, `string? IconUrl`); `sealed partial record TickerType` (`required string Code`, `required string Description`, `required string AssetClass`, `required string Locale`). No partials. Tasks 10 and 11 call `ListTickersAsync`; Task 11 calls the other two.
 
 - [ ] **Step 1: Add the fixtures**
 
@@ -697,7 +697,7 @@ public sealed class ReferenceTickersTests
         StubHandler handler = new(Fixtures.ReferenceTickers);
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
 
-        MassivePage<Ticker> page;
+        MassivePage<TickerSummary> page;
 
         using (client)
         using (transport)
@@ -705,7 +705,7 @@ public sealed class ReferenceTickersTests
             page = await client.Reference.ListTickersAsync(cancellationToken: Ct);
         }
 
-        Ticker ticker = Assert.Single(page.Results);
+        TickerSummary ticker = Assert.Single(page.Results);
         Assert.Equal("A", ticker.Ticker);
         Assert.Equal("Agilent Technologies Inc.", ticker.Name);
         Assert.Equal("stocks", ticker.Market);
@@ -735,7 +735,7 @@ public sealed class ReferenceTickersTests
         using (client)
         using (transport)
         {
-            await foreach (Ticker ticker in client.Reference.EnumerateTickersAsync(market: MarketType.Stocks, cancellationToken: Ct))
+            await foreach (TickerSummary ticker in client.Reference.EnumerateTickersAsync(market: MarketType.Stocks, cancellationToken: Ct))
             {
                 tickers.Add(ticker.Ticker);
             }
@@ -908,14 +908,14 @@ In `tests/MassiveDotNet.Rest.Tests/EndpointCoverageTests.cs`, raise the baseline
 - [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `dotnet test tests/MassiveDotNet.Rest.Tests --filter "FullyQualifiedName~ReferenceTickers|FullyQualifiedName~ReferenceTickerDetails"`
-Expected: the build fails with CS1061 (`ReferenceGroup` has no `ListTickersAsync`) and CS0246 for `Ticker`, `TickerDetails`, and `TickerType`.
+Expected: the build fails with CS1061 (`ReferenceGroup` has no `ListTickersAsync`) and CS0246 for `TickerSummary`, `TickerDetails`, and `TickerType`.
 
 - [ ] **Step 4: Add the model rows**
 
 In `specs/endpoints.map.json`, append inside the `models` object after the `DevTrade` row (add a comma after its closing brace):
 
 ```json
-    "Ticker": {
+    "TickerSummary": {
       "summary": "One row of the ticker list: the symbol, its name, market, locale, and primary exchange, and the identifiers that tie it to other reference data.",
       "remarks": "Reference data, so a class rather than a struct (decision D4), and the model the constitution's own example names. <see cref=\"TickerDetails\"/> is the same identity with the company profile added; the two are separate models because the details carry twelve properties the list does not (decision D16). Both timestamps are RFC 3339 strings read by the <see cref=\"NodaTime.Instant\"/> converter.",
       "schema": { "operationId": "ListTickers", "pointer": "results/items" },
@@ -1020,7 +1020,7 @@ In `specs/endpoints.map.json`, append inside the `endpoints` array after the `ge
       "method": "ListTickers",
       "summary": "Retrieves the tickers the platform supports across every asset class, with each one's name, market, and identifiers.",
       "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"ticker\"/> takes a plain symbol or a lexical range; <paramref name=\"market\"/> is a <see cref=\"MarketType\"/>; <paramref name=\"type\"/> takes a code from <see cref=\"ListTickerTypesAsync\"/>, whose set that operation owns. <paramref name=\"date\"/> asks for the tickers as they stood on a calendar date.",
-      "result": { "kind": "array", "model": "Ticker", "property": "results" },
+      "result": { "kind": "array", "model": "TickerSummary", "property": "results" },
       "parameters": {
         "ticker":   { "name": "ticker" },
         "type":     { "name": "type" },
@@ -1083,7 +1083,8 @@ Expected: no diff.
 git add specs/endpoints.map.json src/MassiveDotNet.Rest/Generated tests/MassiveDotNet.Rest.Tests/Fixtures.cs tests/MassiveDotNet.Rest.Tests/ReferenceTickersTests.cs tests/MassiveDotNet.Rest.Tests/ReferenceTickerDetailsTests.cs tests/MassiveDotNet.Rest.Tests/EndpointCoverageTests.cs
 git commit -m "feat: map the tickers list, ticker details, and ticker types
 
-Ticker and TickerDetails follow D4's own example; the details' list_date
+TickerSummary and TickerDetails follow D4's own example (the list item
+cannot be named Ticker: C# forbids a member named after its type, CS0542); the details' list_date
 binds LocalDate from the map (D-R9). Ticker types has no published JSON
 example, so its fixture is a reviewed live capture (D-R12). Coverage
 reaches 26.
@@ -3693,11 +3694,11 @@ if (status.Market != "extended-hours" || status.Exchanges?.Otc != "closed" || st
 
 Console.WriteLine("\ntickers, for the stocks market:");
 
-MassivePage<Ticker> tickers = await client.Reference.ListTickersAsync(market: MarketType.Stocks, active: true, limit: 1);
+MassivePage<TickerSummary> tickers = await client.Reference.ListTickersAsync(market: MarketType.Stocks, active: true, limit: 1);
 
 Console.WriteLine($"request : {handler.LastRequestUri}");
 
-foreach (Ticker ticker in tickers.Results)
+foreach (TickerSummary ticker in tickers.Results)
 {
     Console.WriteLine($"  {ticker.Ticker,-6} {ticker.Name}  updated {(ticker.LastUpdatedUtc is { } updated ? InstantPattern.ExtendedIso.Format(updated) : "never")}");
 }
@@ -3961,7 +3962,7 @@ public sealed class ReferenceTickersLiveTests : LiveApiTest
         // skipped symbol across the seam is what an incorrectly rebuilt cursor looks like.
         List<string> tickers = [];
 
-        await foreach (Ticker ticker in Client.Reference.EnumerateTickersAsync(
+        await foreach (TickerSummary ticker in Client.Reference.EnumerateTickersAsync(
             market: MarketType.Stocks,
             active: true,
             order: SortOrder.Ascending,

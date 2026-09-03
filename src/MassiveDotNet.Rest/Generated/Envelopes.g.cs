@@ -466,3 +466,326 @@ internal sealed class GetStocksDevTradesTickerResponse : IPagedEnvelope<DevTrade
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v3/reference/tickers.</summary>
+internal sealed class ListTickersResponse : IPagedEnvelope<TickerSummary>
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>
+    /// An array of tickers that match your query. Note: Although you can query by CUSIP, due to legal
+    /// reasons we do not return the CUSIP in the response.
+    /// </summary>
+    [JsonPropertyName("results")]
+    public TickerSummary[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/tickers/{ticker}.</summary>
+internal sealed class GetTickerResponse
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Ticker with details.</summary>
+    [JsonPropertyName("results")]
+    public TickerDetails? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/tickers/types.</summary>
+internal sealed class ListTickerTypesResponse
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>A request ID assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public TickerType[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /vX/reference/tickers/{id}/events.</summary>
+internal sealed class GetEventsResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Contains the requested event data for the specified ticker.</summary>
+    [JsonPropertyName("results")]
+    public TickerEvents? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/related-companies/{ticker}.</summary>
+internal sealed class GetRelatedCompaniesResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public RelatedCompany[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>The ticker being queried.</summary>
+    [JsonPropertyName("ticker")]
+    public string? Ticker { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/conditions.</summary>
+internal sealed class ListConditionsResponse : IPagedEnvelope<Condition>
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request ID assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of conditions that match your query.</summary>
+    [JsonPropertyName("results")]
+    public Condition[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/exchanges.</summary>
+internal sealed class ListExchangesResponse
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>A request ID assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public Exchange[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/dividends.</summary>
+internal sealed class ListDividendsResponse : IPagedEnvelope<ReferenceDividend>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public ReferenceDividend[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/splits.</summary>
+internal sealed class ListStockSplitsResponse : IPagedEnvelope<ReferenceSplit>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public ReferenceSplit[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/options/contracts.</summary>
+internal sealed class ListOptionsContractsResponse : IPagedEnvelope<OptionsContract>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public OptionsContract[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/options/contracts/{options_ticker}.</summary>
+internal sealed class GetOptionsContractResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Contains the requested data for the specified options contract.</summary>
+    [JsonPropertyName("results")]
+    public OptionsContract? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /vX/reference/ipos.</summary>
+internal sealed class ListIPOsResponse : IPagedEnvelope<Ipo>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public Ipo[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/reference/ipos.</summary>
+internal sealed class GetV1ReferenceIposResponse : IPagedEnvelope<IpoV1>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public IpoV1[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/v1/short-interest.</summary>
+internal sealed class GetStocksV1ShortInterestResponse : IPagedEnvelope<ShortInterest>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public ShortInterest[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/v1/short-volume.</summary>
+internal sealed class GetStocksV1ShortVolumeResponse : IPagedEnvelope<ShortVolume>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public ShortVolume[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/vX/float.</summary>
+internal sealed class GetStocksVXFloatResponse : IPagedEnvelope<ShareFloat>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public ShareFloat[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

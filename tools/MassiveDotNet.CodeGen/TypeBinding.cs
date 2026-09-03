@@ -88,6 +88,7 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
         [nameof(MarketType)] = WireValues<MarketType>(value => value.ToWireValue()),
         [nameof(SeriesType)] = WireValues<SeriesType>(value => value.ToWireValue()),
         [nameof(SnapshotDirection)] = WireValues<SnapshotDirection>(value => value.ToWireValue()),
+        [nameof(ContractType)] = WireValues<ContractType>(value => value.ToWireValue()),
     };
 
     private static string[] WireValues<T>(Func<T, string> wire)

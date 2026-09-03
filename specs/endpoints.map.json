@@ -523,6 +523,419 @@
         "correction":            { "name": "CorrectionIndicator" },
         "tape":                  { "name": "Tape" }
       }
+    },
+
+    "TickerSummary": {
+      "summary": "One row of the ticker list: the symbol, its name, market, locale, and primary exchange, and the identifiers that tie it to other reference data.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4), following D4's own reference-type example but named <c>TickerSummary</c> rather than <c>Ticker</c> because C# forbids a member named after its enclosing type (CS0542), and <c>Ticker</c> is the SDK-wide property name for the wire field. <see cref=\"TickerDetails\"/> is the same identity with the company profile added; the two are separate models because the details carry twelve properties the list does not (decision D16). Both timestamps are RFC 3339 strings read by the <see cref=\"NodaTime.Instant\"/> converter.",
+      "schema": { "operationId": "ListTickers", "pointer": "results/items" },
+      "properties": {
+        "ticker":               { "name": "Ticker" },
+        "name":                 { "name": "Name" },
+        "market":               { "name": "Market" },
+        "locale":               { "name": "Locale" },
+        "primary_exchange":     { "name": "PrimaryExchange" },
+        "type":                 { "name": "Type", "summary": "The ticker type code; <c>ListTickerTypesAsync</c> lists the codes." },
+        "active":               { "name": "IsActive" },
+        "currency_symbol":      { "name": "CurrencySymbol" },
+        "currency_name":        { "name": "CurrencyName" },
+        "base_currency_symbol": { "name": "BaseCurrencySymbol" },
+        "base_currency_name":   { "name": "BaseCurrencyName" },
+        "cik":                  { "name": "Cik" },
+        "composite_figi":       { "name": "CompositeFigi" },
+        "share_class_figi":     { "name": "ShareClassFigi" },
+        "last_updated_utc":     { "name": "LastUpdatedUtc" },
+        "delisted_utc":         { "name": "DelistedUtc" }
+      }
+    },
+
+    "TickerDetails": {
+      "summary": "Everything the platform knows about one ticker: its identity, the company's profile and address, its branding, and its share counts.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"ListDate\"/> is a calendar date the description types as a bare string; the map binds it to <see cref=\"NodaTime.LocalDate\"/> because the published example shows the ISO form (D-R9). The share counts and <see cref=\"TotalEmployees\"/> are doubles because the description declares them numbers; safety over ergonomics is the design goals' order.",
+      "schema": { "operationId": "GetTicker", "pointer": "results" },
+      "properties": {
+        "ticker":                         { "name": "Ticker" },
+        "name":                           { "name": "Name" },
+        "market":                         { "name": "Market" },
+        "locale":                         { "name": "Locale" },
+        "primary_exchange":               { "name": "PrimaryExchange" },
+        "type":                           { "name": "Type", "summary": "The ticker type code; <c>ListTickerTypesAsync</c> lists the codes." },
+        "active":                         { "name": "IsActive" },
+        "currency_name":                  { "name": "CurrencyName" },
+        "cik":                            { "name": "Cik" },
+        "composite_figi":                 { "name": "CompositeFigi" },
+        "share_class_figi":               { "name": "ShareClassFigi" },
+        "market_cap":                     { "name": "MarketCap" },
+        "phone_number":                   { "name": "PhoneNumber" },
+        "address":                        { "name": "Address", "model": "CompanyAddress" },
+        "description":                    { "name": "Description" },
+        "sic_code":                       { "name": "SicCode" },
+        "sic_description":                { "name": "SicDescription" },
+        "ticker_root":                    { "name": "TickerRoot" },
+        "ticker_suffix":                  { "name": "TickerSuffix" },
+        "homepage_url":                   { "name": "HomepageUrl" },
+        "total_employees":                { "name": "TotalEmployees" },
+        "list_date":                      { "name": "ListDate", "type": "LocalDate?", "summary": "The date the ticker was first listed. The description types this a bare string; the published example carries an ISO calendar date (D-R9)." },
+        "branding":                       { "name": "Branding", "model": "Branding" },
+        "share_class_shares_outstanding": { "name": "ShareClassSharesOutstanding" },
+        "weighted_shares_outstanding":    { "name": "WeightedSharesOutstanding" },
+        "round_lot":                      { "name": "RoundLot" },
+        "delisted_utc":                   { "name": "DelistedUtc" }
+      }
+    },
+
+    "CompanyAddress": {
+      "summary": "A company's headquarters address, as the ticker details report it.",
+      "schema": { "operationId": "GetTicker", "pointer": "results/address" },
+      "properties": {
+        "address1":    { "name": "Address1" },
+        "address2":    { "name": "Address2" },
+        "city":        { "name": "City" },
+        "state":       { "name": "State" },
+        "postal_code": { "name": "PostalCode" }
+      }
+    },
+
+    "Branding": {
+      "summary": "The URLs of a company's logo and icon, as the ticker details report them.",
+      "remarks": "The URLs point at a branding route that requires the same API key as every other request; the SDK does not fetch them.",
+      "schema": { "operationId": "GetTicker", "pointer": "results/branding" },
+      "properties": {
+        "logo_url": { "name": "LogoUrl", "summary": "A link to this ticker's company's logo. Note that you must provide an API key when accessing this URL." },
+        "icon_url": { "name": "IconUrl", "summary": "A link to this ticker's company's icon. Icon's are generally smaller, square images that represent the company at a glance. Note that you must provide an API key when accessing this URL." }
+      }
+    },
+
+    "TickerType": {
+      "summary": "One ticker type the platform recognises: its code, a description, and the asset class and locale it applies to.",
+      "remarks": "The codes are what the tickers list's <c>type</c> parameter accepts, which is why that parameter is a string rather than an enum (D-R6): this operation owns the set.",
+      "schema": { "operationId": "ListTickerTypes", "pointer": "results/items" },
+      "properties": {
+        "code":        { "name": "Code" },
+        "description": { "name": "Description" },
+        "asset_class": { "name": "AssetClass" },
+        "locale":      { "name": "Locale" }
+      }
+    },
+
+    "TickerEvents": {
+      "summary": "The history of one asset's identifiers: its current name and the events, such as ticker changes, that led to it.",
+      "remarks": "A singular result (decision D17). Its items are declared behind a one-branch <c>oneOf</c>, which the generator reads as the branch (decision D24).",
+      "schema": { "operationId": "GetEvents", "pointer": "results" },
+      "properties": {
+        "name":   { "name": "Name" },
+        "events": { "name": "Events", "model": "TickerEvent" }
+      }
+    },
+
+    "TickerEvent": {
+      "summary": "One event in an asset's history: the date it took place and, for a ticker change, the symbol it changed to.",
+      "remarks": "The description declares a required <c>event_type</c>; the published example and the live wire both spell it <c>type</c>, so <see cref=\"EventType\"/> is typed nullable and reads as absent until the description or the service moves (D-R10). Nothing here is renamed: the map cannot rename a wire key.",
+      "schema": { "operationId": "GetEvents", "pointer": "results/events/items" },
+      "properties": {
+        "date":          { "name": "Date" },
+        "event_type":    { "name": "EventType", "type": "string?", "summary": "The type of the event. The description requires this key, but the wire spells it <c>type</c>, so it is null in practice (D-R10); <see cref=\"TickerChange\"/> being set is the working discriminator." },
+        "ticker_change": { "name": "TickerChange", "model": "TickerChange" }
+      }
+    },
+
+    "TickerChange": {
+      "summary": "The symbol an asset took on in a ticker change event.",
+      "schema": { "operationId": "GetEvents", "pointer": "results/events/items/ticker_change" },
+      "properties": {
+        "ticker": { "name": "Ticker" }
+      }
+    },
+
+    "RelatedCompany": {
+      "summary": "A company related to the one queried, by news and returns; only its ticker is reported.",
+      "schema": { "operationId": "GetRelatedCompanies", "pointer": "results/items" },
+      "properties": {
+        "ticker": { "name": "Ticker" }
+      }
+    },
+
+    "MarketStatus": {
+      "summary": "The trading status of the markets right now: the overall state, each exchange's, the currency markets', and the index groups', with the server's own clock.",
+      "remarks": "The response body is the payload (decision D17). <see cref=\"ServerTime\"/> is an RFC 3339 timestamp carrying the server's UTC offset, which the description types as a bare string; the map binds it to <see cref=\"NodaTime.Instant\"/> and the converter applies the offset (D-R10).",
+      "schema": { "operationId": "GetMarketStatus" },
+      "properties": {
+        "market":        { "name": "Market" },
+        "earlyHours":    { "name": "IsEarlyHours" },
+        "afterHours":    { "name": "IsAfterHours" },
+        "serverTime":    { "name": "ServerTime", "type": "Instant?", "summary": "The server's current time. The description types this a bare string; the wire carries an RFC 3339 timestamp with the server's UTC offset (D-R10)." },
+        "exchanges":     { "name": "Exchanges", "model": "MarketStatusExchanges" },
+        "currencies":    { "name": "Currencies", "model": "MarketStatusCurrencies" },
+        "indicesGroups": { "name": "IndexGroups", "model": "MarketStatusIndexGroups" }
+      }
+    },
+
+    "MarketStatusExchanges": {
+      "summary": "The status of each US equities venue in a market status: NYSE, Nasdaq, and OTC.",
+      "schema": { "operationId": "GetMarketStatus", "pointer": "exchanges" },
+      "properties": {
+        "nyse":   { "name": "Nyse" },
+        "nasdaq": { "name": "Nasdaq" },
+        "otc":    { "name": "Otc" }
+      }
+    },
+
+    "MarketStatusCurrencies": {
+      "summary": "The status of the currency markets in a market status: forex and crypto.",
+      "schema": { "operationId": "GetMarketStatus", "pointer": "currencies" },
+      "properties": {
+        "fx":     { "name": "Fx" },
+        "crypto": { "name": "Crypto" }
+      }
+    },
+
+    "MarketStatusIndexGroups": {
+      "summary": "The status of each index provider's group in a market status.",
+      "remarks": "The published example omits this object; the live service sends it. Each member is the provider's status string.",
+      "schema": { "operationId": "GetMarketStatus", "pointer": "indicesGroups" },
+      "properties": {
+        "s_and_p":          { "name": "SAndP" },
+        "societe_generale": { "name": "SocieteGenerale" },
+        "msci":             { "name": "Msci" },
+        "ftse_russell":     { "name": "FtseRussell" },
+        "mstar":            { "name": "Mstar" },
+        "mstarc":           { "name": "Mstarc" },
+        "cccy":             { "name": "Cccy" },
+        "cgi":              { "name": "Cgi" },
+        "nasdaq":           { "name": "Nasdaq" },
+        "dow_jones":        { "name": "DowJones" }
+      }
+    },
+
+    "Condition": {
+      "summary": "A trade or quote condition code: its identifier, name, and type, the SIPs that carry it, and how it affects aggregates.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"SipMapping\"/> names the code each SIP uses for this condition; <see cref=\"UpdateRules\"/> says whether a trade carrying it updates the high, low, open, close, and volume of consolidated and per-venue aggregates.",
+      "schema": { "operationId": "ListConditions", "pointer": "results/items" },
+      "properties": {
+        "id":           { "name": "Id" },
+        "type":         { "name": "Type" },
+        "name":         { "name": "Name" },
+        "asset_class":  { "name": "AssetClass" },
+        "abbreviation": { "name": "Abbreviation" },
+        "description":  { "name": "Description" },
+        "data_types":   { "name": "DataTypes" },
+        "exchange":     { "name": "Exchange" },
+        "legacy":       { "name": "IsLegacy" },
+        "sip_mapping":  { "name": "SipMapping", "model": "SipMapping" },
+        "update_rules": { "name": "UpdateRules", "model": "ConditionUpdateRules" }
+      }
+    },
+
+    "SipMapping": {
+      "summary": "The code each securities information processor uses for one condition; a SIP that does not carry the condition is null.",
+      "schema": { "operationId": "ListConditions", "pointer": "results/items/sip_mapping" },
+      "properties": {
+        "CTA":  { "name": "Cta" },
+        "UTP":  { "name": "Utp" },
+        "OPRA": { "name": "Opra" }
+      }
+    },
+
+    "ConditionUpdateRules": {
+      "summary": "How a condition affects aggregates, for the consolidated tape and for a single market center.",
+      "remarks": "Both halves are the same shape, so one model, <see cref=\"UpdateRule\"/>, is declared from the consolidated half and verified by the generator at the other (decision D16).",
+      "schema": { "operationId": "ListConditions", "pointer": "results/items/update_rules" },
+      "properties": {
+        "consolidated":  { "name": "Consolidated", "model": "UpdateRule" },
+        "market_center": { "name": "MarketCenter", "model": "UpdateRule" }
+      }
+    },
+
+    "UpdateRule": {
+      "summary": "Whether a trade carrying a condition updates an aggregate's high and low, open and close, and volume.",
+      "schema": { "operationId": "ListConditions", "pointer": "results/items/update_rules/consolidated" },
+      "properties": {
+        "updates_high_low":   { "name": "UpdatesHighLow" },
+        "updates_open_close": { "name": "UpdatesOpenClose" },
+        "updates_volume":     { "name": "UpdatesVolume" }
+      }
+    },
+
+    "Exchange": {
+      "summary": "An exchange, trade reporting facility, or SIP for any asset class, with its MIC codes and identifiers.",
+      "remarks": "Reference data, so a class (decision D4). Unprefixed because it spans every asset class; <see cref=\"StockExchange\"/>, from the stocks-only route, lacks <see cref=\"AssetClass\"/> and so is a separate model (decision D16, D-R7).",
+      "schema": { "operationId": "ListExchanges", "pointer": "results/items" },
+      "properties": {
+        "id":             { "name": "Id" },
+        "type":           { "name": "Type" },
+        "asset_class":    { "name": "AssetClass" },
+        "locale":         { "name": "Locale" },
+        "name":           { "name": "Name" },
+        "acronym":        { "name": "Acronym" },
+        "mic":            { "name": "Mic" },
+        "operating_mic":  { "name": "OperatingMic" },
+        "participant_id": { "name": "ParticipantId" },
+        "url":            { "name": "Url" }
+      }
+    },
+
+    "ReferenceDividend": {
+      "summary": "A cash dividend from the v3 reference route: the ticker, the four dates that govern it, the amount, its type, and how often it pays.",
+      "remarks": "Reference data, so a class (decision D4). Prefixed because the stocks/v1 route's <see cref=\"Dividend\"/> carries two properties this one lacks, so the two cannot share a model (decision D16, D-R7). The four dates are bare strings in the description; the published example carries ISO calendar dates, so the map binds them to <see cref=\"NodaTime.LocalDate\"/> (D-R9).",
+      "schema": { "operationId": "ListDividends", "pointer": "results/items" },
+      "properties": {
+        "id":               { "name": "Id" },
+        "ticker":           { "name": "Ticker" },
+        "cash_amount":      { "name": "CashAmount" },
+        "currency":         { "name": "Currency" },
+        "dividend_type":    { "name": "DividendType" },
+        "frequency":        { "name": "Frequency" },
+        "declaration_date": { "name": "DeclarationDate", "type": "LocalDate?", "summary": "The date the dividend was announced. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "ex_dividend_date": { "name": "ExDividendDate", "type": "LocalDate", "summary": "The first trading day on which a buyer is not entitled to the dividend. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "record_date":      { "name": "RecordDate", "type": "LocalDate?", "summary": "The date a holder must be on the register to receive the dividend. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "pay_date":         { "name": "PayDate", "type": "LocalDate?", "summary": "The date the dividend is paid. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." }
+      }
+    },
+
+    "ReferenceSplit": {
+      "summary": "A stock split from the v3 reference route: the ticker, the execution date, and the ratio.",
+      "remarks": "Reference data, so a class (decision D4). Prefixed because the stocks/v1 route's <see cref=\"Split\"/> carries two properties this one lacks (decision D16, D-R7). <see cref=\"ExecutionDate\"/> is a bare string in the description and an ISO calendar date on the wire, hence <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "schema": { "operationId": "ListStockSplits", "pointer": "results/items" },
+      "properties": {
+        "id":             { "name": "Id" },
+        "ticker":         { "name": "Ticker" },
+        "execution_date": { "name": "ExecutionDate", "type": "LocalDate", "summary": "The date the split took effect. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "split_from":     { "name": "SplitFrom" },
+        "split_to":       { "name": "SplitTo" }
+      }
+    },
+
+    "OptionsContract": {
+      "summary": "An options contract's terms: its ticker and underlying, whether it is a call or a put, its style, expiration, strike, and share count, and any additional underlyings from a corporate action.",
+      "remarks": "Reference data, so a class (decision D4). Declared from the list and reused as the payload of <see cref=\"ReferenceGroup.GetOptionsContractAsync\"/>, where the generator verifies the shape (decision D16). <see cref=\"ContractType\"/> is the wire string, <c>call</c> or <c>put</c>; the request-side enum <see cref=\"MassiveDotNet.ContractType\"/> is for filtering. <see cref=\"ExpirationDate\"/> is a bare string in the description and an ISO calendar date on the wire (D-R9).",
+      "schema": { "operationId": "ListOptionsContracts", "pointer": "results/items" },
+      "properties": {
+        "ticker":                 { "name": "Ticker" },
+        "underlying_ticker":      { "name": "UnderlyingTicker" },
+        "contract_type":          { "name": "ContractType" },
+        "exercise_style":         { "name": "ExerciseStyle" },
+        "expiration_date":        { "name": "ExpirationDate", "type": "LocalDate?", "summary": "The contract's expiration date. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "strike_price":           { "name": "StrikePrice" },
+        "shares_per_contract":    { "name": "SharesPerContract" },
+        "primary_exchange":       { "name": "PrimaryExchange" },
+        "cfi":                    { "name": "Cfi" },
+        "correction":             { "name": "Correction" },
+        "additional_underlyings": { "name": "AdditionalUnderlyings", "model": "AdditionalUnderlying" }
+      }
+    },
+
+    "AdditionalUnderlying": {
+      "summary": "An extra deliverable on an adjusted options contract, such as shares of a spun-off company or a cash amount, and how much of it.",
+      "schema": { "operationId": "ListOptionsContracts", "pointer": "results/items/additional_underlyings/items" },
+      "properties": {
+        "underlying": { "name": "Underlying" },
+        "type":       { "name": "Type" },
+        "amount":     { "name": "Amount" }
+      }
+    },
+
+    "Ipo": {
+      "summary": "An initial public offering from the vX reference route: the issuer, the security, its status, the offer's price and size, and the dates that mark it.",
+      "remarks": "Reference data, so a class (decision D4). The three dates carry <c>format: date</c> and bind <see cref=\"NodaTime.LocalDate\"/> on their own. <see cref=\"IpoV1\"/> is the same offering from the <c>v1</c> route, whose description types the dates as integers; the two are separate models because their wire types differ (D-R7). The route is experimental and this model is the served one (D-R5).",
+      "schema": { "operationId": "ListIPOs", "pointer": "results/items" },
+      "properties": {
+        "ticker":               { "name": "Ticker" },
+        "issuer_name":          { "name": "IssuerName" },
+        "ipo_status":           { "name": "IpoStatus" },
+        "security_type":        { "name": "SecurityType" },
+        "security_description": { "name": "SecurityDescription" },
+        "isin":                 { "name": "Isin" },
+        "us_code":              { "name": "UsCode" },
+        "currency_code":        { "name": "CurrencyCode" },
+        "primary_exchange":     { "name": "PrimaryExchange" },
+        "announced_date":       { "name": "AnnouncedDate" },
+        "listing_date":         { "name": "ListingDate" },
+        "last_updated":         { "name": "LastUpdated" },
+        "final_issue_price":    { "name": "FinalIssuePrice" },
+        "lowest_offer_price":   { "name": "LowestOfferPrice" },
+        "highest_offer_price":  { "name": "HighestOfferPrice" },
+        "min_shares_offered":   { "name": "MinSharesOffered" },
+        "max_shares_offered":   { "name": "MaxSharesOffered" },
+        "shares_outstanding":   { "name": "SharesOutstanding" },
+        "total_offer_size":     { "name": "TotalOfferSize" },
+        "lot_size":             { "name": "LotSize" }
+      }
+    },
+
+    "IpoV1": {
+      "summary": "An initial public offering from the v1 reference route: the same offering as <see cref=\"Ipo\"/>, with its dates as epoch integers and its share counts as integers.",
+      "remarks": "Reference data, so a class (decision D4). The description types the three dates as 64-bit integers and declares no unit; the route answered a plain-text 404 on 2026-09-03, so the wire cannot settle it. The model follows the description (decision D21) and offers no computed instant until it can (D-R10); the <c>Epoch</c> suffix says the value is a count, not a date. The route's own <c>listing_date</c> filter documents nanoseconds, which is what the fixture assumes.",
+      "schema": { "operationId": "get_v1_reference_ipos", "pointer": "results/items" },
+      "properties": {
+        "ticker":               { "name": "Ticker" },
+        "issuer_name":          { "name": "IssuerName" },
+        "ipo_status":           { "name": "IpoStatus" },
+        "security_type":        { "name": "SecurityType" },
+        "security_description": { "name": "SecurityDescription" },
+        "isin":                 { "name": "Isin" },
+        "us_code":              { "name": "UsCode" },
+        "currency_code":        { "name": "CurrencyCode" },
+        "primary_exchange":     { "name": "PrimaryExchange" },
+        "announced_date":       { "name": "AnnouncedDateEpoch", "summary": "The date the offering was announced, as an epoch count whose unit the description does not declare; its listing_date filter documents nanoseconds (D-R10)." },
+        "listing_date":         { "name": "ListingDateEpoch", "summary": "The first trading date, as an epoch count whose unit the description does not declare; its listing_date filter documents nanoseconds (D-R10)." },
+        "last_updated":         { "name": "LastUpdatedEpoch", "summary": "When the record was last updated, as an epoch count whose unit the description does not declare; its listing_date filter documents nanoseconds (D-R10)." },
+        "final_issue_price":    { "name": "FinalIssuePrice" },
+        "lowest_offer_price":   { "name": "LowestOfferPrice" },
+        "highest_offer_price":  { "name": "HighestOfferPrice" },
+        "min_shares_offered":   { "name": "MinSharesOffered" },
+        "max_shares_offered":   { "name": "MaxSharesOffered" },
+        "shares_outstanding":   { "name": "SharesOutstanding" },
+        "total_offer_size":     { "name": "TotalOfferSize" },
+        "lot_size":             { "name": "LotSize" }
+      }
+    },
+
+    "ShortInterest": {
+      "summary": "A short interest report for one stock on one settlement date: the shares held short, the average daily volume, and the days to cover.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"SharesShort\"/> is the wire's <c>short_interest</c>, renamed because a member may not share its type's name. <see cref=\"SettlementDate\"/> is a bare string in the description and an ISO calendar date on the wire (D-R9).",
+      "schema": { "operationId": "get_stocks_v1_short-interest", "pointer": "results/items" },
+      "properties": {
+        "ticker":           { "name": "Ticker" },
+        "settlement_date":  { "name": "SettlementDate", "type": "LocalDate", "summary": "The settlement date the report is as of. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "short_interest":   { "name": "SharesShort", "summary": "The number of shares held short as of the settlement date; the wire's <c>short_interest</c>." },
+        "avg_daily_volume": { "name": "AverageDailyVolume" },
+        "days_to_cover":    { "name": "DaysToCover" }
+      }
+    },
+
+    "ShortVolume": {
+      "summary": "A day's short sale volume for one stock: the totals, the ratio, and the count at each reporting venue.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"TotalShortVolume\"/> is the wire's <c>short_volume</c>, renamed because a member may not share its type's name and to sit beside <see cref=\"TotalVolume\"/>. <see cref=\"Date\"/> is a bare string in the description and an ISO calendar date on the wire (D-R9).",
+      "schema": { "operationId": "get_stocks_v1_short-volume", "pointer": "results/items" },
+      "properties": {
+        "ticker":                              { "name": "Ticker" },
+        "date":                                { "name": "Date", "type": "LocalDate", "summary": "The trading date the volumes are for. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "total_volume":                        { "name": "TotalVolume" },
+        "short_volume":                        { "name": "TotalShortVolume", "summary": "The total volume sold short across every venue; the wire's <c>short_volume</c>." },
+        "short_volume_ratio":                  { "name": "ShortVolumeRatio" },
+        "exempt_volume":                       { "name": "ExemptVolume" },
+        "non_exempt_volume":                   { "name": "NonExemptVolume" },
+        "adf_short_volume":                    { "name": "AdfShortVolume" },
+        "adf_short_volume_exempt":             { "name": "AdfShortVolumeExempt" },
+        "nasdaq_carteret_short_volume":        { "name": "NasdaqCarteretShortVolume" },
+        "nasdaq_carteret_short_volume_exempt": { "name": "NasdaqCarteretShortVolumeExempt" },
+        "nasdaq_chicago_short_volume":         { "name": "NasdaqChicagoShortVolume" },
+        "nasdaq_chicago_short_volume_exempt":  { "name": "NasdaqChicagoShortVolumeExempt" },
+        "nyse_short_volume":                   { "name": "NyseShortVolume" },
+        "nyse_short_volume_exempt":            { "name": "NyseShortVolumeExempt" }
+      }
+    },
+
+    "ShareFloat": {
+      "summary": "The free float of one stock as of a date: the shares available to trade and their share of the total outstanding.",
+      "remarks": "Reference data, so a class (decision D4). Named for the concept rather than <c>Float</c>, which would read as the numeric type.",
+      "schema": { "operationId": "get_stocks_vX_float", "pointer": "results/items" },
+      "properties": {
+        "ticker":             { "name": "Ticker" },
+        "effective_date":     { "name": "EffectiveDate" },
+        "free_float":         { "name": "FreeFloat" },
+        "free_float_percent": { "name": "FreeFloatPercent" }
+      }
     }
   },
 
@@ -856,6 +1269,258 @@
         "sip_timestamp": { "name": "sipTimestamp", "type": "DateOrNanoseconds" },
         "limit":         { "name": "limit" },
         "sort":          { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListTickers",
+      "group": "Reference",
+      "method": "ListTickers",
+      "summary": "Retrieves the tickers the platform supports across every asset class, with each one's name, market, and identifiers.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"ticker\"/> takes a plain symbol or a lexical range; <paramref name=\"market\"/> is a <see cref=\"MarketType\"/>; <paramref name=\"type\"/> takes a code from <see cref=\"ListTickerTypesAsync\"/>, whose set that operation owns. <paramref name=\"date\"/> asks for the tickers as they stood on a calendar date.",
+      "result": { "kind": "array", "model": "TickerSummary", "property": "results" },
+      "parameters": {
+        "ticker":   { "name": "ticker" },
+        "type":     { "name": "type" },
+        "market":   { "name": "market", "type": "MarketType" },
+        "exchange": { "name": "exchange" },
+        "cusip":    { "name": "cusip" },
+        "cik":      { "name": "cik" },
+        "date":     { "name": "date" },
+        "search":   { "name": "search" },
+        "active":   { "name": "active" },
+        "order":    { "name": "order", "type": "SortOrder" },
+        "limit":    { "name": "limit" },
+        "sort":     { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetTicker",
+      "group": "Reference",
+      "method": "GetTicker",
+      "summary": "Retrieves the details of one ticker: its identity, the company's profile, address, and branding, and its share counts.",
+      "remarks": "<paramref name=\"date\"/> asks for the ticker as it stood on a calendar date; the default is the most recent. A ticker the service does not know answers 404, which surfaces as a <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "TickerDetails", "property": "results" },
+      "parameters": {
+        "ticker": { "name": "ticker" },
+        "date":   { "name": "date" }
+      }
+    },
+    {
+      "operationId": "ListTickerTypes",
+      "group": "Reference",
+      "method": "ListTickerTypes",
+      "summary": "Retrieves the ticker types the platform recognises, optionally for one asset class and locale.",
+      "remarks": "The list is short and does not page. Its codes are what <see cref=\"ListTickersAsync\"/> accepts for its <c>type</c> parameter.",
+      "result": { "kind": "array", "model": "TickerType", "property": "results" },
+      "parameters": {
+        "asset_class": { "name": "assetClass", "type": "MarketType" },
+        "locale":      { "name": "locale" }
+      }
+    },
+    {
+      "operationId": "GetEvents",
+      "group": "Reference",
+      "method": "GetTickerEvents",
+      "summary": "Retrieves the identifier history of one asset: its current name and the ticker changes that led to it.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. <paramref name=\"id\"/> is a ticker, a CUSIP, or a composite FIGI. <paramref name=\"types\"/> is a comma-separated list of event types, of which the description names only <c>ticker_change</c>. The event rows' <see cref=\"TickerEvent.EventType\"/> reads as absent on today's wire (D-R10).",
+      "result": { "kind": "object", "model": "TickerEvents", "property": "results" },
+      "parameters": {
+        "id":    { "name": "id" },
+        "types": { "name": "types" }
+      }
+    },
+    {
+      "operationId": "GetRelatedCompanies",
+      "group": "Reference",
+      "method": "ListRelatedCompanies",
+      "summary": "Retrieves the tickers of companies related to the one given, as judged by news coverage and return correlation.",
+      "remarks": "The list does not page. Only the ticker of each related company is reported; <see cref=\"GetTickerAsync\"/> fetches the rest.",
+      "result": { "kind": "array", "model": "RelatedCompany", "property": "results" }
+    },
+    {
+      "operationId": "GetMarketStatus",
+      "group": "Reference",
+      "method": "GetMarketStatus",
+      "summary": "Retrieves the current trading status of the markets: overall, per exchange, for the currency markets, and for each index group.",
+      "remarks": "The body is the payload, with no envelope, so the response carries no request id (decision D17). Pair with <see cref=\"ListMarketHolidaysAsync\"/> for what is coming rather than what is now.",
+      "result": { "kind": "object", "model": "MarketStatus" }
+    },
+    {
+      "operationId": "ListConditions",
+      "group": "Reference",
+      "method": "ListConditions",
+      "summary": "Retrieves the trade and quote condition codes, with each one's SIP mappings and its effect on aggregates.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"assetClass\"/> is a <see cref=\"MarketType\"/>; the description declares four of its members here and the server rejects the rest. <paramref name=\"dataType\"/> is <c>trade</c>, <c>bbo</c>, or <c>nbbo</c>; <paramref name=\"sip\"/> is <c>CTA</c>, <c>UTP</c>, or <c>OPRA</c>.",
+      "result": { "kind": "array", "model": "Condition", "property": "results" },
+      "parameters": {
+        "asset_class": { "name": "assetClass", "type": "MarketType" },
+        "data_type":   { "name": "dataType" },
+        "id":          { "name": "id" },
+        "sip":         { "name": "sip" },
+        "order":       { "name": "order", "type": "SortOrder" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListExchanges",
+      "group": "Reference",
+      "method": "ListExchanges",
+      "summary": "Retrieves the exchanges, trade reporting facilities, and SIPs the platform knows, optionally for one asset class and locale.",
+      "remarks": "The list does not page. <paramref name=\"assetClass\"/> is a <see cref=\"MarketType\"/>; the description declares five of its members here and the server rejects the rest.",
+      "result": { "kind": "array", "model": "Exchange", "property": "results" },
+      "parameters": {
+        "asset_class": { "name": "assetClass", "type": "MarketType" },
+        "locale":      { "name": "locale" }
+      }
+    },
+    {
+      "operationId": "ListDividends",
+      "group": "Reference",
+      "method": "ListDividends",
+      "summary": "Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four dates that govern a dividend, by amount, and by type.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality or a <see cref=\"RangeFilter\"/> factory for a range. The date filters carry <c>format: date</c> in the description and bind <see cref=\"NodaTime.LocalDate\"/> on their own, while the response's date properties are bare strings the map retypes to <see cref=\"NodaTime.LocalDate\"/> (D-R9). <see cref=\"StocksGroup.ListDividendsAsync\"/> is the newer stocks route with a wider row; this one is kept because the description declares it.",
+      "result": { "kind": "array", "model": "ReferenceDividend", "property": "results" },
+      "parameters": {
+        "ticker":           { "name": "ticker" },
+        "ex_dividend_date": { "name": "exDividendDate" },
+        "record_date":      { "name": "recordDate" },
+        "declaration_date": { "name": "declarationDate" },
+        "pay_date":         { "name": "payDate" },
+        "frequency":        { "name": "frequency" },
+        "cash_amount":      { "name": "cashAmount" },
+        "dividend_type":    { "name": "dividendType" },
+        "order":            { "name": "order", "type": "SortOrder" },
+        "limit":            { "name": "limit" },
+        "sort":             { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListStockSplits",
+      "group": "Reference",
+      "method": "ListSplits",
+      "summary": "Retrieves stock splits from the v3 reference route, filtered by ticker, execution date, and direction.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"reverseSplit\"/> selects splits whose ratio reduces the share count. <see cref=\"StocksGroup.ListSplitsAsync\"/> is the newer stocks route with a wider row; this one is kept because the description declares it.",
+      "result": { "kind": "array", "model": "ReferenceSplit", "property": "results" },
+      "parameters": {
+        "ticker":         { "name": "ticker" },
+        "execution_date": { "name": "executionDate" },
+        "reverse_split":  { "name": "reverseSplit" },
+        "order":          { "name": "order", "type": "SortOrder" },
+        "limit":          { "name": "limit" },
+        "sort":           { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListOptionsContracts",
+      "group": "Reference",
+      "method": "ListOptionsContracts",
+      "summary": "Retrieves options contracts, filtered by underlying, type, expiration, strike, and whether they have expired, as of a chosen date.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"contractType\"/> is a <see cref=\"ContractType\"/>. <paramref name=\"ticker\"/> is a parameter the description itself calls deprecated; use <see cref=\"GetOptionsContractAsync\"/> to fetch one contract by its ticker. <paramref name=\"asOf\"/> and the expiration filter are bare strings in the description and take <see cref=\"NodaTime.LocalDate\"/> here (D-R9).",
+      "result": { "kind": "array", "model": "OptionsContract", "property": "results" },
+      "parameters": {
+        "underlying_ticker": { "name": "underlyingTicker" },
+        "ticker":            { "name": "ticker" },
+        "contract_type":     { "name": "contractType", "type": "ContractType" },
+        "expiration_date":   { "name": "expirationDate", "type": "LocalDate" },
+        "as_of":             { "name": "asOf", "type": "LocalDate" },
+        "strike_price":      { "name": "strikePrice" },
+        "expired":           { "name": "expired" },
+        "order":             { "name": "order", "type": "SortOrder" },
+        "limit":             { "name": "limit" },
+        "sort":              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetOptionsContract",
+      "group": "Reference",
+      "method": "GetOptionsContract",
+      "summary": "Retrieves one options contract by its ticker, as of a chosen date.",
+      "remarks": "<paramref name=\"optionsTicker\"/> is the <c>O:</c>-prefixed contract symbol; the colon is percent-escaped in the path. A contract the service does not know answers 404, which surfaces as a <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "OptionsContract", "property": "results" },
+      "parameters": {
+        "options_ticker": { "name": "optionsTicker" },
+        "as_of":          { "name": "asOf", "type": "LocalDate" }
+      }
+    },
+    {
+      "operationId": "ListIPOs",
+      "group": "Reference",
+      "method": "ListIpos",
+      "summary": "Retrieves initial public offerings, past and upcoming, filtered by ticker, identifier, listing date, and status.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. This is the served revision and takes the plain name; <see cref=\"ListIposV1Async\"/> is the <c>v1</c> route the description also declares (decision D26). <paramref name=\"ipoStatus\"/> is one of <c>direct_listing_process</c>, <c>history</c>, <c>new</c>, <c>pending</c>, <c>postponed</c>, <c>rumor</c>, or <c>withdrawn</c>.",
+      "result": { "kind": "array", "model": "Ipo", "property": "results" },
+      "parameters": {
+        "ticker":       { "name": "ticker" },
+        "us_code":      { "name": "usCode" },
+        "isin":         { "name": "isin" },
+        "listing_date": { "name": "listingDate" },
+        "ipo_status":   { "name": "ipoStatus" },
+        "order":        { "name": "order", "type": "SortOrder" },
+        "limit":        { "name": "limit" },
+        "sort":         { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_v1_reference_ipos",
+      "group": "Reference",
+      "method": "ListIposV1",
+      "summary": "Retrieves initial public offerings from the v1 reference route, with comparator filters on ticker, identifiers, listing date, and status.",
+      "remarks": "The description declares this route beside <see cref=\"ListIposAsync\"/>, and the service answered a plain-text 404 for it on 2026-09-03; it stays mapped as declared (decision D21) and carries its version segment in its name because the <c>vX</c> revision is the served one (decision D26). <paramref name=\"listingDate\"/> takes a calendar date or an <see cref=\"NodaTime.Instant\"/>, rendered as Unix nanoseconds (decision D20).",
+      "result": { "kind": "array", "model": "IpoV1", "property": "results" },
+      "parameters": {
+        "ticker":       { "name": "ticker" },
+        "us_code":      { "name": "usCode" },
+        "isin":         { "name": "isin" },
+        "listing_date": { "name": "listingDate", "type": "DateOrNanoseconds" },
+        "ipo_status":   { "name": "ipoStatus" },
+        "limit":        { "name": "limit" },
+        "sort":         { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_short-interest",
+      "group": "Reference",
+      "method": "ListShortInterest",
+      "summary": "Retrieves short interest reports for US stocks, filtered by ticker, settlement date, days to cover, and average daily volume.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality, a <see cref=\"RangeFilter\"/> factory for a range, or <see cref=\"SetFilter\"/> for a set. <paramref name=\"settlementDate\"/> is a bare string in the description and takes <see cref=\"NodaTime.LocalDate\"/> here (D-R9).",
+      "result": { "kind": "array", "model": "ShortInterest", "property": "results" },
+      "parameters": {
+        "ticker":           { "name": "ticker" },
+        "days_to_cover":    { "name": "daysToCover" },
+        "settlement_date":  { "name": "settlementDate", "type": "LocalDate" },
+        "avg_daily_volume": { "name": "avgDailyVolume" },
+        "limit":            { "name": "limit" },
+        "sort":             { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_short-volume",
+      "group": "Reference",
+      "method": "ListShortVolume",
+      "summary": "Retrieves daily short sale volume for US stocks, by venue, filtered by ticker, date, and short volume ratio.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality, a <see cref=\"RangeFilter\"/> factory for a range, or <see cref=\"SetFilter\"/> for a set. <paramref name=\"date\"/> is a bare string in the description and takes <see cref=\"NodaTime.LocalDate\"/> here (D-R9).",
+      "result": { "kind": "array", "model": "ShortVolume", "property": "results" },
+      "parameters": {
+        "ticker":             { "name": "ticker" },
+        "date":               { "name": "date", "type": "LocalDate" },
+        "short_volume_ratio": { "name": "shortVolumeRatio" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_vX_float",
+      "group": "Reference",
+      "method": "ListFloat",
+      "summary": "Retrieves the free float of US stocks, filtered by ticker and by the share of outstanding stock that floats.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.",
+      "result": { "kind": "array", "model": "ShareFloat", "property": "results" },
+      "parameters": {
+        "ticker":             { "name": "ticker" },
+        "free_float_percent": { "name": "freeFloatPercent" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
       }
     }
   ]

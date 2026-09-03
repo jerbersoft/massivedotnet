@@ -1303,4 +1303,583 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /v3/reference/tickers. It carries a cursor of its own.</summary>
+    public const string ReferenceTickers = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/v3/reference/tickers?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "e70013d92930de90e089dc8fa098888e",
+          "results": [
+            {
+              "active": true,
+              "cik": "0001090872",
+              "composite_figi": "BBG000BWQYZ5",
+              "currency_name": "usd",
+              "last_updated_utc": "2021-04-25T00:00:00Z",
+              "locale": "us",
+              "market": "stocks",
+              "name": "Agilent Technologies Inc.",
+              "primary_exchange": "XNYS",
+              "share_class_figi": "BBG001SCTQY4",
+              "ticker": "A",
+              "type": "CS"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the tickers envelope's shape, with no <c>next_url</c>, so a
+    /// traversal from <see cref="ReferenceTickers"/> ends after two requests.
+    /// </summary>
+    public const string ReferenceTickersLastPage = """
+        {
+          "count": 1,
+          "request_id": "e70013d92930de90e089dc8fa098888f",
+          "results": [
+            {
+              "active": true,
+              "cik": "0000006201",
+              "composite_figi": "BBG005P7Q881",
+              "currency_name": "usd",
+              "last_updated_utc": "2021-04-25T00:00:00Z",
+              "locale": "us",
+              "market": "stocks",
+              "name": "American Airlines Group Inc.",
+              "primary_exchange": "XNAS",
+              "share_class_figi": "BBG005P7Q907",
+              "ticker": "AAL",
+              "type": "CS"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/tickers/{ticker}.</summary>
+    public const string ReferenceTickerDetails = """
+        {
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": {
+            "active": true,
+            "address": {
+              "address1": "One Apple Park Way",
+              "city": "Cupertino",
+              "postal_code": "95014",
+              "state": "CA"
+            },
+            "branding": {
+              "icon_url": "https://api.massive.com/v1/reference/company-branding/d3d3LmFwcGxlLmNvbQ/images/2022-01-10_icon.png",
+              "logo_url": "https://api.massive.com/v1/reference/company-branding/d3d3LmFwcGxlLmNvbQ/images/2022-01-10_logo.svg"
+            },
+            "cik": "0000320193",
+            "composite_figi": "BBG000B9XRY4",
+            "currency_name": "usd",
+            "description": "Apple designs a wide variety of consumer electronic devices, including smartphones (iPhone), tablets (iPad), PCs (Mac), smartwatches (Apple Watch), AirPods, and TV boxes (Apple TV), among others. The iPhone makes up the majority of Apple's total revenue. In addition, Apple offers its customers a variety of services such as Apple Music, iCloud, Apple Care, Apple TV+, Apple Arcade, Apple Card, and Apple Pay, among others. Apple's products run internally developed software and semiconductors, and the firm is well known for its integration of hardware, software and services. Apple's products are distributed online as well as through company-owned stores and third-party retailers. The company generates roughly 40% of its revenue from the Americas, with the remainder earned internationally.",
+            "homepage_url": "https://www.apple.com",
+            "list_date": "1980-12-12",
+            "locale": "us",
+            "market": "stocks",
+            "market_cap": 2771126040150,
+            "name": "Apple Inc.",
+            "phone_number": "(408) 996-1010",
+            "primary_exchange": "XNAS",
+            "round_lot": 100,
+            "share_class_figi": "BBG001S5N8V8",
+            "share_class_shares_outstanding": 16406400000,
+            "sic_code": "3571",
+            "sic_description": "ELECTRONIC COMPUTERS",
+            "ticker": "AAPL",
+            "ticker_root": "AAPL",
+            "total_employees": 154000,
+            "type": "CS",
+            "weighted_shares_outstanding": 16334371000
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v3/reference/tickers/types?asset_class=stocks&amp;locale=us, captured from the live
+    /// service on 2026-09-03 because the description publishes only a CSV example for it
+    /// (D-R12). Reviewed: it carries no account identifier and no URL embeds a key.
+    /// </summary>
+    public const string ReferenceTickerTypes = """
+        {
+          "count": 24,
+          "request_id": "b226ee899a65f4be25300c7af02eed7d",
+          "results": [
+            { "asset_class": "stocks", "code": "CS", "description": "Common Stock", "locale": "us" },
+            { "asset_class": "stocks", "code": "PFD", "description": "Preferred Stock", "locale": "us" },
+            { "asset_class": "stocks", "code": "WARRANT", "description": "Warrant", "locale": "us" },
+            { "asset_class": "stocks", "code": "RIGHT", "description": "Rights", "locale": "us" },
+            { "asset_class": "stocks", "code": "BOND", "description": "Corporate Bond", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETF", "description": "Exchange Traded Fund", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETN", "description": "Exchange Traded Note", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETV", "description": "Exchange Traded Vehicle", "locale": "us" },
+            { "asset_class": "stocks", "code": "SP", "description": "Structured Product", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRC", "description": "American Depository Receipt Common", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRP", "description": "American Depository Receipt Preferred", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRW", "description": "American Depository Receipt Warrants", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRR", "description": "American Depository Receipt Rights", "locale": "us" },
+            { "asset_class": "stocks", "code": "FUND", "description": "Fund", "locale": "us" },
+            { "asset_class": "stocks", "code": "BASKET", "description": "Basket", "locale": "us" },
+            { "asset_class": "stocks", "code": "UNIT", "description": "Unit", "locale": "us" },
+            { "asset_class": "stocks", "code": "LT", "description": "Liquidating Trust", "locale": "us" },
+            { "asset_class": "stocks", "code": "OS", "description": "Ordinary Shares", "locale": "us" },
+            { "asset_class": "stocks", "code": "GDR", "description": "Global Depository Receipts", "locale": "us" },
+            { "asset_class": "stocks", "code": "OTHER", "description": "Other Security Type", "locale": "us" },
+            { "asset_class": "stocks", "code": "NYRS", "description": "New York Registry Shares", "locale": "us" },
+            { "asset_class": "stocks", "code": "AGEN", "description": "Agency Bond", "locale": "us" },
+            { "asset_class": "stocks", "code": "EQLK", "description": "Equity Linked Bond", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETS", "description": "Single-security ETF", "locale": "us" }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /vX/reference/tickers/{id}/events. Each event spells its
+    /// discriminator <c>type</c>, where the schema declares a required <c>event_type</c>; the
+    /// live wire agrees with the sample, so the map types that property nullable and the SDK
+    /// reads it as absent (D-R10). The fixture is the sample verbatim.
+    /// </summary>
+    public const string ReferenceTickerEvents = """
+        {
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": {
+            "events": [
+              {
+                "date": "2022-06-09",
+                "ticker_change": {
+                  "ticker": "META"
+                },
+                "type": "ticker_change"
+              },
+              {
+                "date": "2012-05-18",
+                "ticker_change": {
+                  "ticker": "FB"
+                },
+                "type": "ticker_change"
+              }
+            ],
+            "name": "Meta Platforms, Inc. Class A Common Stock"
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/related-companies/{ticker}. The envelope's
+    /// <c>stock_symbol</c> is not in the schema, which declares <c>ticker</c> there instead, and
+    /// is ignored.
+    /// </summary>
+    public const string ReferenceRelatedCompanies = """
+        {
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": [
+            { "ticker": "MSFT" },
+            { "ticker": "GOOGL" },
+            { "ticker": "AMZN" },
+            { "ticker": "FB" },
+            { "ticker": "TSLA" },
+            { "ticker": "NVDA" },
+            { "ticker": "INTC" },
+            { "ticker": "ADBE" },
+            { "ticker": "NFLX" },
+            { "ticker": "PYPL" }
+          ],
+          "status": "OK",
+          "stock_symbol": "AAPL"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/marketstatus/now: the body is the payload, with no
+    /// envelope (decision D17). The sample omits <c>indicesGroups</c>, which the live service
+    /// sends; the model leaves it null here.
+    /// </summary>
+    public const string ReferenceMarketStatus = """
+        {
+          "afterHours": true,
+          "currencies": {
+            "crypto": "open",
+            "fx": "open"
+          },
+          "earlyHours": false,
+          "exchanges": {
+            "nasdaq": "extended-hours",
+            "nyse": "extended-hours",
+            "otc": "closed"
+          },
+          "market": "extended-hours",
+          "serverTime": "2020-11-10T17:37:37-05:00"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/conditions.</summary>
+    public const string ReferenceConditions = """
+        {
+          "count": 1,
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": [
+            {
+              "asset_class": "stocks",
+              "data_types": [
+                "trade"
+              ],
+              "id": 2,
+              "name": "Average Price Trade",
+              "sip_mapping": {
+                "CTA": "B",
+                "UTP": "W"
+              },
+              "type": "condition",
+              "update_rules": {
+                "consolidated": {
+                  "updates_high_low": false,
+                  "updates_open_close": false,
+                  "updates_volume": true
+                },
+                "market_center": {
+                  "updates_high_low": false,
+                  "updates_open_close": false,
+                  "updates_volume": true
+                }
+              }
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v3/reference/exchanges?asset_class=stocks&amp;locale=us, captured from the live
+    /// service on 2026-09-03 because the description publishes only a CSV example for it
+    /// (D-R12). Reviewed: it carries no account identifier and no URL embeds a key.
+    /// </summary>
+    public const string ReferenceExchanges = """
+        {
+          "count": 27,
+          "request_id": "33edc6f450e0bb88f54bb3e1329f10e7",
+          "results": [
+            { "acronym": "AMEX", "asset_class": "stocks", "id": 1, "locale": "us", "mic": "XASE", "name": "NYSE American, LLC", "operating_mic": "XNYS", "participant_id": "A", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-american" },
+            { "asset_class": "stocks", "id": 2, "locale": "us", "mic": "XBOS", "name": "Nasdaq Texas, Inc.", "operating_mic": "XNAS", "participant_id": "B", "type": "exchange", "url": "https://www.nasdaq.com/solutions/nasdaq-bx-stock-market" },
+            { "acronym": "NSX", "asset_class": "stocks", "id": 3, "locale": "us", "mic": "XCIS", "name": "NYSE National, Inc.", "operating_mic": "XNYS", "participant_id": "C", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-national" },
+            { "asset_class": "stocks", "id": 4, "locale": "us", "mic": "XADF", "name": "FINRA Alternative Display Facility", "operating_mic": "FINR", "participant_id": "D", "type": "TRF", "url": "https://www.finra.org" },
+            { "asset_class": "stocks", "id": 5, "locale": "us", "name": "Unlisted Trading Privileges", "operating_mic": "XNAS", "participant_id": "E", "type": "SIP", "url": "https://www.utpplan.com" },
+            { "asset_class": "stocks", "id": 6, "locale": "us", "mic": "XISE", "name": "International Securities Exchange, LLC - Stocks", "operating_mic": "XNAS", "participant_id": "I", "type": "TRF", "url": "https://nasdaq.com/solutions/nasdaq-ise" },
+            { "asset_class": "stocks", "id": 7, "locale": "us", "mic": "EDGA", "name": "Cboe EDGA", "operating_mic": "XCBO", "participant_id": "J", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 8, "locale": "us", "mic": "EDGX", "name": "Cboe EDGX", "operating_mic": "XCBO", "participant_id": "K", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 9, "locale": "us", "mic": "XCHI", "name": "NYSE Texas, Inc.", "operating_mic": "XNYS", "participant_id": "M", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-texas" },
+            { "asset_class": "stocks", "id": 10, "locale": "us", "mic": "XNYS", "name": "New York Stock Exchange", "operating_mic": "XNYS", "participant_id": "N", "type": "exchange", "url": "https://www.nyse.com" },
+            { "asset_class": "stocks", "id": 11, "locale": "us", "mic": "ARCX", "name": "NYSE Arca, Inc.", "operating_mic": "XNYS", "participant_id": "P", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-arca" },
+            { "asset_class": "stocks", "id": 12, "locale": "us", "mic": "XNAS", "name": "Nasdaq", "operating_mic": "XNAS", "participant_id": "T", "type": "exchange", "url": "https://www.nasdaq.com" },
+            { "asset_class": "stocks", "id": 13, "locale": "us", "name": "Consolidated Tape Association", "operating_mic": "XNYS", "participant_id": "S", "type": "SIP", "url": "https://www.nyse.com/data/cta" },
+            { "asset_class": "stocks", "id": 14, "locale": "us", "mic": "LTSE", "name": "Long-Term Stock Exchange", "operating_mic": "LTSE", "participant_id": "L", "type": "exchange", "url": "https://www.ltse.com" },
+            { "asset_class": "stocks", "id": 15, "locale": "us", "mic": "IEXG", "name": "Investors Exchange", "operating_mic": "IEXG", "participant_id": "V", "type": "exchange", "url": "https://www.iextrading.com" },
+            { "asset_class": "stocks", "id": 16, "locale": "us", "mic": "CBSX", "name": "Cboe Stock Exchange", "operating_mic": "XCBO", "participant_id": "W", "type": "TRF", "url": "https://www.cboe.com" },
+            { "asset_class": "stocks", "id": 17, "locale": "us", "mic": "XPHL", "name": "Nasdaq Philadelphia Exchange LLC", "operating_mic": "XNAS", "participant_id": "X", "type": "exchange", "url": "https://www.nasdaq.com/solutions/nasdaq-phlx" },
+            { "asset_class": "stocks", "id": 18, "locale": "us", "mic": "BATY", "name": "Cboe BYX", "operating_mic": "XCBO", "participant_id": "Y", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 19, "locale": "us", "mic": "BATS", "name": "Cboe BZX", "operating_mic": "XCBO", "participant_id": "Z", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 20, "locale": "us", "mic": "EPRL", "name": "MIAX Pearl", "operating_mic": "MIHI", "participant_id": "H", "type": "exchange", "url": "https://www.miaxoptions.com/alerts/pearl-equities" },
+            { "asset_class": "stocks", "id": 21, "locale": "us", "mic": "MEMX", "name": "Members Exchange", "operating_mic": "MEMX", "participant_id": "U", "type": "exchange", "url": "https://www.memx.com" },
+            { "acronym": "24X", "asset_class": "stocks", "id": 22, "locale": "us", "mic": "24EQ", "name": "24X National Exchange LLC", "operating_mic": "24EQ", "participant_id": "G", "type": "exchange", "url": "https://24exchange.com/" },
+            { "acronym": "TXSE", "asset_class": "stocks", "id": 23, "locale": "us", "mic": "TXSE", "name": "Texas Stock Exchange LLC", "operating_mic": "TXSE", "participant_id": "F", "type": "exchange", "url": "https://txse.com/" },
+            { "asset_class": "stocks", "id": 62, "locale": "us", "mic": "OOTC", "name": "OTC Equity Security", "operating_mic": "FINR", "type": "ORF", "url": "https://www.finra.org/filing-reporting/over-the-counter-reporting-facility-orf" },
+            { "asset_class": "stocks", "id": 201, "locale": "us", "mic": "FINY", "name": "FINRA NYSE TRF", "operating_mic": "FINR", "type": "TRF", "url": "https://www.finra.org" },
+            { "asset_class": "stocks", "id": 202, "locale": "us", "mic": "FINN", "name": "FINRA Nasdaq TRF Carteret", "operating_mic": "FINR", "type": "TRF", "url": "https://www.finra.org" },
+            { "asset_class": "stocks", "id": 203, "locale": "us", "mic": "FINC", "name": "FINRA Nasdaq TRF Chicago", "operating_mic": "FINR", "type": "TRF", "url": "https://www.finra.org" }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/dividends. It carries a cursor of its own.</summary>
+    public const string ReferenceDividends = """
+        {
+          "next_url": "https://api.massive.com/v3/reference/dividends/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "cash_amount": 0.22,
+              "declaration_date": "2021-10-28",
+              "dividend_type": "CD",
+              "ex_dividend_date": "2021-11-05",
+              "frequency": 4,
+              "id": "E8e3c4f794613e9205e2f178a36c53fcc57cdabb55e1988c87b33f9e52e221444",
+              "pay_date": "2021-11-11",
+              "record_date": "2021-11-08",
+              "ticker": "AAPL"
+            },
+            {
+              "cash_amount": 0.22,
+              "declaration_date": "2021-07-27",
+              "dividend_type": "CD",
+              "ex_dividend_date": "2021-08-06",
+              "frequency": 4,
+              "id": "E6436c5475706773f03490acf0b63fdb90b2c72bfeed329a6eb4afc080acd80ae",
+              "pay_date": "2021-08-12",
+              "record_date": "2021-08-09",
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/splits. It carries a cursor of its own.</summary>
+    public const string ReferenceSplits = """
+        {
+          "next_url": "https://api.massive.com/v3/splits/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "execution_date": "2020-08-31",
+              "id": "E36416cce743c3964c5da63e1ef1626c0aece30fb47302eea5a49c0055c04e8d0",
+              "split_from": 1,
+              "split_to": 4,
+              "ticker": "AAPL"
+            },
+            {
+              "execution_date": "2005-02-28",
+              "id": "E90a77bdf742661741ed7c8fc086415f0457c2816c45899d73aaa88bdc8ff6025",
+              "split_from": 1,
+              "split_to": 2,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/options/contracts.</summary>
+    public const string ReferenceOptionsContracts = """
+        {
+          "request_id": "603902c0-a5a5-406f-bd08-f030f92418fa",
+          "results": [
+            {
+              "cfi": "OCASPS",
+              "contract_type": "call",
+              "exercise_style": "american",
+              "expiration_date": "2021-11-19",
+              "primary_exchange": "BATO",
+              "shares_per_contract": 100,
+              "strike_price": 85,
+              "ticker": "O:AAPL211119C00085000",
+              "underlying_ticker": "AAPL"
+            },
+            {
+              "additional_underlyings": [
+                {
+                  "amount": 44,
+                  "type": "equity",
+                  "underlying": "VMW"
+                },
+                {
+                  "amount": 6.53,
+                  "type": "currency",
+                  "underlying": "USD"
+                }
+              ],
+              "cfi": "OCASPS",
+              "contract_type": "call",
+              "exercise_style": "american",
+              "expiration_date": "2021-11-19",
+              "primary_exchange": "BATO",
+              "shares_per_contract": 100,
+              "strike_price": 90,
+              "ticker": "O:AAPL211119C00090000",
+              "underlying_ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/options/contracts/{options_ticker}.</summary>
+    public const string ReferenceOptionsContract = """
+        {
+          "request_id": "603902c0-a5a5-406f-bd08-f030f92418fa",
+          "results": {
+            "additional_underlyings": [
+              {
+                "amount": 44,
+                "type": "equity",
+                "underlying": "VMW"
+              },
+              {
+                "amount": 6.53,
+                "type": "currency",
+                "underlying": "USD"
+              }
+            ],
+            "cfi": "OCASPS",
+            "contract_type": "call",
+            "exercise_style": "american",
+            "expiration_date": "2021-11-19",
+            "primary_exchange": "BATO",
+            "shares_per_contract": 100,
+            "strike_price": 85,
+            "ticker": "O:AAPL211119C00085000",
+            "underlying_ticker": "AAPL"
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /vX/reference/ipos. Its <c>issue_start_date</c> and
+    /// <c>issue_end_date</c> are not in the schema and are ignored.
+    /// </summary>
+    public const string ReferenceIpos = """
+        {
+          "next_url": "https://api.massive.com/vX/reference/ipos?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "announced_date": "2024-06-01",
+              "currency_code": "USD",
+              "final_issue_price": 17,
+              "highest_offer_price": 17,
+              "ipo_status": "history",
+              "isin": "US75383L1026",
+              "issue_end_date": "2024-06-06",
+              "issue_start_date": "2024-06-01",
+              "issuer_name": "Rapport Therapeutics Inc.",
+              "last_updated": "2024-06-27",
+              "listing_date": "2024-06-07",
+              "lot_size": 100,
+              "lowest_offer_price": 17,
+              "max_shares_offered": 8000000,
+              "min_shares_offered": 1000000,
+              "primary_exchange": "XNAS",
+              "security_description": "Ordinary Shares",
+              "security_type": "CS",
+              "shares_outstanding": 35376457,
+              "ticker": "RAPP",
+              "total_offer_size": 136000000,
+              "us_code": "75383L102"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/reference/ipos, with three departures from the
+    /// published text: the schema types <c>announced_date</c>, <c>last_updated</c>, and
+    /// <c>listing_date</c> as 64-bit integers, while the sample shows the same calendar dates as
+    /// the <c>vX</c> sample. The model follows the schema, so the fixture carries each date as
+    /// the Unix nanosecond count of its midnight UTC, the unit the operation's own
+    /// <c>listing_date</c> filter documents (D-R10). The route answered a plain-text 404 on
+    /// 2026-09-03, so the wire cannot settle this; the live pin flips when it can.
+    /// </summary>
+    public const string ReferenceIposV1 = """
+        {
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "announced_date": 1717200000000000000,
+              "currency_code": "USD",
+              "final_issue_price": 17,
+              "highest_offer_price": 17,
+              "ipo_status": "history",
+              "isin": "US75383L1026",
+              "issuer_name": "Rapport Therapeutics Inc.",
+              "last_updated": 1719446400000000000,
+              "listing_date": 1717718400000000000,
+              "lot_size": 100,
+              "lowest_offer_price": 17,
+              "max_shares_offered": 8000000,
+              "min_shares_offered": 1000000,
+              "primary_exchange": "XNAS",
+              "security_description": "Ordinary Shares",
+              "security_type": "CS",
+              "shares_outstanding": 35376457,
+              "ticker": "RAPP",
+              "total_offer_size": 136000000,
+              "us_code": "75383L102"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/short-interest, with one departure from the
+    /// published text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksDividends"/>.
+    /// </summary>
+    public const string ReferenceShortInterest = """
+        {
+          "count": 1,
+          "request_id": "1",
+          "results": [
+            {
+              "avg_daily_volume": 2340158,
+              "days_to_cover": 1.67,
+              "settlement_date": "2025-03-14",
+              "short_interest": 3906231,
+              "ticker": "A"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/short-volume, with one departure from the
+    /// published text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksDividends"/>.
+    /// </summary>
+    public const string ReferenceShortVolume = """
+        {
+          "count": 1,
+          "request_id": "1",
+          "results": [
+            {
+              "adf_short_volume": 0,
+              "adf_short_volume_exempt": 0,
+              "date": "2025-03-25",
+              "exempt_volume": 1,
+              "nasdaq_carteret_short_volume": 179943,
+              "nasdaq_carteret_short_volume_exempt": 1,
+              "nasdaq_chicago_short_volume": 1,
+              "nasdaq_chicago_short_volume_exempt": 0,
+              "non_exempt_volume": 181218,
+              "nyse_short_volume": 1275,
+              "nyse_short_volume_exempt": 0,
+              "short_volume": 181219,
+              "short_volume_ratio": 31.57,
+              "ticker": "A",
+              "total_volume": 574084
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/vX/float, with one departure from the published
+    /// text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksDividends"/>.
+    /// </summary>
+    public const string ReferenceFloat = """
+        {
+          "request_id": "1",
+          "results": [
+            {
+              "effective_date": "2025-11-01",
+              "free_float": 15000000000,
+              "free_float_percent": 98.5,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

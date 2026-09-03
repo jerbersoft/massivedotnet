@@ -10,6 +10,8 @@
 // nullable context, so it is re-enabled explicitly here.
 #nullable enable
 
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
 using MassiveDotNet.Rest.Serialization;
@@ -149,5 +151,1740 @@ public readonly partial struct ReferenceGroup
             .ConfigureAwait(false);
 
         return response ?? [];
+    }
+
+    /// <summary>
+    /// Retrieves the tickers the platform supports across every asset class, with each one's name,
+    /// market, and identifiers, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListTickersAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. <paramref name="ticker"/> takes a plain symbol or a lexical range; <paramref
+    /// name="market"/> is a <see cref="MarketType"/>; <paramref name="type"/> takes a code from <see
+    /// cref="ListTickerTypesAsync"/>, whose set that operation owns. <paramref name="date"/> asks for
+    /// the tickers as they stood on a calendar date.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a ticker symbol. Defaults to empty string which queries all tickers. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="type">
+    /// Specify the type of the tickers. Find the types that we support via our [Ticker Types
+    /// API](https://massive.com/docs/rest/stocks/tickers/ticker-types). Defaults to empty string which
+    /// queries all types.
+    /// </param>
+    /// <param name="market">Filter by market type. By default all markets are included.</param>
+    /// <param name="exchange">
+    /// Specify the asset's primary exchange Market Identifier Code (MIC) according to [ISO
+    /// 10383](https://www.iso20022.org/market-identifier-codes). Defaults to empty string which queries
+    /// all exchanges.
+    /// </param>
+    /// <param name="cusip">
+    /// Specify the CUSIP code of the asset you want to search for. Find more information about CUSIP
+    /// codes [at their website](https://www.cusip.com/identifiers.html#/CUSIP). Defaults to empty
+    /// string which queries all CUSIPs. Note: Although you can query by CUSIP, due to legal reasons we
+    /// do not return the CUSIP in the response.
+    /// </param>
+    /// <param name="cik">
+    /// Specify the CIK of the asset you want to search for. Find more information about CIK codes [at
+    /// their website](https://www.sec.gov/edgar/searchedgar/cik.htm). Defaults to empty string which
+    /// queries all CIKs.
+    /// </param>
+    /// <param name="date">
+    /// Specify a point in time to retrieve tickers available on that date. Defaults to the most recent
+    /// available date.
+    /// </param>
+    /// <param name="search">Search for terms within the ticker and/or company name.</param>
+    /// <param name="active">Specify if the tickers returned should be actively traded on the queried date. Default is true.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 100 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<TickerSummary> EnumerateTickersAsync(
+        RangeFilter<string>? ticker = null,
+        string? type = null,
+        MarketType? market = null,
+        string? exchange = null,
+        string? cusip = null,
+        string? cik = null,
+        LocalDate? date = null,
+        string? search = null,
+        bool? active = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListTickersUri(ticker, type, market, exchange, cusip, cik, date, search, active, order, limit, sort);
+        return _transport.EnumerateAsync<ListTickersResponse, TickerSummary>(
+            requestUri, MassiveRestJsonContext.Default.ListTickersResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the tickers the platform supports across every asset class, with each one's name,
+    /// market, and identifiers.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateTickersAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. <paramref
+    /// name="ticker"/> takes a plain symbol or a lexical range; <paramref name="market"/> is a <see
+    /// cref="MarketType"/>; <paramref name="type"/> takes a code from <see
+    /// cref="ListTickerTypesAsync"/>, whose set that operation owns. <paramref name="date"/> asks for
+    /// the tickers as they stood on a calendar date.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a ticker symbol. Defaults to empty string which queries all tickers. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="type">
+    /// Specify the type of the tickers. Find the types that we support via our [Ticker Types
+    /// API](https://massive.com/docs/rest/stocks/tickers/ticker-types). Defaults to empty string which
+    /// queries all types.
+    /// </param>
+    /// <param name="market">Filter by market type. By default all markets are included.</param>
+    /// <param name="exchange">
+    /// Specify the asset's primary exchange Market Identifier Code (MIC) according to [ISO
+    /// 10383](https://www.iso20022.org/market-identifier-codes). Defaults to empty string which queries
+    /// all exchanges.
+    /// </param>
+    /// <param name="cusip">
+    /// Specify the CUSIP code of the asset you want to search for. Find more information about CUSIP
+    /// codes [at their website](https://www.cusip.com/identifiers.html#/CUSIP). Defaults to empty
+    /// string which queries all CUSIPs. Note: Although you can query by CUSIP, due to legal reasons we
+    /// do not return the CUSIP in the response.
+    /// </param>
+    /// <param name="cik">
+    /// Specify the CIK of the asset you want to search for. Find more information about CIK codes [at
+    /// their website](https://www.sec.gov/edgar/searchedgar/cik.htm). Defaults to empty string which
+    /// queries all CIKs.
+    /// </param>
+    /// <param name="date">
+    /// Specify a point in time to retrieve tickers available on that date. Defaults to the most recent
+    /// available date.
+    /// </param>
+    /// <param name="search">Search for terms within the ticker and/or company name.</param>
+    /// <param name="active">Specify if the tickers returned should be actively traded on the queried date. Default is true.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 100 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<TickerSummary>> ListTickersAsync(
+        RangeFilter<string>? ticker = null,
+        string? type = null,
+        MarketType? market = null,
+        string? exchange = null,
+        string? cusip = null,
+        string? cik = null,
+        LocalDate? date = null,
+        string? search = null,
+        bool? active = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListTickersUri(ticker, type, market, exchange, cusip, cik, date, search, active, order, limit, sort);
+        return SendListTickersAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListTickersUri(
+        RangeFilter<string>? ticker,
+        string? type,
+        MarketType? market,
+        string? exchange,
+        string? cusip,
+        string? cik,
+        LocalDate? date,
+        string? search,
+        bool? active,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/tickers");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("type", type);
+        builder.AppendQuery("market", market?.ToWireValue());
+        builder.AppendQuery("exchange", exchange);
+        builder.AppendQuery("cusip", cusip);
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("date", date?.ToWireValue());
+        builder.AppendQuery("search", search);
+        builder.AppendQuery("active", active);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<TickerSummary>> SendListTickersAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListTickersResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListTickersResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<TickerSummary>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the details of one ticker: its identity, the company's profile, address, and branding,
+    /// and its share counts.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="date"/> asks for the ticker as it stood on a calendar date; the default is the
+    /// most recent. A ticker the service does not know answers 404, which surfaces as a <see
+    /// cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="date">
+    /// Specify a point in time to get information about the ticker available on that date. When
+    /// retrieving information from SEC filings, we compare this date with the period of report date on
+    /// the SEC filing. For example, consider an SEC filing submitted by AAPL on 2019-07-31, with a
+    /// period of report date ending on 2019-06-29. That means that the filing was submitted on
+    /// 2019-07-31, but the filing was created based on information from 2019-06-29. If you were to
+    /// query for AAPL details on 2019-06-29, the ticker details would include information from the SEC
+    /// filing. Defaults to the most recent available date.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<TickerDetails> GetTickerAsync(
+        string ticker,
+        LocalDate? date = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildGetTickerUri(ticker, date);
+        return SendGetTickerAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetTickerUri(
+        string ticker,
+        LocalDate? date)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/tickers/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("date", date?.ToWireValue());
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerDetails> SendGetTickerAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetTickerResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetTickerResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>Retrieves the ticker types the platform recognises, optionally for one asset class and locale.</summary>
+    /// <remarks>
+    /// The list is short and does not page. Its codes are what <see cref="ListTickersAsync"/> accepts
+    /// for its <c>type</c> parameter.
+    /// </remarks>
+    /// <param name="assetClass">Filter by asset class.</param>
+    /// <param name="locale">Filter by locale.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<TickerType[]> ListTickerTypesAsync(
+        MarketType? assetClass = null,
+        string? locale = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListTickerTypesUri(assetClass, locale);
+        return SendListTickerTypesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListTickerTypesUri(
+        MarketType? assetClass,
+        string? locale)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/tickers/types");
+
+        builder.AppendQuery("asset_class", assetClass?.ToWireValue());
+        builder.AppendQuery("locale", locale);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerType[]> SendListTickerTypesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListTickerTypesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListTickerTypesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>
+    /// Retrieves the identifier history of one asset: its current name and the ticker changes that led
+    /// to it.
+    /// </summary>
+    /// <remarks>
+    /// The route's <c>vX</c> segment marks it experimental (decision D18); opt in with
+    /// <c>MASSIVE0001</c>. <paramref name="id"/> is a ticker, a CUSIP, or a composite FIGI. <paramref
+    /// name="types"/> is a comma-separated list of event types, of which the description names only
+    /// <c>ticker_change</c>. The event rows' <see cref="TickerEvent.EventType"/> reads as absent on
+    /// today's wire (D-R10).
+    /// </remarks>
+    /// <param name="id">
+    /// Identifier of an asset, which can be a Ticker, CUSIP, or Composite FIGI. Specify a
+    /// case-sensitive ticker symbol (e.g. AAPL for Apple Inc). When provided a ticker, events for the
+    /// entity currently represented by that ticker are returned. To find events for entities previously
+    /// associated with a ticker, obtain the relevant identifier using the [Ticker Details
+    /// Endpoint](https://massive.com/docs/rest/stocks/tickers/ticker-overview).
+    /// </param>
+    /// <param name="types">
+    /// A comma-separated list of the types of event to include. Currently ticker_change is the only
+    /// supported event_type. Leave blank to return all supported event_types.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<TickerEvents> GetTickerEventsAsync(
+        string id,
+        string? types = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        string requestUri = BuildGetTickerEventsUri(id, types);
+        return SendGetTickerEventsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetTickerEventsUri(
+        string id,
+        string? types)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/vX/reference/tickers/");
+        builder.AppendPathSegment(id);
+        builder.AppendPathLiteral("/events");
+
+        builder.AppendQuery("types", types);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerEvents> SendGetTickerEventsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetEventsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetEventsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the tickers of companies related to the one given, as judged by news coverage and
+    /// return correlation.
+    /// </summary>
+    /// <remarks>
+    /// The list does not page. Only the ticker of each related company is reported; <see
+    /// cref="GetTickerAsync"/> fetches the rest.
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol to search.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<RelatedCompany[]> ListRelatedCompaniesAsync(
+        string ticker,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListRelatedCompaniesUri(ticker);
+        return SendListRelatedCompaniesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListRelatedCompaniesUri(
+        string ticker)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/related-companies/");
+        builder.AppendPathSegment(ticker);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<RelatedCompany[]> SendListRelatedCompaniesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetRelatedCompaniesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetRelatedCompaniesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>
+    /// Retrieves the current trading status of the markets: overall, per exchange, for the currency
+    /// markets, and for each index group.
+    /// </summary>
+    /// <remarks>
+    /// The body is the payload, with no envelope, so the response carries no request id (decision D17).
+    /// Pair with <see cref="ListMarketHolidaysAsync"/> for what is coming rather than what is now.
+    /// </remarks>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The response body, deserialized as one object.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<MarketStatus> GetMarketStatusAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildGetMarketStatusUri();
+        return SendGetMarketStatusAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetMarketStatusUri()
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/marketstatus/now");
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MarketStatus> SendGetMarketStatusAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        MarketStatus? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.MarketStatus, cancellationToken)
+            .ConfigureAwait(false);
+
+        // An empty body is a success the caller cannot use, reported the same way as a body that
+        // fails to deserialize (D17). There is no envelope here, so no request id can be reported.
+        return response
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no payload.");
+    }
+
+    /// <summary>
+    /// Retrieves the trade and quote condition codes, with each one's SIP mappings and its effect on
+    /// aggregates, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListConditionsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. <paramref name="assetClass"/> is a <see cref="MarketType"/>; the description
+    /// declares four of its members here and the server rejects the rest. <paramref name="dataType"/>
+    /// is <c>trade</c>, <c>bbo</c>, or <c>nbbo</c>; <paramref name="sip"/> is <c>CTA</c>, <c>UTP</c>,
+    /// or <c>OPRA</c>.
+    /// </remarks>
+    /// <param name="assetClass">Filter for conditions within a given asset class.</param>
+    /// <param name="dataType">Filter by data type.</param>
+    /// <param name="id">Filter for conditions with a given ID.</param>
+    /// <param name="sip">Filter by SIP. If the condition contains a mapping for that SIP, the condition will be returned.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Condition> EnumerateConditionsAsync(
+        MarketType? assetClass = null,
+        string? dataType = null,
+        int? id = null,
+        string? sip = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListConditionsUri(assetClass, dataType, id, sip, order, limit, sort);
+        return _transport.EnumerateAsync<ListConditionsResponse, Condition>(
+            requestUri, MassiveRestJsonContext.Default.ListConditionsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the trade and quote condition codes, with each one's SIP mappings and its effect on
+    /// aggregates.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateConditionsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="assetClass"/> is a <see cref="MarketType"/>; the description declares four of
+    /// its members here and the server rejects the rest. <paramref name="dataType"/> is <c>trade</c>,
+    /// <c>bbo</c>, or <c>nbbo</c>; <paramref name="sip"/> is <c>CTA</c>, <c>UTP</c>, or <c>OPRA</c>.
+    /// </remarks>
+    /// <param name="assetClass">Filter for conditions within a given asset class.</param>
+    /// <param name="dataType">Filter by data type.</param>
+    /// <param name="id">Filter for conditions with a given ID.</param>
+    /// <param name="sip">Filter by SIP. If the condition contains a mapping for that SIP, the condition will be returned.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Condition>> ListConditionsAsync(
+        MarketType? assetClass = null,
+        string? dataType = null,
+        int? id = null,
+        string? sip = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListConditionsUri(assetClass, dataType, id, sip, order, limit, sort);
+        return SendListConditionsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListConditionsUri(
+        MarketType? assetClass,
+        string? dataType,
+        int? id,
+        string? sip,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/conditions");
+
+        builder.AppendQuery("asset_class", assetClass?.ToWireValue());
+        builder.AppendQuery("data_type", dataType);
+        builder.AppendQuery("id", id);
+        builder.AppendQuery("sip", sip);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Condition>> SendListConditionsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListConditionsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListConditionsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Condition>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the exchanges, trade reporting facilities, and SIPs the platform knows, optionally for
+    /// one asset class and locale.
+    /// </summary>
+    /// <remarks>
+    /// The list does not page. <paramref name="assetClass"/> is a <see cref="MarketType"/>; the
+    /// description declares five of its members here and the server rejects the rest.
+    /// </remarks>
+    /// <param name="assetClass">Filter by asset class.</param>
+    /// <param name="locale">Filter by locale.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<Exchange[]> ListExchangesAsync(
+        MarketType? assetClass = null,
+        string? locale = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListExchangesUri(assetClass, locale);
+        return SendListExchangesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListExchangesUri(
+        MarketType? assetClass,
+        string? locale)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/exchanges");
+
+        builder.AppendQuery("asset_class", assetClass?.ToWireValue());
+        builder.AppendQuery("locale", locale);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<Exchange[]> SendListExchangesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListExchangesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListExchangesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>
+    /// Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four
+    /// dates that govern a dividend, by amount, and by type, enumerating every page as a single lazy
+    /// sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListDividendsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Pass a plain value for equality or a <see cref="RangeFilter"/> factory for a
+    /// range. The date filters carry <c>format: date</c> in the description and bind <see
+    /// cref="NodaTime.LocalDate"/> on their own, while the response's date properties are bare strings
+    /// the map retypes to <see cref="NodaTime.LocalDate"/> (D-R9). <see
+    /// cref="StocksGroup.ListDividendsAsync"/> is the newer stocks route with a wider row; this one is
+    /// kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="exDividendDate">Query by ex-dividend date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="recordDate">Query by record date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="declarationDate">Query by declaration date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="payDate">Query by pay date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="frequency">
+    /// Query by the number of times per year the dividend is paid out. Possible values are 0
+    /// (one-time), 1 (annually), 2 (bi-annually), 4 (quarterly), 12 (monthly), 24 (bi-monthly), and 52
+    /// (weekly).
+    /// </param>
+    /// <param name="cashAmount">Query by the cash amount of the dividend. Accepts an exact value or a range.</param>
+    /// <param name="dividendType">
+    /// Query by the type of dividend. Dividends that have been paid and/or are expected to be paid on
+    /// consistent schedules are denoted as CD. Special Cash dividends that have been paid that are
+    /// infrequent or unusual, and/or can not be expected to occur in the future are denoted as SC.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ReferenceDividend> EnumerateDividendsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? exDividendDate = null,
+        RangeFilter<LocalDate>? recordDate = null,
+        RangeFilter<LocalDate>? declarationDate = null,
+        RangeFilter<LocalDate>? payDate = null,
+        int? frequency = null,
+        RangeFilter<double>? cashAmount = null,
+        string? dividendType = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDividendsUri(ticker, exDividendDate, recordDate, declarationDate, payDate, frequency, cashAmount, dividendType, order, limit, sort);
+        return _transport.EnumerateAsync<ListDividendsResponse, ReferenceDividend>(
+            requestUri, MassiveRestJsonContext.Default.ListDividendsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four
+    /// dates that govern a dividend, by amount, and by type.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateDividendsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality or a <see cref="RangeFilter"/> factory for a range. The date filters
+    /// carry <c>format: date</c> in the description and bind <see cref="NodaTime.LocalDate"/> on their
+    /// own, while the response's date properties are bare strings the map retypes to <see
+    /// cref="NodaTime.LocalDate"/> (D-R9). <see cref="StocksGroup.ListDividendsAsync"/> is the newer
+    /// stocks route with a wider row; this one is kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="exDividendDate">Query by ex-dividend date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="recordDate">Query by record date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="declarationDate">Query by declaration date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="payDate">Query by pay date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="frequency">
+    /// Query by the number of times per year the dividend is paid out. Possible values are 0
+    /// (one-time), 1 (annually), 2 (bi-annually), 4 (quarterly), 12 (monthly), 24 (bi-monthly), and 52
+    /// (weekly).
+    /// </param>
+    /// <param name="cashAmount">Query by the cash amount of the dividend. Accepts an exact value or a range.</param>
+    /// <param name="dividendType">
+    /// Query by the type of dividend. Dividends that have been paid and/or are expected to be paid on
+    /// consistent schedules are denoted as CD. Special Cash dividends that have been paid that are
+    /// infrequent or unusual, and/or can not be expected to occur in the future are denoted as SC.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ReferenceDividend>> ListDividendsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? exDividendDate = null,
+        RangeFilter<LocalDate>? recordDate = null,
+        RangeFilter<LocalDate>? declarationDate = null,
+        RangeFilter<LocalDate>? payDate = null,
+        int? frequency = null,
+        RangeFilter<double>? cashAmount = null,
+        string? dividendType = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDividendsUri(ticker, exDividendDate, recordDate, declarationDate, payDate, frequency, cashAmount, dividendType, order, limit, sort);
+        return SendListDividendsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListDividendsUri(
+        RangeFilter<string>? ticker,
+        RangeFilter<LocalDate>? exDividendDate,
+        RangeFilter<LocalDate>? recordDate,
+        RangeFilter<LocalDate>? declarationDate,
+        RangeFilter<LocalDate>? payDate,
+        int? frequency,
+        RangeFilter<double>? cashAmount,
+        string? dividendType,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/dividends");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("ex_dividend_date", exDividendDate);
+        builder.AppendQuery("record_date", recordDate);
+        builder.AppendQuery("declaration_date", declarationDate);
+        builder.AppendQuery("pay_date", payDate);
+        builder.AppendQuery("frequency", frequency);
+        builder.AppendQuery("cash_amount", cashAmount);
+        builder.AppendQuery("dividend_type", dividendType);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ReferenceDividend>> SendListDividendsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListDividendsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListDividendsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ReferenceDividend>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves stock splits from the v3 reference route, filtered by ticker, execution date, and
+    /// direction, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListSplitsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. <paramref name="reverseSplit"/> selects splits whose ratio reduces the share count.
+    /// <see cref="StocksGroup.ListSplitsAsync"/> is the newer stocks route with a wider row; this one
+    /// is kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="executionDate">Query by execution date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="reverseSplit">
+    /// Query for reverse stock splits. A split ratio where split_from is greater than split_to
+    /// represents a reverse split. By default this filter is not used.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ReferenceSplit> EnumerateSplitsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? executionDate = null,
+        bool? reverseSplit = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSplitsUri(ticker, executionDate, reverseSplit, order, limit, sort);
+        return _transport.EnumerateAsync<ListStockSplitsResponse, ReferenceSplit>(
+            requestUri, MassiveRestJsonContext.Default.ListStockSplitsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves stock splits from the v3 reference route, filtered by ticker, execution date, and
+    /// direction.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateSplitsAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. <paramref
+    /// name="reverseSplit"/> selects splits whose ratio reduces the share count. <see
+    /// cref="StocksGroup.ListSplitsAsync"/> is the newer stocks route with a wider row; this one is
+    /// kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="executionDate">Query by execution date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="reverseSplit">
+    /// Query for reverse stock splits. A split ratio where split_from is greater than split_to
+    /// represents a reverse split. By default this filter is not used.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ReferenceSplit>> ListSplitsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? executionDate = null,
+        bool? reverseSplit = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSplitsUri(ticker, executionDate, reverseSplit, order, limit, sort);
+        return SendListSplitsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListSplitsUri(
+        RangeFilter<string>? ticker,
+        RangeFilter<LocalDate>? executionDate,
+        bool? reverseSplit,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/splits");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("execution_date", executionDate);
+        builder.AppendQuery("reverse_split", reverseSplit);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ReferenceSplit>> SendListSplitsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListStockSplitsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListStockSplitsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ReferenceSplit>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves options contracts, filtered by underlying, type, expiration, strike, and whether they
+    /// have expired, as of a chosen date, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListOptionsContractsAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. <paramref name="contractType"/> is a <see cref="ContractType"/>.
+    /// <paramref name="ticker"/> is a parameter the description itself calls deprecated; use <see
+    /// cref="GetOptionsContractAsync"/> to fetch one contract by its ticker. <paramref name="asOf"/>
+    /// and the expiration filter are bare strings in the description and take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="underlyingTicker">Query for contracts relating to an underlying stock ticker. Accepts an exact value or a range.</param>
+    /// <param name="ticker">
+    /// This parameter has been deprecated. To search by specific options ticker, use the Options
+    /// Contract endpoint [here](https://massive.com/docs/rest/options/contracts/contract-overview).
+    /// </param>
+    /// <param name="contractType">Query by the type of contract.</param>
+    /// <param name="expirationDate">Query by contract expiration with date format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="asOf">
+    /// Specify a point in time for contracts as of this date with format YYYY-MM-DD. Defaults to
+    /// today's date.
+    /// </param>
+    /// <param name="strikePrice">Query by strike price of a contract. Accepts an exact value or a range.</param>
+    /// <param name="expired">Query for expired contracts. Default is false.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<OptionsContract> EnumerateOptionsContractsAsync(
+        RangeFilter<string>? underlyingTicker = null,
+        string? ticker = null,
+        ContractType? contractType = null,
+        RangeFilter<LocalDate>? expirationDate = null,
+        LocalDate? asOf = null,
+        RangeFilter<double>? strikePrice = null,
+        bool? expired = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListOptionsContractsUri(underlyingTicker, ticker, contractType, expirationDate, asOf, strikePrice, expired, order, limit, sort);
+        return _transport.EnumerateAsync<ListOptionsContractsResponse, OptionsContract>(
+            requestUri, MassiveRestJsonContext.Default.ListOptionsContractsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves options contracts, filtered by underlying, type, expiration, strike, and whether they
+    /// have expired, as of a chosen date.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateOptionsContractsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="contractType"/> is a <see cref="ContractType"/>. <paramref name="ticker"/> is a
+    /// parameter the description itself calls deprecated; use <see cref="GetOptionsContractAsync"/> to
+    /// fetch one contract by its ticker. <paramref name="asOf"/> and the expiration filter are bare
+    /// strings in the description and take <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="underlyingTicker">Query for contracts relating to an underlying stock ticker. Accepts an exact value or a range.</param>
+    /// <param name="ticker">
+    /// This parameter has been deprecated. To search by specific options ticker, use the Options
+    /// Contract endpoint [here](https://massive.com/docs/rest/options/contracts/contract-overview).
+    /// </param>
+    /// <param name="contractType">Query by the type of contract.</param>
+    /// <param name="expirationDate">Query by contract expiration with date format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="asOf">
+    /// Specify a point in time for contracts as of this date with format YYYY-MM-DD. Defaults to
+    /// today's date.
+    /// </param>
+    /// <param name="strikePrice">Query by strike price of a contract. Accepts an exact value or a range.</param>
+    /// <param name="expired">Query for expired contracts. Default is false.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<OptionsContract>> ListOptionsContractsAsync(
+        RangeFilter<string>? underlyingTicker = null,
+        string? ticker = null,
+        ContractType? contractType = null,
+        RangeFilter<LocalDate>? expirationDate = null,
+        LocalDate? asOf = null,
+        RangeFilter<double>? strikePrice = null,
+        bool? expired = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListOptionsContractsUri(underlyingTicker, ticker, contractType, expirationDate, asOf, strikePrice, expired, order, limit, sort);
+        return SendListOptionsContractsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListOptionsContractsUri(
+        RangeFilter<string>? underlyingTicker,
+        string? ticker,
+        ContractType? contractType,
+        RangeFilter<LocalDate>? expirationDate,
+        LocalDate? asOf,
+        RangeFilter<double>? strikePrice,
+        bool? expired,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/options/contracts");
+
+        builder.AppendQuery("underlying_ticker", underlyingTicker);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("contract_type", contractType?.ToWireValue());
+        builder.AppendQuery("expiration_date", expirationDate);
+        builder.AppendQuery("as_of", asOf?.ToWireValue());
+        builder.AppendQuery("strike_price", strikePrice);
+        builder.AppendQuery("expired", expired);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<OptionsContract>> SendListOptionsContractsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListOptionsContractsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListOptionsContractsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<OptionsContract>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>Retrieves one options contract by its ticker, as of a chosen date.</summary>
+    /// <remarks>
+    /// <paramref name="optionsTicker"/> is the <c>O:</c>-prefixed contract symbol; the colon is
+    /// percent-escaped in the path. A contract the service does not know answers 404, which surfaces as
+    /// a <see cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="optionsTicker">
+    /// Query for a contract by options ticker. You can learn more about the structure of options
+    /// tickers [here](https://massive.com/blog/how-to-read-a-stock-options-ticker/).
+    /// </param>
+    /// <param name="asOf">
+    /// Specify a point in time for the contract as of this date with format YYYY-MM-DD. Defaults to
+    /// today's date.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<OptionsContract> GetOptionsContractAsync(
+        string optionsTicker,
+        LocalDate? asOf = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(optionsTicker);
+        string requestUri = BuildGetOptionsContractUri(optionsTicker, asOf);
+        return SendGetOptionsContractAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetOptionsContractUri(
+        string optionsTicker,
+        LocalDate? asOf)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/options/contracts/");
+        builder.AppendPathSegment(optionsTicker);
+
+        builder.AppendQuery("as_of", asOf?.ToWireValue());
+
+        return builder.ToUriString();
+    }
+
+    private async Task<OptionsContract> SendGetOptionsContractAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetOptionsContractResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetOptionsContractResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings, past and upcoming, filtered by ticker, identifier, listing
+    /// date, and status, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListIposAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. This is the served revision and
+    /// takes the plain name; <see cref="ListIposV1Async"/> is the <c>v1</c> route the description also
+    /// declares (decision D26). <paramref name="ipoStatus"/> is one of <c>direct_listing_process</c>,
+    /// <c>history</c>, <c>new</c>, <c>pending</c>, <c>postponed</c>, <c>rumor</c>, or <c>withdrawn</c>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, TSLA represents Tesla Inc.</param>
+    /// <param name="usCode">
+    /// Specify a us_code. This is a unique nine-character alphanumeric code that identifies a North
+    /// American financial security for the purposes of facilitating clearing and settlement of trades.
+    /// </param>
+    /// <param name="isin">
+    /// Specify an International Securities Identification Number (ISIN). This is a unique twelve-digit
+    /// code that is assigned to every security issuance in the world.
+    /// </param>
+    /// <param name="listingDate">
+    /// Specify a listing date. This is the first trading date for the newly listed entity. Accepts an
+    /// exact value or a range.
+    /// </param>
+    /// <param name="ipoStatus">Specify an IPO status.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<Ipo> EnumerateIposAsync(
+        string? ticker = null,
+        string? usCode = null,
+        string? isin = null,
+        RangeFilter<LocalDate>? listingDate = null,
+        string? ipoStatus = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposUri(ticker, usCode, isin, listingDate, ipoStatus, order, limit, sort);
+        return _transport.EnumerateAsync<ListIPOsResponse, Ipo>(
+            requestUri, MassiveRestJsonContext.Default.ListIPOsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings, past and upcoming, filtered by ticker, identifier, listing
+    /// date, and status.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateIposAsync"/> to walk every page without
+    /// handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision D18);
+    /// opt in with <c>MASSIVE0001</c>. This is the served revision and takes the plain name; <see
+    /// cref="ListIposV1Async"/> is the <c>v1</c> route the description also declares (decision D26).
+    /// <paramref name="ipoStatus"/> is one of <c>direct_listing_process</c>, <c>history</c>,
+    /// <c>new</c>, <c>pending</c>, <c>postponed</c>, <c>rumor</c>, or <c>withdrawn</c>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, TSLA represents Tesla Inc.</param>
+    /// <param name="usCode">
+    /// Specify a us_code. This is a unique nine-character alphanumeric code that identifies a North
+    /// American financial security for the purposes of facilitating clearing and settlement of trades.
+    /// </param>
+    /// <param name="isin">
+    /// Specify an International Securities Identification Number (ISIN). This is a unique twelve-digit
+    /// code that is assigned to every security issuance in the world.
+    /// </param>
+    /// <param name="listingDate">
+    /// Specify a listing date. This is the first trading date for the newly listed entity. Accepts an
+    /// exact value or a range.
+    /// </param>
+    /// <param name="ipoStatus">Specify an IPO status.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<Ipo>> ListIposAsync(
+        string? ticker = null,
+        string? usCode = null,
+        string? isin = null,
+        RangeFilter<LocalDate>? listingDate = null,
+        string? ipoStatus = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposUri(ticker, usCode, isin, listingDate, ipoStatus, order, limit, sort);
+        return SendListIposAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListIposUri(
+        string? ticker,
+        string? usCode,
+        string? isin,
+        RangeFilter<LocalDate>? listingDate,
+        string? ipoStatus,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/vX/reference/ipos");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("us_code", usCode);
+        builder.AppendQuery("isin", isin);
+        builder.AppendQuery("listing_date", listingDate);
+        builder.AppendQuery("ipo_status", ipoStatus);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Ipo>> SendListIposAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListIPOsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListIPOsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Ipo>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings from the v1 reference route, with comparator filters on
+    /// ticker, identifiers, listing date, and status, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListIposV1Async"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The description declares this route beside
+    /// <see cref="ListIposAsync"/>, and the service answered a plain-text 404 for it on 2026-09-03; it
+    /// stays mapped as declared (decision D21) and carries its version segment in its name because the
+    /// <c>vX</c> revision is the served one (decision D26). <paramref name="listingDate"/> takes a
+    /// calendar date or an <see cref="NodaTime.Instant"/>, rendered as Unix nanoseconds (decision D20).
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol of the IPO event. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="usCode">
+    /// Nine-character alphanumeric code that uniquely identifies a financial security in North America.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="isin">
+    /// International Securities Identification Number. This is a unique twelve-digit code that is
+    /// assigned to every security issuance in the world. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="listingDate">First trading date for the newly listed entity. Accepts an exact value or a range.</param>
+    /// <param name="ipoStatus">The status of the IPO. Accepts an exact value or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'listing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<IpoV1> EnumerateIposV1Async(
+        Filter<string>? ticker = null,
+        Filter<string>? usCode = null,
+        Filter<string>? isin = null,
+        RangeFilter<DateOrNanoseconds>? listingDate = null,
+        SetFilter<string>? ipoStatus = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposV1Uri(ticker, usCode, isin, listingDate, ipoStatus, limit, sort);
+        return _transport.EnumerateAsync<GetV1ReferenceIposResponse, IpoV1>(
+            requestUri, MassiveRestJsonContext.Default.GetV1ReferenceIposResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings from the v1 reference route, with comparator filters on
+    /// ticker, identifiers, listing date, and status.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateIposV1Async"/> to walk every page without
+    /// handling cursors yourself. The description declares this route beside <see
+    /// cref="ListIposAsync"/>, and the service answered a plain-text 404 for it on 2026-09-03; it stays
+    /// mapped as declared (decision D21) and carries its version segment in its name because the
+    /// <c>vX</c> revision is the served one (decision D26). <paramref name="listingDate"/> takes a
+    /// calendar date or an <see cref="NodaTime.Instant"/>, rendered as Unix nanoseconds (decision D20).
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol of the IPO event. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="usCode">
+    /// Nine-character alphanumeric code that uniquely identifies a financial security in North America.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="isin">
+    /// International Securities Identification Number. This is a unique twelve-digit code that is
+    /// assigned to every security issuance in the world. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="listingDate">First trading date for the newly listed entity. Accepts an exact value or a range.</param>
+    /// <param name="ipoStatus">The status of the IPO. Accepts an exact value or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'listing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<IpoV1>> ListIposV1Async(
+        Filter<string>? ticker = null,
+        Filter<string>? usCode = null,
+        Filter<string>? isin = null,
+        RangeFilter<DateOrNanoseconds>? listingDate = null,
+        SetFilter<string>? ipoStatus = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposV1Uri(ticker, usCode, isin, listingDate, ipoStatus, limit, sort);
+        return SendListIposV1Async(requestUri, cancellationToken);
+    }
+
+    private static string BuildListIposV1Uri(
+        Filter<string>? ticker,
+        Filter<string>? usCode,
+        Filter<string>? isin,
+        RangeFilter<DateOrNanoseconds>? listingDate,
+        SetFilter<string>? ipoStatus,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/ipos");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("us_code", usCode);
+        builder.AppendQuery("isin", isin);
+        builder.AppendQuery("listing_date", listingDate);
+        builder.AppendQuery("ipo_status", ipoStatus);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<IpoV1>> SendListIposV1Async(string requestUri, CancellationToken cancellationToken)
+    {
+        GetV1ReferenceIposResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetV1ReferenceIposResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<IpoV1>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves short interest reports for US stocks, filtered by ticker, settlement date, days to
+    /// cover, and average daily volume, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListShortInterestAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. Pass a plain value for equality, a <see cref="RangeFilter"/> factory
+    /// for a range, or <see cref="SetFilter"/> for a set. <paramref name="settlementDate"/> is a bare
+    /// string in the description and takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="daysToCover">
+    /// Calculated as short_interest divided by avg_daily_volume, representing the estimated number of
+    /// days it would take to cover all short positions based on average trading volume. Accepts an
+    /// exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="settlementDate">
+    /// The date (formatted as YYYY-MM-DD) on which the short interest data is considered settled,
+    /// typically based on exchange reporting schedules. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="avgDailyVolume">
+    /// The average daily trading volume for the stock over a specified period, typically used to
+    /// contextualize short interest. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ShortInterest> EnumerateShortInterestAsync(
+        Filter<string>? ticker = null,
+        Filter<double>? daysToCover = null,
+        Filter<LocalDate>? settlementDate = null,
+        Filter<long>? avgDailyVolume = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortInterestUri(ticker, daysToCover, settlementDate, avgDailyVolume, limit, sort);
+        return _transport.EnumerateAsync<GetStocksV1ShortInterestResponse, ShortInterest>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortInterestResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves short interest reports for US stocks, filtered by ticker, settlement date, days to
+    /// cover, and average daily volume.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateShortInterestAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality, a <see cref="RangeFilter"/> factory for a range, or <see
+    /// cref="SetFilter"/> for a set. <paramref name="settlementDate"/> is a bare string in the
+    /// description and takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="daysToCover">
+    /// Calculated as short_interest divided by avg_daily_volume, representing the estimated number of
+    /// days it would take to cover all short positions based on average trading volume. Accepts an
+    /// exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="settlementDate">
+    /// The date (formatted as YYYY-MM-DD) on which the short interest data is considered settled,
+    /// typically based on exchange reporting schedules. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="avgDailyVolume">
+    /// The average daily trading volume for the stock over a specified period, typically used to
+    /// contextualize short interest. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ShortInterest>> ListShortInterestAsync(
+        Filter<string>? ticker = null,
+        Filter<double>? daysToCover = null,
+        Filter<LocalDate>? settlementDate = null,
+        Filter<long>? avgDailyVolume = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortInterestUri(ticker, daysToCover, settlementDate, avgDailyVolume, limit, sort);
+        return SendListShortInterestAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListShortInterestUri(
+        Filter<string>? ticker,
+        Filter<double>? daysToCover,
+        Filter<LocalDate>? settlementDate,
+        Filter<long>? avgDailyVolume,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/short-interest");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("days_to_cover", daysToCover);
+        builder.AppendQuery("settlement_date", settlementDate);
+        builder.AppendQuery("avg_daily_volume", avgDailyVolume);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ShortInterest>> SendListShortInterestAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1ShortInterestResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortInterestResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ShortInterest>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves daily short sale volume for US stocks, by venue, filtered by ticker, date, and short
+    /// volume ratio, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListShortVolumeAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Pass a plain value for equality, a <see cref="RangeFilter"/> factory for a
+    /// range, or <see cref="SetFilter"/> for a set. <paramref name="date"/> is a bare string in the
+    /// description and takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="date">
+    /// The date of trade activity reported in the format YYYY-MM-DD. Accepts an exact value, a range,
+    /// or a set of values.
+    /// </param>
+    /// <param name="shortVolumeRatio">
+    /// The percentage of total volume that was sold short. Calculated as (short_volume / total_volume)
+    /// * 100. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ShortVolume> EnumerateShortVolumeAsync(
+        Filter<string>? ticker = null,
+        Filter<LocalDate>? date = null,
+        Filter<double>? shortVolumeRatio = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortVolumeUri(ticker, date, shortVolumeRatio, limit, sort);
+        return _transport.EnumerateAsync<GetStocksV1ShortVolumeResponse, ShortVolume>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortVolumeResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves daily short sale volume for US stocks, by venue, filtered by ticker, date, and short
+    /// volume ratio.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateShortVolumeAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality, a <see cref="RangeFilter"/> factory for a range, or <see
+    /// cref="SetFilter"/> for a set. <paramref name="date"/> is a bare string in the description and
+    /// takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="date">
+    /// The date of trade activity reported in the format YYYY-MM-DD. Accepts an exact value, a range,
+    /// or a set of values.
+    /// </param>
+    /// <param name="shortVolumeRatio">
+    /// The percentage of total volume that was sold short. Calculated as (short_volume / total_volume)
+    /// * 100. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ShortVolume>> ListShortVolumeAsync(
+        Filter<string>? ticker = null,
+        Filter<LocalDate>? date = null,
+        Filter<double>? shortVolumeRatio = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortVolumeUri(ticker, date, shortVolumeRatio, limit, sort);
+        return SendListShortVolumeAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListShortVolumeUri(
+        Filter<string>? ticker,
+        Filter<LocalDate>? date,
+        Filter<double>? shortVolumeRatio,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/short-volume");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("date", date);
+        builder.AppendQuery("short_volume_ratio", shortVolumeRatio);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ShortVolume>> SendListShortVolumeAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1ShortVolumeResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortVolumeResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ShortVolume>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the free float of US stocks, filtered by ticker and by the share of outstanding stock
+    /// that floats, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFloatAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint.
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="freeFloatPercent">
+    /// Percentage of total shares outstanding that are available for public trading, rounded to two
+    /// decimal places. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<ShareFloat> EnumerateFloatAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<double>? freeFloatPercent = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFloatUri(ticker, freeFloatPercent, limit, sort);
+        return _transport.EnumerateAsync<GetStocksVXFloatResponse, ShareFloat>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksVXFloatResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the free float of US stocks, filtered by ticker and by the share of outstanding stock
+    /// that floats.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFloatAsync"/> to walk every page without
+    /// handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision D18);
+    /// opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="freeFloatPercent">
+    /// Percentage of total shares outstanding that are available for public trading, rounded to two
+    /// decimal places. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<ShareFloat>> ListFloatAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<double>? freeFloatPercent = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFloatUri(ticker, freeFloatPercent, limit, sort);
+        return SendListFloatAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFloatUri(
+        Filter<string>? ticker,
+        RangeFilter<double>? freeFloatPercent,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/vX/float");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("free_float_percent", freeFloatPercent);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ShareFloat>> SendListFloatAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksVXFloatResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksVXFloatResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ShareFloat>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
     }
 }

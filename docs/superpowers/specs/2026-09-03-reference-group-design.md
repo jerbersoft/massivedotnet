@@ -94,11 +94,12 @@ the SEC surface with its own transport addition, and neither depends on the othe
 
 ### D-R2 · A single-branch `oneOf` reads as its branch
 
-`Spec.IsObject` treats a schema whose `oneOf` has exactly one branch as an object when that
-branch is, and `Spec.Collect` recurses into the branch, so `Shape`, `Properties`, and `Navigate`
-all see through it. A `oneOf` with more than one branch on a response schema is refused with a
-diagnostic naming the operation and pointer; none exists today, and a union has no honest model
-binding. Parameter-side `oneOf`, which the news operation uses, is untouched: those parameters
+A private `Unwrap` helper, called from `Spec.Shape` and `Spec.Collect`, treats a schema whose
+`oneOf` has exactly one branch as that branch, so `Shape`, `Properties`, and `Navigate` all see
+through it. A `oneOf` with more than one branch of which any is an object is refused with a
+diagnostic naming the branch count and the rule; none exists today, and a union has no honest model
+binding. A union of scalars, which the news parameters declare, stays a scalar as it always has.
+Parameter-side `oneOf`, which the news operation uses, is untouched: those parameters
 already bind through the map.
 
 Without this the ticker events model would carry `string[]? Events` and fail on every real
@@ -180,8 +181,10 @@ one of these sites, so they are `ReferenceDividend`, `ReferenceSplit`, and `Exch
 goes unprefixed because it spans every asset class, and `StockExchange` already holds the narrower
 one. The two IPO models differ in wire types, not just names, so they are `Ipo` and `IpoV1`.
 
-Tickers follow the constitution's own example in D4: `Ticker` is the list item, `TickerDetails`
-the singular, with `CompanyAddress` and `Branding` beneath it.
+Tickers follow the constitution's own example in D4: `TickerSummary` is the list item (not
+`Ticker`: C# forbids a member named after its enclosing type, CS0542, and `Ticker` is the
+SDK-wide property name for the wire field), `TickerDetails` the singular, with `CompanyAddress`
+and `Branding` beneath it.
 
 ### D-R8 · SEC form names: a leading form number is spelled, a trailing one is kept
 
@@ -263,7 +266,7 @@ on `vX` routes carry `[Experimental("MASSIVE0001")]`.
 
 | Operation | Method | Returns |
 |---|---|---|
-| `ListTickers` | `ListTickersAsync(RangeFilter<string>? ticker, string? type, MarketType? market, string? exchange, string? cusip, string? cik, LocalDate? date, string? search, bool? active, SortOrder? order, int? limit, string? sort)`, `EnumerateTickersAsync` | `MassivePage<Ticker>`, `IAsyncEnumerable<Ticker>` |
+| `ListTickers` | `ListTickersAsync(RangeFilter<string>? ticker, string? type, MarketType? market, string? exchange, string? cusip, string? cik, LocalDate? date, string? search, bool? active, SortOrder? order, int? limit, string? sort)`, `EnumerateTickersAsync` | `MassivePage<TickerSummary>`, `IAsyncEnumerable<TickerSummary>` |
 | `GetTicker` | `GetTickerAsync(string ticker, LocalDate? date)` | `TickerDetails` |
 | `ListTickerTypes` | `ListTickerTypesAsync(MarketType? assetClass, string? locale)` | `TickerType[]` |
 | `GetEvents` | `GetTickerEventsAsync(string id, string? types)` | `TickerEvents` |
@@ -322,7 +325,7 @@ Plan A:
 
 | Model | Pointer, from | Notes |
 |---|---|---|
-| `Ticker` | `results/items` of `ListTickers` | `delisted_utc`, `last_updated_utc` are `Instant?` from their format |
+| `TickerSummary` | `results/items` of `ListTickers` | `delisted_utc`, `last_updated_utc` are `Instant?` from their format |
 | `TickerDetails` | `results` of `GetTicker` | `list_date` as `LocalDate?`; `delisted_utc` as `Instant?`; numbers as the schema declares |
 | `CompanyAddress` | `results/address` of `GetTicker` | |
 | `Branding` | `results/branding` of `GetTicker` | |

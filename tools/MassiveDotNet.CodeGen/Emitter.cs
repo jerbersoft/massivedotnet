@@ -68,7 +68,7 @@ internal sealed class Emitter(Spec spec, Map map)
         List<SpecProperty> properties = [.. Spec.Properties(schema)
             .OrderBy(p => model.Properties.FindIndex(row => row.WireName == p.Name) is var i and >= 0 ? i : int.MaxValue)];
 
-        List<(SpecProperty Property, string Name, string Type, string? Summary)> members = [.. properties.Select(property =>
+        List<(SpecProperty Property, string Name, string Type, string? Summary, bool PreserveMarkup)> members = [.. properties.Select(property =>
         {
             MapProperty? mapped = model.Property(property.Name);
 
@@ -76,7 +76,8 @@ internal sealed class Emitter(Spec spec, Map map)
                 property,
                 mapped?.Name ?? Naming.Pascal(property.Name),
                 PropertyType(model, property, mapped),
-                mapped?.Summary ?? Prose.Clean(property.Description));
+                mapped?.Summary ?? Prose.Clean(property.Description),
+                mapped?.Summary is not null);
         })];
 
         CodeWriter writer = new();
@@ -105,7 +106,7 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             bool first = true;
 
-            foreach ((SpecProperty property, string name, string type, string? summary) in members)
+            foreach ((SpecProperty property, string name, string type, string? summary, bool preserveMarkup) in members)
             {
                 if (!first)
                 {
@@ -114,7 +115,7 @@ internal sealed class Emitter(Spec spec, Map map)
 
                 first = false;
 
-                writer.Doc("summary", summary);
+                writer.Doc("summary", summary, preserveMarkup: preserveMarkup);
                 writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
 
                 string modifier = NeedsRequiredModifier(property.Required, type) ? "required " : "";

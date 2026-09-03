@@ -276,6 +276,78 @@ if (snapshots is not [{ Ticker: "BCAT", Minute: { AccumulatedVolume: 37216 }, La
     return 1;
 }
 
+// Market status is the first body-object payload with nested models, the tickers page the first
+// whose query carries a MarketType and whose rows carry an Instant read from an RFC 3339 string,
+// and the contracts page the first ContractType parameter and optional array of nested models;
+// each is a generic instantiation or a context entry a clean publish says nothing about unless
+// something here reaches it.
+Console.WriteLine("\nmarket status:");
+
+MarketStatus status = await client.Reference.GetMarketStatusAsync();
+Console.WriteLine(
+    $"  market {status.Market}  nyse {status.Exchanges?.Nyse}  fx {status.Currencies?.Fx}"
+    + $"  at {(status.ServerTime is { } serverTime ? InstantPattern.ExtendedIso.Format(serverTime) : "unknown")}");
+
+if (status.Market != "extended-hours" || status.Exchanges?.Otc != "closed" || status.ServerTime != Instant.FromUtc(2020, 11, 10, 22, 37, 37))
+{
+    Console.Error.WriteLine("FAIL: expected an extended-hours market with OTC closed at 2020-11-10T22:37:37Z.");
+    return 1;
+}
+
+Console.WriteLine("\ntickers, for the stocks market:");
+
+MassivePage<TickerSummary> tickers = await client.Reference.ListTickersAsync(market: MarketType.Stocks, active: true, limit: 1);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (TickerSummary ticker in tickers.Results)
+{
+    Console.WriteLine($"  {ticker.Ticker,-6} {ticker.Name}  updated {(ticker.LastUpdatedUtc is { } updated ? InstantPattern.ExtendedIso.Format(updated) : "never")}");
+}
+
+const string ExpectedTickersQuery = "?market=stocks&active=true&limit=1";
+
+if (handler.LastRequestUri?.Query != ExpectedTickersQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the tickers query {ExpectedTickersQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (tickers.Results is not [{ Ticker: "A", LastUpdatedUtc: not null }] || !tickers.HasMore)
+{
+    Console.Error.WriteLine("FAIL: expected one ticker, A, with an update time, and more pages.");
+    return 1;
+}
+
+Console.WriteLine("\noptions contracts, calls only:");
+
+MassivePage<OptionsContract> contracts = await client.Reference.ListOptionsContractsAsync(
+    underlyingTicker: "AAPL",
+    contractType: ContractType.Call,
+    strikePrice: RangeFilter.Between(80d, 90d),
+    limit: 2);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (OptionsContract contract in contracts.Results)
+{
+    Console.WriteLine($"  {contract.Ticker}  strike {contract.StrikePrice,6:F2}  extras {contract.AdditionalUnderlyings?.Length ?? 0}");
+}
+
+const string ExpectedContractsQuery = "?underlying_ticker=AAPL&contract_type=call&strike_price.gte=80&strike_price.lte=90&limit=2";
+
+if (handler.LastRequestUri?.Query != ExpectedContractsQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the contracts query {ExpectedContractsQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (contracts.Results is not [{ AdditionalUnderlyings: null }, { AdditionalUnderlyings: [{ Underlying: "VMW" }, _] }])
+{
+    Console.Error.WriteLine("FAIL: expected two contracts, the second with two additional underlyings starting with VMW.");
+    return 1;
+}
+
 Console.WriteLine($"\nrequests: {handler.Requests}");
 
 if (bars.Length != 2 || !page.HasMore)
@@ -286,11 +358,12 @@ if (bars.Length != 2 || !page.HasMore)
 
 // Two pages of the aggregates enumeration, the single-page aggregates call, the dividends call,
 // the news call, one SMA page, two SMA pages enumerated, the last trade, the open/close day, the
-// holidays, the trades page, and the snapshots.
-if (enumerated != 3 || handler.Requests != 13)
+// holidays, the trades page, the snapshots, the market status, the tickers page, and the
+// contracts page.
+if (enumerated != 3 || handler.Requests != 16)
 {
     Console.Error.WriteLine(
-        $"FAIL: expected 3 enumerated bars over 13 requests; got {enumerated} over {handler.Requests}.");
+        $"FAIL: expected 3 enumerated bars over 16 requests; got {enumerated} over {handler.Requests}.");
     return 1;
 }
 
@@ -510,6 +583,77 @@ internal sealed class StubHandler : HttpMessageHandler
         }
         """;
 
+    private const string MarketStatusBody = """
+        {
+          "afterHours": true,
+          "currencies": { "crypto": "open", "fx": "open" },
+          "earlyHours": false,
+          "exchanges": { "nasdaq": "extended-hours", "nyse": "extended-hours", "otc": "closed" },
+          "market": "extended-hours",
+          "serverTime": "2020-11-10T17:37:37-05:00"
+        }
+        """;
+
+    private const string Tickers = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/v3/reference/tickers?cursor=next",
+          "request_id": "e70013d92930de90e089dc8fa098888e",
+          "results": [
+            {
+              "active": true,
+              "cik": "0001090872",
+              "composite_figi": "BBG000BWQYZ5",
+              "currency_name": "usd",
+              "last_updated_utc": "2021-04-25T00:00:00Z",
+              "locale": "us",
+              "market": "stocks",
+              "name": "Agilent Technologies Inc.",
+              "primary_exchange": "XNYS",
+              "share_class_figi": "BBG001SCTQY4",
+              "ticker": "A",
+              "type": "CS"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    private const string Contracts = """
+        {
+          "request_id": "603902c0-a5a5-406f-bd08-f030f92418fa",
+          "results": [
+            {
+              "cfi": "OCASPS",
+              "contract_type": "call",
+              "exercise_style": "american",
+              "expiration_date": "2021-11-19",
+              "primary_exchange": "BATO",
+              "shares_per_contract": 100,
+              "strike_price": 85,
+              "ticker": "O:AAPL211119C00085000",
+              "underlying_ticker": "AAPL"
+            },
+            {
+              "additional_underlyings": [
+                { "amount": 44, "type": "equity", "underlying": "VMW" },
+                { "amount": 6.53, "type": "currency", "underlying": "USD" }
+              ],
+              "cfi": "OCASPS",
+              "contract_type": "call",
+              "exercise_style": "american",
+              "expiration_date": "2021-11-19",
+              "primary_exchange": "BATO",
+              "shares_per_contract": 100,
+              "strike_price": 90,
+              "ticker": "O:AAPL211119C00090000",
+              "underlying_ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
     public Uri? LastRequestUri { get; private set; }
 
     public int Requests { get; private set; }
@@ -535,6 +679,9 @@ internal sealed class StubHandler : HttpMessageHandler
             "/v1/marketstatus/upcoming" => Holidays,
             "/v3/trades/AAPL" => Trades,
             "/v2/snapshot/locale/us/markets/stocks/tickers" => Snapshots,
+            "/v1/marketstatus/now" => MarketStatusBody,
+            "/v3/reference/tickers" => Tickers,
+            "/v3/reference/options/contracts" => Contracts,
             _ => cursored ? FinalPage : FirstPage,
         };
 

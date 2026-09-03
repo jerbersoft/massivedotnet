@@ -119,6 +119,36 @@ public sealed class ModelBindingTests
         """;
 
     [Fact]
+    public void PropertySummariesPreserveMapAuthoredMarkupButEscapeDescriptionMarkup()
+    {
+        // F1: a property row's map-authored `summary` may carry intentional XML doc markup, the
+        // same way a model or endpoint summary can; a schema `description` is docs-site prose run
+        // through Prose.Clean and must still be escaped, never trusted as markup.
+        //
+        // The "described" property's angle bracket is deliberately unpaired: Prose.Clean's HtmlTag
+        // regex ("<[^>]+>") strips any matched <...> pair wholesale, so a *closed* tag such as
+        // "<c>y</c>" never reaches CodeWriter.Doc at all -- there is nothing left to escape. A lone
+        // "<" with no later ">" survives Prose.Clean untouched, which is exactly what still needs
+        // escaping so it cannot break the emitted XML doc comment.
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "mapped":    { "type": "string" },
+                "described": { "type": "string", "description": "Values under <100 also qualify." }
+              }
+            }
+            """);
+
+        string map = MapDocument("""{ "mapped": { "summary": "Uses <c>x</c> for emphasis." } }""");
+
+        string thing = Thing(Harness.Generate(spec, map));
+
+        Assert.Contains("Uses <c>x</c> for emphasis.", thing, StringComparison.Ordinal);
+        Assert.Contains("Values under &lt;100 also qualify.", thing, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PropertiesFollowTheMapsDeclarationOrder()
     {
         // The description stores properties alphabetically; the map's order keeps related fields
@@ -294,5 +324,123 @@ public sealed class ModelBindingTests
         Assert.Contains("public bool Flag { get; init; }", thing, StringComparison.Ordinal);
         Assert.Contains("public double Ratio { get; init; }", thing, StringComparison.Ordinal);
         Assert.DoesNotContain("required", thing, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SeesThroughAOneBranchOneOf()
+    {
+        // The ticker events items are the description's one response-side oneOf, and it has a
+        // single branch. Without the unwrap the array has no item type and binds string[] (D-R2).
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "name":   { "type": "string" },
+                "events": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": ["date"],
+                        "properties": {
+                          "date":          { "type": "string", "format": "date" },
+                          "ticker_change": { "type": "object", "properties": { "ticker": { "type": "string" } } }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument(
+            """{ "events": { "name": "Events", "model": "Event" } }""",
+            """
+            "Event":  { "schema": { "operationId": "ListThings", "pointer": "results/items/events/items" }, "properties": { "ticker_change": { "name": "Change", "model": "Change" } } },
+            "Change": { "schema": { "operationId": "ListThings", "pointer": "results/items/events/items/ticker_change" } }
+            """));
+
+        Assert.Contains("public Event[]? Events { get; init; }", Thing(files), StringComparison.Ordinal);
+
+        string @event = files[Path.Combine("Models", "Event.g.cs")];
+        Assert.Contains("public LocalDate Date { get; init; }", @event, StringComparison.Ordinal);
+        Assert.Contains("public Change? Change { get; init; }", @event, StringComparison.Ordinal);
+        Assert.Contains("public string? Ticker { get; init; }", files[Path.Combine("Models", "Change.g.cs")], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadsAScalarUnionAsAScalar()
+    {
+        // The news parameters declare a two-branch oneOf of strings, and parameters go through
+        // the same Shape. A union of scalars must keep reading as a scalar, or news stops
+        // generating. This passed before the unwrap existed and pins that the refusal below is
+        // narrower than "any multi-branch oneOf".
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "when": { "oneOf": [ { "type": "string" }, { "type": "string", "format": "date-time" } ] }
+              }
+            }
+            """);
+
+        Assert.Contains("public string? When { get; init; }", Thing(Harness.Generate(spec, MapDocument())), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RefusesAUnionWithAnObjectBranch()
+    {
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "payload": {
+                  "oneOf": [
+                    { "type": "object", "properties": { "a": { "type": "string" } } },
+                    { "type": "object", "properties": { "b": { "type": "string" } } }
+                  ]
+                }
+              }
+            }
+            """);
+
+        string message = Harness.Refusal(spec, MapDocument());
+
+        Assert.Contains("oneOf with 2 branches", message, StringComparison.Ordinal);
+        Assert.Contains("D24", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RefusesAUnionWhoseObjectBranchIsWrapped()
+    {
+        // A multi-branch union where one branch wraps an object in a single-branch oneOf.
+        // The outer oneOf has two branches: the first is { oneOf: [ { type: object } ] },
+        // the second is { type: string }. Without unwrapping each branch before judging,
+        // IsObject sees only the outer oneOf wrapper (no type, properties, or allOf) and
+        // returns false, so the loop falls through and the union silently reads as a scalar.
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "payload": {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        { "type": "object", "properties": { "a": { "type": "string" } } }
+                      ]
+                    },
+                    { "type": "string" }
+                  ]
+                }
+              }
+            }
+            """);
+
+        string message = Harness.Refusal(spec, MapDocument());
+
+        Assert.Contains("oneOf with 2 branches", message, StringComparison.Ordinal);
+        Assert.Contains("D24", message, StringComparison.Ordinal);
     }
 }
