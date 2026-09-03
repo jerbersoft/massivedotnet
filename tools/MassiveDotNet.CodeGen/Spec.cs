@@ -214,10 +214,16 @@ internal sealed class Spec
                 resolved = _componentParameters.GetProperty(name);
             }
 
+            string location = resolved.GetProperty("in").GetString()!;
+
             results.Add(new SpecParameter(
                 resolved.GetProperty("name").GetString()!,
-                resolved.GetProperty("in").GetString()!,
-                resolved.TryGetProperty("required", out JsonElement required) && required.GetBoolean(),
+                location,
+                // OpenAPI mandates required: true on a path parameter, and the SEC v1 description
+                // omits it on filing_id and file_id. A segment cannot be left out of a route, so
+                // the location is the fact and the flag is read only where the location leaves the
+                // question open (D-R3).
+                location == "path" || (resolved.TryGetProperty("required", out JsonElement required) && required.GetBoolean()),
                 resolved.TryGetProperty("description", out JsonElement description) ? description.GetString() : null,
                 resolved.TryGetProperty("schema", out JsonElement schema) ? schema : default));
         }
