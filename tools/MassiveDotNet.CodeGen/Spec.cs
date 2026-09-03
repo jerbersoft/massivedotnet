@@ -392,6 +392,8 @@ internal sealed class Spec
             return SchemaShape.Scalar;
         }
 
+        schema = Unwrap(schema);
+
         if (IsObject(schema))
         {
             return SchemaShape.Object;
@@ -500,12 +502,52 @@ internal sealed class Spec
         || schema.TryGetProperty("properties", out _)
         || schema.TryGetProperty("allOf", out _);
 
+    /// <summary>
+    /// The node a schema binds as: itself, or the single branch of a one-branch <c>oneOf</c>.
+    /// The description uses that form once, on the ticker events items, and without this the
+    /// array had no item type and bound <c>string[]</c> (D24).
+    /// </summary>
+    /// <remarks>
+    /// A <c>oneOf</c> of scalars still reads as a scalar, as it always has: the news parameters
+    /// declare one and go through <see cref="Shape"/> too. A union with an object branch has no
+    /// model binding, and reading it as a scalar would bind <c>string</c> where the wire carries
+    /// objects, so it is refused. No operation declares one today.
+    /// </remarks>
+    private static JsonElement Unwrap(JsonElement schema)
+    {
+        if (schema.ValueKind != JsonValueKind.Object
+            || !schema.TryGetProperty("oneOf", out JsonElement branches)
+            || branches.ValueKind != JsonValueKind.Array)
+        {
+            return schema;
+        }
+
+        if (branches.GetArrayLength() == 1)
+        {
+            return Unwrap(branches[0]);
+        }
+
+        foreach (JsonElement branch in branches.EnumerateArray())
+        {
+            if (IsObject(branch))
+            {
+                throw new InvalidOperationException(
+                    $"A oneOf with {branches.GetArrayLength()} branches, at least one an object, has no model binding. "
+                    + "The generator reads only a one-branch oneOf as its branch (D24); a union needs a design, not a guess.");
+            }
+        }
+
+        return schema;
+    }
+
     private static void Collect(
         JsonElement schema,
         Dictionary<string, SpecProperty> properties,
         List<string> order,
         HashSet<string> required)
     {
+        schema = Unwrap(schema);
+
         if (schema.TryGetProperty("allOf", out JsonElement branches))
         {
             foreach (JsonElement branch in branches.EnumerateArray())

@@ -295,4 +295,90 @@ public sealed class ModelBindingTests
         Assert.Contains("public double Ratio { get; init; }", thing, StringComparison.Ordinal);
         Assert.DoesNotContain("required", thing, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void SeesThroughAOneBranchOneOf()
+    {
+        // The ticker events items are the description's one response-side oneOf, and it has a
+        // single branch. Without the unwrap the array has no item type and binds string[] (D-R2).
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "name":   { "type": "string" },
+                "events": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": ["date"],
+                        "properties": {
+                          "date":          { "type": "string", "format": "date" },
+                          "ticker_change": { "type": "object", "properties": { "ticker": { "type": "string" } } }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument(
+            """{ "events": { "name": "Events", "model": "Event" } }""",
+            """
+            "Event":  { "schema": { "operationId": "ListThings", "pointer": "results/items/events/items" }, "properties": { "ticker_change": { "name": "Change", "model": "Change" } } },
+            "Change": { "schema": { "operationId": "ListThings", "pointer": "results/items/events/items/ticker_change" } }
+            """));
+
+        Assert.Contains("public Event[]? Events { get; init; }", Thing(files), StringComparison.Ordinal);
+
+        string @event = files[Path.Combine("Models", "Event.g.cs")];
+        Assert.Contains("public LocalDate Date { get; init; }", @event, StringComparison.Ordinal);
+        Assert.Contains("public Change? Change { get; init; }", @event, StringComparison.Ordinal);
+        Assert.Contains("public string? Ticker { get; init; }", files[Path.Combine("Models", "Change.g.cs")], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadsAScalarUnionAsAScalar()
+    {
+        // The news parameters declare a two-branch oneOf of strings, and parameters go through
+        // the same Shape. A union of scalars must keep reading as a scalar, or news stops
+        // generating. This passed before the unwrap existed and pins that the refusal below is
+        // narrower than "any multi-branch oneOf".
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "when": { "oneOf": [ { "type": "string" }, { "type": "string", "format": "date-time" } ] }
+              }
+            }
+            """);
+
+        Assert.Contains("public string? When { get; init; }", Thing(Harness.Generate(spec, MapDocument())), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RefusesAUnionWithAnObjectBranch()
+    {
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "payload": {
+                  "oneOf": [
+                    { "type": "object", "properties": { "a": { "type": "string" } } },
+                    { "type": "object", "properties": { "b": { "type": "string" } } }
+                  ]
+                }
+              }
+            }
+            """);
+
+        string message = Harness.Refusal(spec, MapDocument());
+
+        Assert.Contains("oneOf with 2 branches", message, StringComparison.Ordinal);
+        Assert.Contains("D24", message, StringComparison.Ordinal);
+    }
 }

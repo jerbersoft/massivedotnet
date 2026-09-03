@@ -96,9 +96,10 @@ the SEC surface with its own transport addition, and neither depends on the othe
 
 `Spec.IsObject` treats a schema whose `oneOf` has exactly one branch as an object when that
 branch is, and `Spec.Collect` recurses into the branch, so `Shape`, `Properties`, and `Navigate`
-all see through it. A `oneOf` with more than one branch on a response schema is refused with a
-diagnostic naming the operation and pointer; none exists today, and a union has no honest model
-binding. Parameter-side `oneOf`, which the news operation uses, is untouched: those parameters
+all see through it. A `oneOf` with more than one branch of which any is an object is refused with a
+diagnostic naming the branch count and the rule; none exists today, and a union has no honest model
+binding. A union of scalars, which the news parameters declare, stays a scalar as it always has.
+Parameter-side `oneOf`, which the news operation uses, is untouched: those parameters
 already bind through the map.
 
 Without this the ticker events model would carry `string[]? Events` and fail on every real
