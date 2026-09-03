@@ -789,3 +789,48 @@ internal sealed class GetStocksVXFloatResponse : IPagedEnvelope<ShareFloat>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v1/reference/sec/filings.</summary>
+internal sealed class ListFilingsResponse : IPagedEnvelope<Filing>
+{
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    [JsonPropertyName("results")]
+    public Filing[]? Results { get; init; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/reference/sec/filings/{filing_id}.</summary>
+internal sealed class GetFilingResponse
+{
+    [JsonPropertyName("results")]
+    public Filing? Results { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/reference/sec/filings/{filing_id}/files.</summary>
+internal sealed class ListFilingFilesResponse : IPagedEnvelope<FilingFile>
+{
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    [JsonPropertyName("results")]
+    public FilingFile[]? Results { get; init; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

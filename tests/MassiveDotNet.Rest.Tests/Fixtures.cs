@@ -1882,4 +1882,185 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// GET /v1/reference/sec/filings?type=10-K&amp;limit=2&amp;sort=filing_date&amp;order=desc,
+    /// captured from the live service on 2026-09-03 because the description publishes no example
+    /// for it (D-R12). Reviewed: it carries no account identifier and no URL embeds a key. The
+    /// wire carries fields the description does not declare (<c>main_file_url</c>,
+    /// <c>xbrl_instance_url</c>, and a <c>tickers</c> array on the company), which the models
+    /// ignore, and its dates are the compact digits D-R9 binds as strings.
+    /// </summary>
+    public const string ReferenceSecFilings = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/v1/reference/sec/filings?cursor=YXA9MjAyNjA5MDImYXM9MDAwMTAxMDQ3MC0yNi0wMDAwMTAmbGltaXQ9MiZvcmRlcj1kZXNjJnNvcnQ9ZmlsaW5nX2RhdGUmdHlwZT0xMC1L",
+          "request_id": "18a640368b180ab2bc59c32d803c411c",
+          "results": [
+            {
+              "acceptance_datetime": "20260902103943",
+              "accession_number": "0001683168-26-006873",
+              "entities": [
+                {
+                  "company_data": {
+                    "cik": "0002087656",
+                    "name": "MYX Inc.",
+                    "sic": "7374"
+                  },
+                  "relation": "filer"
+                }
+              ],
+              "files_count": 65,
+              "filing_date": "20260902",
+              "id": "0001683168-26-006873",
+              "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126.htm",
+              "period_of_report_date": "20260531",
+              "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/0001683168-26-006873.txt",
+              "type": "10-K",
+              "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126_htm.xml"
+            },
+            {
+              "acceptance_datetime": "20260902151927",
+              "accession_number": "0001010470-26-000010",
+              "entities": [
+                {
+                  "company_data": {
+                    "cik": "0001010470",
+                    "name": "PROVIDENT FINANCIAL HOLDINGS INC",
+                    "sic": "6035",
+                    "ticker": "PROV",
+                    "tickers": [
+                      "PROV"
+                    ]
+                  },
+                  "relation": "filer"
+                }
+              ],
+              "files_count": 142,
+              "filing_date": "20260902",
+              "id": "0001010470-26-000010",
+              "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0001010470-26-000010/files/prov-20260630x10k.htm",
+              "period_of_report_date": "20260630",
+              "source_url": "https://www.sec.gov/Archives/edgar/data/1010470/000101047026000010/0001010470-26-000010.txt",
+              "type": "10-K",
+              "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0001010470-26-000010/files/prov-20260630x10k_htm.xml"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The page after <see cref="ReferenceSecFilings"/>, captured on 2026-09-03 by following its
+    /// cursor and trimmed to its first filing with the cursor removed, so a traversal that starts
+    /// on the first page ends here. Reviewed as the first page was.
+    /// </summary>
+    public const string ReferenceSecFilingsLastPage = """
+        {
+          "count": 1,
+          "request_id": "0801eb323ee313fc400388d884bc1020",
+          "results": [
+            {
+              "acceptance_datetime": "20260902163656",
+              "accession_number": "0000858877-26-000132",
+              "entities": [
+                {
+                  "company_data": {
+                    "cik": "0000858877",
+                    "name": "CISCO SYSTEMS, INC.",
+                    "sic": "3576",
+                    "ticker": "CSCO",
+                    "tickers": [
+                      "CSCO"
+                    ]
+                  },
+                  "relation": "filer"
+                }
+              ],
+              "files_count": 155,
+              "filing_date": "20260902",
+              "id": "0000858877-26-000132",
+              "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0000858877-26-000132/files/csco-20260725.htm",
+              "period_of_report_date": "20260725",
+              "source_url": "https://www.sec.gov/Archives/edgar/data/858877/000085887726000132/0000858877-26-000132.txt",
+              "type": "10-K",
+              "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0000858877-26-000132/files/csco-20260725_htm.xml"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v1/reference/sec/filings/0001683168-26-006873, captured from the live service on
+    /// 2026-09-03 because the description publishes no example for it (D-R12). Reviewed: it
+    /// carries no account identifier and no URL embeds a key. The payload is the first filing of
+    /// <see cref="ReferenceSecFilings"/> as one object under <c>results</c>.
+    /// </summary>
+    public const string ReferenceSecFiling = """
+        {
+          "count": 1,
+          "request_id": "d47da93daf98dacd49b64aa826f9fd40",
+          "results": {
+            "acceptance_datetime": "20260902103943",
+            "accession_number": "0001683168-26-006873",
+            "entities": [
+              {
+                "company_data": {
+                  "cik": "0002087656",
+                  "name": "MYX Inc.",
+                  "sic": "7374"
+                },
+                "relation": "filer"
+              }
+            ],
+            "files_count": 65,
+            "filing_date": "20260902",
+            "id": "0001683168-26-006873",
+            "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126.htm",
+            "period_of_report_date": "20260531",
+            "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/0001683168-26-006873.txt",
+            "type": "10-K",
+            "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126_htm.xml"
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v1/reference/sec/filings/0001683168-26-006873/files?limit=2&amp;sort=sequence&amp;order=asc,
+    /// captured from the live service on 2026-09-03 because the description publishes no example
+    /// for it (D-R12). Reviewed: it carries no account identifier and no URL embeds a key. The
+    /// wire carries a <c>filing_id</c> the description does not declare, which the model ignores.
+    /// </summary>
+    public const string ReferenceSecFilingFiles = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files?cursor=YXA9MiZhcz1teXhfZXgyMzAxLmh0bSZsaW1pdD0yJm9yZGVyPWFzYyZzb3J0PXNlcXVlbmNl",
+          "request_id": "62c18c45afd33e7312ed59d6aa1d417b",
+          "results": [
+            {
+              "description": "FORM 10-K FOR MAY 2026",
+              "filename": "myx_i10k-053126.htm",
+              "filing_id": "0001683168-26-006873",
+              "id": "myx_i10k-053126.htm",
+              "sequence": 1,
+              "size_bytes": 377038,
+              "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/myx_i10k-053126.htm",
+              "type": "10-K"
+            },
+            {
+              "description": "CONSENT OF INDEPENDENT REGISTERED PUBLIC ACCOUNTING FIRM",
+              "filename": "myx_ex2301.htm",
+              "filing_id": "0001683168-26-006873",
+              "id": "myx_ex2301.htm",
+              "sequence": 2,
+              "size_bytes": 4408,
+              "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/myx_ex2301.htm",
+              "type": "EX-32.1"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

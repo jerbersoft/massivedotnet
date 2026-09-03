@@ -1887,4 +1887,359 @@ public readonly partial struct ReferenceGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves SEC filings, filtered by form type, by filing and report dates, by the presence of
+    /// XBRL, and by the filing company's name, CIK, ticker, and SIC code, enumerating every page as a
+    /// single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFilingsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. The date filters take the compact form the route reads, <c>yyyyMMdd</c>, as strings:
+    /// the ISO form a <see cref="NodaTime.LocalDate"/> renders is accepted by the server and silently
+    /// misread, so it is not bindable here (D-R9). The company filters are the description's dotted
+    /// <c>entities.company_data</c> parameters, rendered under those names; <paramref
+    /// name="companyNameSearch"/> is a text search where <paramref name="companyName"/> is an exact
+    /// match.
+    /// </remarks>
+    /// <param name="type">Query by filing type.</param>
+    /// <param name="filingDate">Query by filing date. Accepts an exact value or a range.</param>
+    /// <param name="periodOfReportDate">Query by period of report. Accepts an exact value or a range.</param>
+    /// <param name="hasXbrl">
+    /// If true, query only for filings with an XBRL instance file. If false, query for filings without
+    /// an XBRL instance file. If this parameter is not provided, query for filings with or without XBRL
+    /// instance files.
+    /// </param>
+    /// <param name="companyName">Query by entity company name.</param>
+    /// <param name="companyCik">Query by entity company CIK.</param>
+    /// <param name="companyTicker">Query by entity company ticker.</param>
+    /// <param name="companySic">Query by entity company SIC.</param>
+    /// <param name="companyNameSearch">Search by entities.company_data.name.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Filing> EnumerateFilingsAsync(
+        string? type = null,
+        RangeFilter<string>? filingDate = null,
+        RangeFilter<string>? periodOfReportDate = null,
+        bool? hasXbrl = null,
+        string? companyName = null,
+        string? companyCik = null,
+        string? companyTicker = null,
+        string? companySic = null,
+        string? companyNameSearch = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFilingsUri(type, filingDate, periodOfReportDate, hasXbrl, companyName, companyCik, companyTicker, companySic, companyNameSearch, order, limit, sort);
+        return _transport.EnumerateAsync<ListFilingsResponse, Filing>(
+            requestUri, MassiveRestJsonContext.Default.ListFilingsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves SEC filings, filtered by form type, by filing and report dates, by the presence of
+    /// XBRL, and by the filing company's name, CIK, ticker, and SIC code.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFilingsAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. The date
+    /// filters take the compact form the route reads, <c>yyyyMMdd</c>, as strings: the ISO form a <see
+    /// cref="NodaTime.LocalDate"/> renders is accepted by the server and silently misread, so it is not
+    /// bindable here (D-R9). The company filters are the description's dotted
+    /// <c>entities.company_data</c> parameters, rendered under those names; <paramref
+    /// name="companyNameSearch"/> is a text search where <paramref name="companyName"/> is an exact
+    /// match.
+    /// </remarks>
+    /// <param name="type">Query by filing type.</param>
+    /// <param name="filingDate">Query by filing date. Accepts an exact value or a range.</param>
+    /// <param name="periodOfReportDate">Query by period of report. Accepts an exact value or a range.</param>
+    /// <param name="hasXbrl">
+    /// If true, query only for filings with an XBRL instance file. If false, query for filings without
+    /// an XBRL instance file. If this parameter is not provided, query for filings with or without XBRL
+    /// instance files.
+    /// </param>
+    /// <param name="companyName">Query by entity company name.</param>
+    /// <param name="companyCik">Query by entity company CIK.</param>
+    /// <param name="companyTicker">Query by entity company ticker.</param>
+    /// <param name="companySic">Query by entity company SIC.</param>
+    /// <param name="companyNameSearch">Search by entities.company_data.name.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Filing>> ListFilingsAsync(
+        string? type = null,
+        RangeFilter<string>? filingDate = null,
+        RangeFilter<string>? periodOfReportDate = null,
+        bool? hasXbrl = null,
+        string? companyName = null,
+        string? companyCik = null,
+        string? companyTicker = null,
+        string? companySic = null,
+        string? companyNameSearch = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFilingsUri(type, filingDate, periodOfReportDate, hasXbrl, companyName, companyCik, companyTicker, companySic, companyNameSearch, order, limit, sort);
+        return SendListFilingsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFilingsUri(
+        string? type,
+        RangeFilter<string>? filingDate,
+        RangeFilter<string>? periodOfReportDate,
+        bool? hasXbrl,
+        string? companyName,
+        string? companyCik,
+        string? companyTicker,
+        string? companySic,
+        string? companyNameSearch,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings");
+
+        builder.AppendQuery("type", type);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("period_of_report_date", periodOfReportDate);
+        builder.AppendQuery("has_xbrl", hasXbrl);
+        builder.AppendQuery("entities.company_data.name", companyName);
+        builder.AppendQuery("entities.company_data.cik", companyCik);
+        builder.AppendQuery("entities.company_data.ticker", companyTicker);
+        builder.AppendQuery("entities.company_data.sic", companySic);
+        builder.AppendQuery("entities.company_data.name.search", companyNameSearch);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Filing>> SendListFilingsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListFilingsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListFilingsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Filing>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>Retrieves one SEC filing by its identifier.</summary>
+    /// <remarks>
+    /// <paramref name="filingId"/> is the accession number, as <see cref="Filing.Id"/> reports it. The
+    /// description does not flag the path parameter required; the generator reads every path parameter
+    /// as required, since a segment cannot be left out of a route (D-R3). A filing the service does not
+    /// know answers 404, which surfaces as a <see cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<Filing> GetFilingAsync(
+        string filingId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        string requestUri = BuildGetFilingUri(filingId);
+        return SendGetFilingAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetFilingUri(
+        string filingId)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings/");
+        builder.AppendPathSegment(filingId);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<Filing> SendGetFilingAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetFilingResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetFilingResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.");
+    }
+
+    /// <summary>
+    /// Retrieves the files that make up one SEC filing, filtered by sequence number and file name,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFilingFilesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Each row names the file's type and size, which is what a caller consults
+    /// before retrieving one.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="sequence">Query by file sequence number. Accepts an exact value or a range.</param>
+    /// <param name="filename">Query by file name. Accepts an exact value or a range.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<FilingFile> EnumerateFilingFilesAsync(
+        string filingId,
+        RangeFilter<long>? sequence = null,
+        RangeFilter<string>? filename = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        string requestUri = BuildListFilingFilesUri(filingId, sequence, filename, order, limit, sort);
+        return _transport.EnumerateAsync<ListFilingFilesResponse, FilingFile>(
+            requestUri, MassiveRestJsonContext.Default.ListFilingFilesResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the files that make up one SEC filing, filtered by sequence number and file name.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFilingFilesAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Each
+    /// row names the file's type and size, which is what a caller consults before retrieving one.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="sequence">Query by file sequence number. Accepts an exact value or a range.</param>
+    /// <param name="filename">Query by file name. Accepts an exact value or a range.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<FilingFile>> ListFilingFilesAsync(
+        string filingId,
+        RangeFilter<long>? sequence = null,
+        RangeFilter<string>? filename = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        string requestUri = BuildListFilingFilesUri(filingId, sequence, filename, order, limit, sort);
+        return SendListFilingFilesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFilingFilesUri(
+        string filingId,
+        RangeFilter<long>? sequence,
+        RangeFilter<string>? filename,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings/");
+        builder.AppendPathSegment(filingId);
+        builder.AppendPathLiteral("/files");
+
+        builder.AppendQuery("sequence", sequence);
+        builder.AppendQuery("filename", filename);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<FilingFile>> SendListFilingFilesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListFilingFilesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListFilingFilesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<FilingFile>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>Retrieves the metadata object the description declares for one file within an SEC filing.</summary>
+    /// <remarks>
+    /// Generated as the description declares it (decision D21). The service serves the file's own
+    /// content at this route, <c>text/html</c> for a filing document, rather than the declared JSON
+    /// object, so on 2026-09-03 this method threw a <see cref="MassiveApiException"/> whose inner
+    /// exception is the deserialization failure; that flips the day the service or the description
+    /// moves.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="fileId">Select by file id.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The response body, deserialized as one object.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<FilingFile> GetFilingFileAsync(
+        string filingId,
+        string fileId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
+        string requestUri = BuildGetFilingFileUri(filingId, fileId);
+        return SendGetFilingFileAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetFilingFileUri(
+        string filingId,
+        string fileId)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings/");
+        builder.AppendPathSegment(filingId);
+        builder.AppendPathLiteral("/files/");
+        builder.AppendPathSegment(fileId);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<FilingFile> SendGetFilingFileAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        FilingFile? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.FilingFile, cancellationToken)
+            .ConfigureAwait(false);
+
+        // An empty body is a success the caller cannot use, reported the same way as a body that
+        // fails to deserialize (D17). There is no envelope here, so no request id can be reported.
+        return response
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no payload.");
+    }
 }

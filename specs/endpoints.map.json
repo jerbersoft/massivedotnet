@@ -936,6 +936,59 @@
         "free_float":         { "name": "FreeFloat" },
         "free_float_percent": { "name": "FreeFloatPercent" }
       }
+    },
+
+    "Filing": {
+      "summary": "One SEC filing from the v1 route: its accession number and form type, the dates that govern it, the entities that filed it, and where its files live.",
+      "remarks": "Reference data, so a class (decision D4). Also the payload of <see cref=\"ReferenceGroup.GetFilingAsync\"/>, where decision D16 verifies the shape. The three dates are bare strings in the description and compact digits on the wire, <c>yyyyMMdd</c> and <c>yyyyMMddHHmmss</c>, so they stay strings rather than binding a type that renders another form (D-R9). The wire also carries <c>main_file_url</c> and <c>xbrl_instance_url</c>, which the description does not declare and this model therefore omits.",
+      "schema": { "operationId": "ListFilings", "pointer": "results/items" },
+      "properties": {
+        "id":                    { "name": "Id" },
+        "accession_number":      { "name": "AccessionNumber" },
+        "type":                  { "name": "Type" },
+        "filing_date":           { "name": "FilingDate", "summary": "The date the filing was filed, in the compact form the wire carries, <c>yyyyMMdd</c> (D-R9)." },
+        "period_of_report_date": { "name": "PeriodOfReportDate", "summary": "The period the filing reports on, in the compact form the wire carries, <c>yyyyMMdd</c> (D-R9)." },
+        "acceptance_datetime":   { "name": "AcceptanceTimestamp", "summary": "When EDGAR accepted the filing, in Eastern Time, in the compact form the wire carries, <c>yyyyMMddHHmmss</c> (D-R9)." },
+        "entities":              { "name": "Entities", "model": "FilingEntity" },
+        "files_count":           { "name": "FilesCount" },
+        "source_url":            { "name": "SourceUrl" }
+      }
+    },
+
+    "FilingEntity": {
+      "summary": "A party to an SEC filing: the company and its relation to the filing.",
+      "schema": { "operationId": "ListFilings", "pointer": "results/items/entities/items" },
+      "properties": {
+        "relation":     { "name": "Relation" },
+        "company_data": { "name": "CompanyData", "model": "FilingCompany", "summary": "The company this entity is, when the description has one to give." }
+      }
+    },
+
+    "FilingCompany": {
+      "summary": "The company behind a filing entity: its CIK, name, SIC code, and ticker.",
+      "remarks": "The wire also carries a <c>tickers</c> array the description does not declare, which this model omits.",
+      "schema": { "operationId": "ListFilings", "pointer": "results/items/entities/items/company_data" },
+      "properties": {
+        "cik":    { "name": "Cik" },
+        "name":   { "name": "Name", "summary": "The company's name as registered with the SEC." },
+        "sic":    { "name": "Sic" },
+        "ticker": { "name": "Ticker" }
+      }
+    },
+
+    "FilingFile": {
+      "summary": "One file within an SEC filing: its identifier, name, sequence, size, type, and source.",
+      "remarks": "Reference data, so a class (decision D4). Also the declared payload of <see cref=\"ReferenceGroup.GetFilingFileAsync\"/>, where decision D16 verifies the shape.",
+      "schema": { "operationId": "ListFilingFiles", "pointer": "results/items" },
+      "properties": {
+        "id":          { "name": "Id" },
+        "filename":    { "name": "Filename" },
+        "description": { "name": "Description" },
+        "sequence":    { "name": "Sequence" },
+        "size_bytes":  { "name": "SizeBytes" },
+        "type":        { "name": "Type" },
+        "source_url":  { "name": "SourceUrl" }
+      }
     }
   },
 
@@ -1521,6 +1574,67 @@
         "free_float_percent": { "name": "freeFloatPercent" },
         "limit":              { "name": "limit" },
         "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListFilings",
+      "group": "Reference",
+      "method": "ListFilings",
+      "summary": "Retrieves SEC filings, filtered by form type, by filing and report dates, by the presence of XBRL, and by the filing company's name, CIK, ticker, and SIC code.",
+      "remarks": "Every filter is optional and defaults to no constraint. The date filters take the compact form the route reads, <c>yyyyMMdd</c>, as strings: the ISO form a <see cref=\"NodaTime.LocalDate\"/> renders is accepted by the server and silently misread, so it is not bindable here (D-R9). The company filters are the description's dotted <c>entities.company_data</c> parameters, rendered under those names; <paramref name=\"companyNameSearch\"/> is a text search where <paramref name=\"companyName\"/> is an exact match.",
+      "result": { "kind": "array", "model": "Filing", "property": "results" },
+      "parameters": {
+        "type":                              { "name": "type" },
+        "filing_date":                       { "name": "filingDate" },
+        "period_of_report_date":             { "name": "periodOfReportDate" },
+        "has_xbrl":                          { "name": "hasXbrl" },
+        "entities.company_data.name":        { "name": "companyName" },
+        "entities.company_data.cik":         { "name": "companyCik" },
+        "entities.company_data.ticker":      { "name": "companyTicker" },
+        "entities.company_data.sic":         { "name": "companySic" },
+        "entities.company_data.name.search": { "name": "companyNameSearch" },
+        "order":                             { "name": "order", "type": "SortOrder" },
+        "limit":                             { "name": "limit" },
+        "sort":                              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetFiling",
+      "group": "Reference",
+      "method": "GetFiling",
+      "summary": "Retrieves one SEC filing by its identifier.",
+      "remarks": "<paramref name=\"filingId\"/> is the accession number, as <see cref=\"Filing.Id\"/> reports it. The description does not flag the path parameter required; the generator reads every path parameter as required, since a segment cannot be left out of a route (D-R3). A filing the service does not know answers 404, which surfaces as a <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "Filing", "property": "results" },
+      "parameters": {
+        "filing_id": { "name": "filingId" }
+      }
+    },
+    {
+      "operationId": "ListFilingFiles",
+      "group": "Reference",
+      "method": "ListFilingFiles",
+      "summary": "Retrieves the files that make up one SEC filing, filtered by sequence number and file name.",
+      "remarks": "Every filter is optional and defaults to no constraint. Each row names the file's type and size, which is what a caller consults before retrieving one.",
+      "result": { "kind": "array", "model": "FilingFile", "property": "results" },
+      "parameters": {
+        "filing_id": { "name": "filingId" },
+        "sequence":  { "name": "sequence" },
+        "filename":  { "name": "filename" },
+        "order":     { "name": "order", "type": "SortOrder" },
+        "limit":     { "name": "limit" },
+        "sort":      { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetFilingFile",
+      "group": "Reference",
+      "method": "GetFilingFile",
+      "summary": "Retrieves the metadata object the description declares for one file within an SEC filing.",
+      "remarks": "Generated as the description declares it (decision D21). The service serves the file's own content at this route, <c>text/html</c> for a filing document, rather than the declared JSON object, so on 2026-09-03 this method threw a <see cref=\"MassiveApiException\"/> whose inner exception is the deserialization failure; that flips the day the service or the description moves.",
+      "result": { "kind": "object", "model": "FilingFile" },
+      "parameters": {
+        "filing_id": { "name": "filingId" },
+        "file_id":   { "name": "fileId" }
       }
     }
   ]
