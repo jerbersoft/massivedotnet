@@ -95,7 +95,9 @@ samples/MassiveDotNet.AotSmokeTest
    Everything else — paths, parameters, requiredness, enum members, nullability, prose — is read
    from the spec so it cannot drift. So is stability: a deprecated operation's `[Obsolete]` message
    names the method that replaces it, so map the replacement before the operation it supersedes,
-   or generation refuses (D18).
+   or generation refuses (D18). A row that names a core enum, such as `SortOrder`, is checked
+   against the members the spec declares for that parameter: a member the enum lacks fails
+   generation, while a member the operation omits is accepted, since the server rejects it (#37).
 2. Regenerate: `dotnet run --project tools/MassiveDotNet.CodeGen`
 3. Raise `CoverageBaseline` in `EndpointCoverageTests` to the new count.
 4. Add a deserialization test using the endpoint's **published sample response** as the fixture.
