@@ -38,10 +38,7 @@ public sealed partial record ShortInterest
     [JsonPropertyName("settlement_date")]
     public LocalDate SettlementDate { get; init; }
 
-    /// <summary>
-    /// The number of shares held short as of the settlement date; the wire's
-    /// &lt;c&gt;short_interest&lt;/c&gt;.
-    /// </summary>
+    /// <summary>The number of shares held short as of the settlement date; the wire's <c>short_interest</c>.</summary>
     [JsonPropertyName("short_interest")]
     public long? SharesShort { get; init; }
 

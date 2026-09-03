@@ -119,6 +119,36 @@ public sealed class ModelBindingTests
         """;
 
     [Fact]
+    public void PropertySummariesPreserveMapAuthoredMarkupButEscapeDescriptionMarkup()
+    {
+        // F1: a property row's map-authored `summary` may carry intentional XML doc markup, the
+        // same way a model or endpoint summary can; a schema `description` is docs-site prose run
+        // through Prose.Clean and must still be escaped, never trusted as markup.
+        //
+        // The "described" property's angle bracket is deliberately unpaired: Prose.Clean's HtmlTag
+        // regex ("<[^>]+>") strips any matched <...> pair wholesale, so a *closed* tag such as
+        // "<c>y</c>" never reaches CodeWriter.Doc at all -- there is nothing left to escape. A lone
+        // "<" with no later ">" survives Prose.Clean untouched, which is exactly what still needs
+        // escaping so it cannot break the emitted XML doc comment.
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "mapped":    { "type": "string" },
+                "described": { "type": "string", "description": "Values under <100 also qualify." }
+              }
+            }
+            """);
+
+        string map = MapDocument("""{ "mapped": { "summary": "Uses <c>x</c> for emphasis." } }""");
+
+        string thing = Thing(Harness.Generate(spec, map));
+
+        Assert.Contains("Uses <c>x</c> for emphasis.", thing, StringComparison.Ordinal);
+        Assert.Contains("Values under &lt;100 also qualify.", thing, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PropertiesFollowTheMapsDeclarationOrder()
     {
         // The description stores properties alphabetically; the map's order keeps related fields

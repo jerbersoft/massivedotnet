@@ -32,9 +32,9 @@ public sealed partial record TickerEvent
     public LocalDate Date { get; init; }
 
     /// <summary>
-    /// The type of the event. The description requires this key, but the wire spells it
-    /// &lt;c&gt;type&lt;/c&gt;, so it is null in practice (D-R10); &lt;see cref="TickerChange"/&gt;
-    /// being set is the working discriminator.
+    /// The type of the event. The description requires this key, but the wire spells it <c>type</c>, so
+    /// it is null in practice (D-R10); <see cref="TickerChange"/> being set is the working
+    /// discriminator.
     /// </summary>
     [JsonPropertyName("event_type")]
     public string? EventType { get; init; }

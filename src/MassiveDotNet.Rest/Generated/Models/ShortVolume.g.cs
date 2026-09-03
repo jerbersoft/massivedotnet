@@ -42,7 +42,7 @@ public sealed partial record ShortVolume
     [JsonPropertyName("total_volume")]
     public double? TotalVolume { get; init; }
 
-    /// <summary>The total volume sold short across every venue; the wire's &lt;c&gt;short_volume&lt;/c&gt;.</summary>
+    /// <summary>The total volume sold short across every venue; the wire's <c>short_volume</c>.</summary>
     [JsonPropertyName("short_volume")]
     public double? TotalShortVolume { get; init; }
 
