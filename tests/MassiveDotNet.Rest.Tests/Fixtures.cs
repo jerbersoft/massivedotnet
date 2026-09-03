@@ -1808,4 +1808,78 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/short-interest, with one departure from the
+    /// published text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksDividends"/>.
+    /// </summary>
+    public const string ReferenceShortInterest = """
+        {
+          "count": 1,
+          "request_id": "1",
+          "results": [
+            {
+              "avg_daily_volume": 2340158,
+              "days_to_cover": 1.67,
+              "settlement_date": "2025-03-14",
+              "short_interest": 3906231,
+              "ticker": "A"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/v1/short-volume, with one departure from the
+    /// published text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksDividends"/>.
+    /// </summary>
+    public const string ReferenceShortVolume = """
+        {
+          "count": 1,
+          "request_id": "1",
+          "results": [
+            {
+              "adf_short_volume": 0,
+              "adf_short_volume_exempt": 0,
+              "date": "2025-03-25",
+              "exempt_volume": 1,
+              "nasdaq_carteret_short_volume": 179943,
+              "nasdaq_carteret_short_volume_exempt": 1,
+              "nasdaq_chicago_short_volume": 1,
+              "nasdaq_chicago_short_volume_exempt": 0,
+              "non_exempt_volume": 181218,
+              "nyse_short_volume": 1275,
+              "nyse_short_volume_exempt": 0,
+              "short_volume": 181219,
+              "short_volume_ratio": 31.57,
+              "ticker": "A",
+              "total_volume": 574084
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/vX/float, with one departure from the published
+    /// text: <c>"request_id": 1</c> becomes a string, for the reason given on
+    /// <see cref="StocksDividends"/>.
+    /// </summary>
+    public const string ReferenceFloat = """
+        {
+          "request_id": "1",
+          "results": [
+            {
+              "effective_date": "2025-11-01",
+              "free_float": 15000000000,
+              "free_float_percent": 98.5,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

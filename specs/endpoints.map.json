@@ -888,6 +888,54 @@
         "total_offer_size":     { "name": "TotalOfferSize" },
         "lot_size":             { "name": "LotSize" }
       }
+    },
+
+    "ShortInterest": {
+      "summary": "A short interest report for one stock on one settlement date: the shares held short, the average daily volume, and the days to cover.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"SharesShort\"/> is the wire's <c>short_interest</c>, renamed because a member may not share its type's name. <see cref=\"SettlementDate\"/> is a bare string in the description and an ISO calendar date on the wire (D-R9).",
+      "schema": { "operationId": "get_stocks_v1_short-interest", "pointer": "results/items" },
+      "properties": {
+        "ticker":           { "name": "Ticker" },
+        "settlement_date":  { "name": "SettlementDate", "type": "LocalDate", "summary": "The settlement date the report is as of. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "short_interest":   { "name": "SharesShort", "summary": "The number of shares held short as of the settlement date; the wire's <c>short_interest</c>." },
+        "avg_daily_volume": { "name": "AverageDailyVolume" },
+        "days_to_cover":    { "name": "DaysToCover" }
+      }
+    },
+
+    "ShortVolume": {
+      "summary": "A day's short sale volume for one stock: the totals, the ratio, and the count at each reporting venue.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"TotalShortVolume\"/> is the wire's <c>short_volume</c>, renamed because a member may not share its type's name and to sit beside <see cref=\"TotalVolume\"/>. <see cref=\"Date\"/> is a bare string in the description and an ISO calendar date on the wire (D-R9).",
+      "schema": { "operationId": "get_stocks_v1_short-volume", "pointer": "results/items" },
+      "properties": {
+        "ticker":                              { "name": "Ticker" },
+        "date":                                { "name": "Date", "type": "LocalDate", "summary": "The trading date the volumes are for. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "total_volume":                        { "name": "TotalVolume" },
+        "short_volume":                        { "name": "TotalShortVolume", "summary": "The total volume sold short across every venue; the wire's <c>short_volume</c>." },
+        "short_volume_ratio":                  { "name": "ShortVolumeRatio" },
+        "exempt_volume":                       { "name": "ExemptVolume" },
+        "non_exempt_volume":                   { "name": "NonExemptVolume" },
+        "adf_short_volume":                    { "name": "AdfShortVolume" },
+        "adf_short_volume_exempt":             { "name": "AdfShortVolumeExempt" },
+        "nasdaq_carteret_short_volume":        { "name": "NasdaqCarteretShortVolume" },
+        "nasdaq_carteret_short_volume_exempt": { "name": "NasdaqCarteretShortVolumeExempt" },
+        "nasdaq_chicago_short_volume":         { "name": "NasdaqChicagoShortVolume" },
+        "nasdaq_chicago_short_volume_exempt":  { "name": "NasdaqChicagoShortVolumeExempt" },
+        "nyse_short_volume":                   { "name": "NyseShortVolume" },
+        "nyse_short_volume_exempt":            { "name": "NyseShortVolumeExempt" }
+      }
+    },
+
+    "ShareFloat": {
+      "summary": "The free float of one stock as of a date: the shares available to trade and their share of the total outstanding.",
+      "remarks": "Reference data, so a class (decision D4). Named for the concept rather than <c>Float</c>, which would read as the numeric type.",
+      "schema": { "operationId": "get_stocks_vX_float", "pointer": "results/items" },
+      "properties": {
+        "ticker":             { "name": "Ticker" },
+        "effective_date":     { "name": "EffectiveDate" },
+        "free_float":         { "name": "FreeFloat" },
+        "free_float_percent": { "name": "FreeFloatPercent" }
+      }
     }
   },
 
@@ -1428,6 +1476,51 @@
         "ipo_status":   { "name": "ipoStatus" },
         "limit":        { "name": "limit" },
         "sort":         { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_short-interest",
+      "group": "Reference",
+      "method": "ListShortInterest",
+      "summary": "Retrieves short interest reports for US stocks, filtered by ticker, settlement date, days to cover, and average daily volume.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality, a <see cref=\"RangeFilter\"/> factory for a range, or <see cref=\"SetFilter\"/> for a set. <paramref name=\"settlementDate\"/> is a bare string in the description and takes <see cref=\"NodaTime.LocalDate\"/> here (D-R9).",
+      "result": { "kind": "array", "model": "ShortInterest", "property": "results" },
+      "parameters": {
+        "ticker":           { "name": "ticker" },
+        "days_to_cover":    { "name": "daysToCover" },
+        "settlement_date":  { "name": "settlementDate", "type": "LocalDate" },
+        "avg_daily_volume": { "name": "avgDailyVolume" },
+        "limit":            { "name": "limit" },
+        "sort":             { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_v1_short-volume",
+      "group": "Reference",
+      "method": "ListShortVolume",
+      "summary": "Retrieves daily short sale volume for US stocks, by venue, filtered by ticker, date, and short volume ratio.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality, a <see cref=\"RangeFilter\"/> factory for a range, or <see cref=\"SetFilter\"/> for a set. <paramref name=\"date\"/> is a bare string in the description and takes <see cref=\"NodaTime.LocalDate\"/> here (D-R9).",
+      "result": { "kind": "array", "model": "ShortVolume", "property": "results" },
+      "parameters": {
+        "ticker":             { "name": "ticker" },
+        "date":               { "name": "date", "type": "LocalDate" },
+        "short_volume_ratio": { "name": "shortVolumeRatio" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_vX_float",
+      "group": "Reference",
+      "method": "ListFloat",
+      "summary": "Retrieves the free float of US stocks, filtered by ticker and by the share of outstanding stock that floats.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.",
+      "result": { "kind": "array", "model": "ShareFloat", "property": "results" },
+      "parameters": {
+        "ticker":             { "name": "ticker" },
+        "free_float_percent": { "name": "freeFloatPercent" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
       }
     }
   ]

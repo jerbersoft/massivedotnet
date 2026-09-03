@@ -1507,4 +1507,382 @@ public readonly partial struct ReferenceGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves short interest reports for US stocks, filtered by ticker, settlement date, days to
+    /// cover, and average daily volume, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListShortInterestAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. Pass a plain value for equality, a <see cref="RangeFilter"/> factory
+    /// for a range, or <see cref="SetFilter"/> for a set. <paramref name="settlementDate"/> is a bare
+    /// string in the description and takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="daysToCover">
+    /// Calculated as short_interest divided by avg_daily_volume, representing the estimated number of
+    /// days it would take to cover all short positions based on average trading volume. Accepts an
+    /// exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="settlementDate">
+    /// The date (formatted as YYYY-MM-DD) on which the short interest data is considered settled,
+    /// typically based on exchange reporting schedules. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="avgDailyVolume">
+    /// The average daily trading volume for the stock over a specified period, typically used to
+    /// contextualize short interest. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ShortInterest> EnumerateShortInterestAsync(
+        Filter<string>? ticker = null,
+        Filter<double>? daysToCover = null,
+        Filter<LocalDate>? settlementDate = null,
+        Filter<long>? avgDailyVolume = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortInterestUri(ticker, daysToCover, settlementDate, avgDailyVolume, limit, sort);
+        return _transport.EnumerateAsync<GetStocksV1ShortInterestResponse, ShortInterest>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortInterestResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves short interest reports for US stocks, filtered by ticker, settlement date, days to
+    /// cover, and average daily volume.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateShortInterestAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality, a <see cref="RangeFilter"/> factory for a range, or <see
+    /// cref="SetFilter"/> for a set. <paramref name="settlementDate"/> is a bare string in the
+    /// description and takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="daysToCover">
+    /// Calculated as short_interest divided by avg_daily_volume, representing the estimated number of
+    /// days it would take to cover all short positions based on average trading volume. Accepts an
+    /// exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="settlementDate">
+    /// The date (formatted as YYYY-MM-DD) on which the short interest data is considered settled,
+    /// typically based on exchange reporting schedules. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="avgDailyVolume">
+    /// The average daily trading volume for the stock over a specified period, typically used to
+    /// contextualize short interest. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ShortInterest>> ListShortInterestAsync(
+        Filter<string>? ticker = null,
+        Filter<double>? daysToCover = null,
+        Filter<LocalDate>? settlementDate = null,
+        Filter<long>? avgDailyVolume = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortInterestUri(ticker, daysToCover, settlementDate, avgDailyVolume, limit, sort);
+        return SendListShortInterestAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListShortInterestUri(
+        Filter<string>? ticker,
+        Filter<double>? daysToCover,
+        Filter<LocalDate>? settlementDate,
+        Filter<long>? avgDailyVolume,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/short-interest");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("days_to_cover", daysToCover);
+        builder.AppendQuery("settlement_date", settlementDate);
+        builder.AppendQuery("avg_daily_volume", avgDailyVolume);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ShortInterest>> SendListShortInterestAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1ShortInterestResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortInterestResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ShortInterest>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves daily short sale volume for US stocks, by venue, filtered by ticker, date, and short
+    /// volume ratio, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListShortVolumeAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Pass a plain value for equality, a <see cref="RangeFilter"/> factory for a
+    /// range, or <see cref="SetFilter"/> for a set. <paramref name="date"/> is a bare string in the
+    /// description and takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="date">
+    /// The date of trade activity reported in the format YYYY-MM-DD. Accepts an exact value, a range,
+    /// or a set of values.
+    /// </param>
+    /// <param name="shortVolumeRatio">
+    /// The percentage of total volume that was sold short. Calculated as (short_volume / total_volume)
+    /// * 100. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ShortVolume> EnumerateShortVolumeAsync(
+        Filter<string>? ticker = null,
+        Filter<LocalDate>? date = null,
+        Filter<double>? shortVolumeRatio = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortVolumeUri(ticker, date, shortVolumeRatio, limit, sort);
+        return _transport.EnumerateAsync<GetStocksV1ShortVolumeResponse, ShortVolume>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortVolumeResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves daily short sale volume for US stocks, by venue, filtered by ticker, date, and short
+    /// volume ratio.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateShortVolumeAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality, a <see cref="RangeFilter"/> factory for a range, or <see
+    /// cref="SetFilter"/> for a set. <paramref name="date"/> is a bare string in the description and
+    /// takes <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="date">
+    /// The date of trade activity reported in the format YYYY-MM-DD. Accepts an exact value, a range,
+    /// or a set of values.
+    /// </param>
+    /// <param name="shortVolumeRatio">
+    /// The percentage of total volume that was sold short. Calculated as (short_volume / total_volume)
+    /// * 100. Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ShortVolume>> ListShortVolumeAsync(
+        Filter<string>? ticker = null,
+        Filter<LocalDate>? date = null,
+        Filter<double>? shortVolumeRatio = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListShortVolumeUri(ticker, date, shortVolumeRatio, limit, sort);
+        return SendListShortVolumeAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListShortVolumeUri(
+        Filter<string>? ticker,
+        Filter<LocalDate>? date,
+        Filter<double>? shortVolumeRatio,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/v1/short-volume");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("date", date);
+        builder.AppendQuery("short_volume_ratio", shortVolumeRatio);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ShortVolume>> SendListShortVolumeAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksV1ShortVolumeResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksV1ShortVolumeResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ShortVolume>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the free float of US stocks, filtered by ticker and by the share of outstanding stock
+    /// that floats, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFloatAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint.
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="freeFloatPercent">
+    /// Percentage of total shares outstanding that are available for public trading, rounded to two
+    /// decimal places. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<ShareFloat> EnumerateFloatAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<double>? freeFloatPercent = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFloatUri(ticker, freeFloatPercent, limit, sort);
+        return _transport.EnumerateAsync<GetStocksVXFloatResponse, ShareFloat>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksVXFloatResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the free float of US stocks, filtered by ticker and by the share of outstanding stock
+    /// that floats.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFloatAsync"/> to walk every page without
+    /// handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision D18);
+    /// opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// </remarks>
+    /// <param name="ticker">The primary ticker symbol for the stock. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="freeFloatPercent">
+    /// Percentage of total shares outstanding that are available for public trading, rounded to two
+    /// decimal places. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '5000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<ShareFloat>> ListFloatAsync(
+        Filter<string>? ticker = null,
+        RangeFilter<double>? freeFloatPercent = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFloatUri(ticker, freeFloatPercent, limit, sort);
+        return SendListFloatAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFloatUri(
+        Filter<string>? ticker,
+        RangeFilter<double>? freeFloatPercent,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/vX/float");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("free_float_percent", freeFloatPercent);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ShareFloat>> SendListFloatAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksVXFloatResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksVXFloatResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ShareFloat>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }
