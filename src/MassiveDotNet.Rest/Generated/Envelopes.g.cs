@@ -1078,3 +1078,83 @@ internal sealed class ListFinancialsResponse : IPagedEnvelope<FinancialReport>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /stocks/financials/v1/balance-sheets.</summary>
+internal sealed class GetStocksFinancialsV1BalanceSheetsResponse : IPagedEnvelope<BalanceSheet>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public BalanceSheet[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/financials/v1/cash-flow-statements.</summary>
+internal sealed class GetStocksFinancialsV1CashFlowStatementsResponse : IPagedEnvelope<CashFlowStatement>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public CashFlowStatement[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/financials/v1/income-statements.</summary>
+internal sealed class GetStocksFinancialsV1IncomeStatementsResponse : IPagedEnvelope<IncomeStatement>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public IncomeStatement[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/financials/v1/ratios.</summary>
+internal sealed class GetStocksFinancialsV1RatiosResponse : IPagedEnvelope<FinancialRatios>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public FinancialRatios[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

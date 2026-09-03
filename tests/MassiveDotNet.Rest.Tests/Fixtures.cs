@@ -2740,4 +2740,165 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/financials/v1/balance-sheets. It reports 30 of the 38
+    /// declared line items, so the eight it omits are what proves absent is not zero.
+    /// </summary>
+    public const string ReferenceBalanceSheets = """
+        {
+          "request_id": "d9f86384d43845a4a3d7b79098fb08dd",
+          "results": [
+            {
+              "accounts_payable": 50374000000,
+              "accrued_and_other_current_liabilities": 62499000000,
+              "accumulated_other_comprehensive_income": -6369000000,
+              "cash_and_equivalents": 36269000000,
+              "cik": "0000320193",
+              "common_stock": 89806000000,
+              "debt_current": 19268000000,
+              "deferred_revenue_current": 8979000000,
+              "filing_date": "2025-08-01",
+              "fiscal_quarter": 3,
+              "fiscal_year": 2025,
+              "inventories": 5925000000,
+              "long_term_debt_and_capital_lease_obligations": 82430000000,
+              "other_assets": 160496000000,
+              "other_current_assets": 14359000000,
+              "other_equity": 0,
+              "other_noncurrent_liabilities": 42115000000,
+              "period_end": "2025-06-28",
+              "property_plant_equipment_net": 48508000000,
+              "receivables": 46835000000,
+              "retained_earnings_deficit": -17607000000,
+              "tickers": [
+                "AAPL"
+              ],
+              "timeframe": "quarterly",
+              "total_assets": 331495000000,
+              "total_current_assets": 103388000000,
+              "total_current_liabilities": 141120000000,
+              "total_equity": 65830000000,
+              "total_equity_attributable_to_parent": 65830000000,
+              "total_liabilities": 265665000000,
+              "total_liabilities_and_equity": 331495000000
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/financials/v1/cash-flow-statements.</summary>
+    public const string ReferenceCashFlowStatements = """
+        {
+          "request_id": "d6d389ca03a0450d93c4ecb13ff26dae",
+          "results": [
+            {
+              "cash_from_operating_activities_continuing_operations": 27867000000,
+              "change_in_cash_and_equivalents": 8107000000,
+              "change_in_other_operating_assets_and_liabilities_net": -2034000000,
+              "cik": "0000320193",
+              "depreciation_depletion_and_amortization": 2830000000,
+              "dividends": -3945000000,
+              "filing_date": "2025-08-01",
+              "fiscal_quarter": 3,
+              "fiscal_year": 2025,
+              "long_term_debt_issuances_repayments": -1192000000,
+              "net_cash_from_financing_activities": -24833000000,
+              "net_cash_from_financing_activities_continuing_operations": -24833000000,
+              "net_cash_from_investing_activities": 5073000000,
+              "net_cash_from_investing_activities_continuing_operations": 5073000000,
+              "net_cash_from_operating_activities": 27867000000,
+              "net_income": 23434000000,
+              "other_financing_activities": -23599000000,
+              "other_investing_activities": 8535000000,
+              "other_operating_activities": 3637000000,
+              "period_end": "2025-06-28",
+              "purchase_of_property_plant_and_equipment": -3462000000,
+              "short_term_debt_issuances_repayments": 3903000000,
+              "tickers": [
+                "AAPL"
+              ],
+              "timeframe": "quarterly"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/financials/v1/income-statements.</summary>
+    public const string ReferenceIncomeStatements = """
+        {
+          "request_id": "5b3cc7c674b34fdd89034b74500bfab5",
+          "results": [
+            {
+              "basic_earnings_per_share": 1.57,
+              "basic_shares_outstanding": 14902886000,
+              "cik": "0000320193",
+              "consolidated_net_income_loss": 23434000000,
+              "cost_of_revenue": 50318000000,
+              "diluted_earnings_per_share": 1.57,
+              "diluted_shares_outstanding": 14948179000,
+              "ebitda": 31032000000,
+              "filing_date": "2025-08-01",
+              "fiscal_quarter": 3,
+              "fiscal_year": 2025,
+              "gross_profit": 43718000000,
+              "income_before_income_taxes": 28031000000,
+              "income_taxes": 4597000000,
+              "net_income_loss_attributable_common_shareholders": 23434000000,
+              "operating_income": 28202000000,
+              "other_income_expense": -171000000,
+              "other_operating_expenses": 0,
+              "period_end": "2025-06-28",
+              "research_development": 8866000000,
+              "revenue": 94036000000,
+              "selling_general_administrative": 6650000000,
+              "tickers": [
+                "AAPL"
+              ],
+              "timeframe": "quarterly",
+              "total_operating_expenses": 15516000000,
+              "total_other_income_expense": -171000000
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/financials/v1/ratios.</summary>
+    public const string ReferenceRatios = """
+        {
+          "count": 1,
+          "request_id": "8f5374516fec4a819070e53609f47fab",
+          "results": [
+            {
+              "average_volume": 47500000,
+              "cash": 0.19,
+              "cik": "320193",
+              "current": 0.68,
+              "date": "2024-09-19",
+              "debt_to_equity": 1.52,
+              "dividend_yield": 0.0044,
+              "earnings_per_share": 6.57,
+              "enterprise_value": 3555509835190,
+              "ev_to_ebitda": 26.98,
+              "ev_to_sales": 9.22,
+              "free_cash_flow": 104339000000,
+              "market_cap": 3479770835190,
+              "price": 228.87,
+              "price_to_book": 52.16,
+              "price_to_cash_flow": 30.78,
+              "price_to_earnings": 34.84,
+              "price_to_free_cash_flow": 33.35,
+              "price_to_sales": 9.02,
+              "quick": 0.63,
+              "return_on_assets": 0.3075,
+              "return_on_equity": 1.5284,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

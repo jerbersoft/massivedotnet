@@ -3993,4 +3993,946 @@ public readonly partial struct ReferenceGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves balance sheets for US companies, filtered by company, by period end and filing dates,
+    /// and by fiscal period, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListBalanceSheetsAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. <paramref name="periodEnd"/> and <paramref name="filingDate"/> are
+    /// bare strings in the description whose prose gives the ISO calendar form, so they take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9). <paramref name="timeframe"/> is <c>quarterly</c> or
+    /// <c>annual</c>. <paramref name="tickers"/> matches the ticker array a statement is reported
+    /// under, whose own description says only that it filters arrays. <paramref name="fiscalYear"/> and
+    /// <paramref name="fiscalQuarter"/> filter a <c>long</c> where <see
+    /// cref="BalanceSheet.FiscalYear"/> is an <c>int</c>, because the description types the parameter
+    /// and the property differently.
+    /// </remarks>
+    /// <param name="cik">
+    /// The company's Central Index Key (CIK), a unique identifier assigned by the U.S. Securities and
+    /// Exchange Commission (SEC). You can look up a company's CIK using the [SEC CIK Lookup
+    /// tool](https://www.sec.gov/search-filings/cik-lookup). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="periodEnd">
+    /// The last date of the reporting period, representing the specific point in time when the balance
+    /// sheet snapshot was taken. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="filingDate">
+    /// The date of the most recent SEC filing that included this period's data. This is not necessarily
+    /// the date this period was originally filed. Because SEC filings restate comparative data for
+    /// prior periods, multiple records can share the same filing_date. For example, an annual 10-K
+    /// reports three years of results, and a 10-Q includes prior period comparatives. To find the
+    /// original filing date for a specific 10-K or 10-Q, use the SEC EDGAR filings index endpoint
+    /// (/stocks/filings/vX/index). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="fiscalYear">The fiscal year for the reporting period. Accepts an exact value or a range.</param>
+    /// <param name="fiscalQuarter">
+    /// The fiscal quarter number (1, 2, 3, or 4) for the reporting period. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="timeframe">
+    /// The reporting period type. Possible values include: quarterly, annual. Accepts an exact value, a
+    /// range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<BalanceSheet> EnumerateBalanceSheetsAsync(
+        Filter<string>? cik = null,
+        ArrayFilter<string>? tickers = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<long>? fiscalYear = null,
+        RangeFilter<long>? fiscalQuarter = null,
+        Filter<string>? timeframe = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListBalanceSheetsUri(cik, tickers, periodEnd, filingDate, fiscalYear, fiscalQuarter, timeframe, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFinancialsV1BalanceSheetsResponse, BalanceSheet>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1BalanceSheetsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves balance sheets for US companies, filtered by company, by period end and filing dates,
+    /// and by fiscal period.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateBalanceSheetsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="periodEnd"/> and <paramref name="filingDate"/> are bare strings in the
+    /// description whose prose gives the ISO calendar form, so they take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9). <paramref name="timeframe"/> is <c>quarterly</c> or
+    /// <c>annual</c>. <paramref name="tickers"/> matches the ticker array a statement is reported
+    /// under, whose own description says only that it filters arrays. <paramref name="fiscalYear"/> and
+    /// <paramref name="fiscalQuarter"/> filter a <c>long</c> where <see
+    /// cref="BalanceSheet.FiscalYear"/> is an <c>int</c>, because the description types the parameter
+    /// and the property differently.
+    /// </remarks>
+    /// <param name="cik">
+    /// The company's Central Index Key (CIK), a unique identifier assigned by the U.S. Securities and
+    /// Exchange Commission (SEC). You can look up a company's CIK using the [SEC CIK Lookup
+    /// tool](https://www.sec.gov/search-filings/cik-lookup). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="periodEnd">
+    /// The last date of the reporting period, representing the specific point in time when the balance
+    /// sheet snapshot was taken. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="filingDate">
+    /// The date of the most recent SEC filing that included this period's data. This is not necessarily
+    /// the date this period was originally filed. Because SEC filings restate comparative data for
+    /// prior periods, multiple records can share the same filing_date. For example, an annual 10-K
+    /// reports three years of results, and a 10-Q includes prior period comparatives. To find the
+    /// original filing date for a specific 10-K or 10-Q, use the SEC EDGAR filings index endpoint
+    /// (/stocks/filings/vX/index). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="fiscalYear">The fiscal year for the reporting period. Accepts an exact value or a range.</param>
+    /// <param name="fiscalQuarter">
+    /// The fiscal quarter number (1, 2, 3, or 4) for the reporting period. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="timeframe">
+    /// The reporting period type. Possible values include: quarterly, annual. Accepts an exact value, a
+    /// range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<BalanceSheet>> ListBalanceSheetsAsync(
+        Filter<string>? cik = null,
+        ArrayFilter<string>? tickers = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<long>? fiscalYear = null,
+        RangeFilter<long>? fiscalQuarter = null,
+        Filter<string>? timeframe = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListBalanceSheetsUri(cik, tickers, periodEnd, filingDate, fiscalYear, fiscalQuarter, timeframe, limit, sort);
+        return SendListBalanceSheetsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListBalanceSheetsUri(
+        Filter<string>? cik,
+        ArrayFilter<string>? tickers,
+        RangeFilter<LocalDate>? periodEnd,
+        RangeFilter<LocalDate>? filingDate,
+        RangeFilter<long>? fiscalYear,
+        RangeFilter<long>? fiscalQuarter,
+        Filter<string>? timeframe,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/financials/v1/balance-sheets");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("period_end", periodEnd);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("fiscal_year", fiscalYear);
+        builder.AppendQuery("fiscal_quarter", fiscalQuarter);
+        builder.AppendQuery("timeframe", timeframe);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<BalanceSheet>> SendListBalanceSheetsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFinancialsV1BalanceSheetsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1BalanceSheetsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<BalanceSheet>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves cash flow statements for US companies, filtered by company, by period end and filing
+    /// dates, and by fiscal period, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListCashFlowStatementsAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. <paramref name="periodEnd"/> and <paramref name="filingDate"/> are
+    /// bare strings in the description whose prose gives the ISO calendar form, so they take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9). <paramref name="timeframe"/> is <c>quarterly</c> or
+    /// <c>annual</c>. <paramref name="tickers"/> matches the ticker array a statement is reported
+    /// under, whose own description says only that it filters arrays.
+    /// </remarks>
+    /// <param name="cik">
+    /// The company's Central Index Key (CIK), a unique identifier assigned by the U.S. Securities and
+    /// Exchange Commission (SEC). You can look up a company’s CIK using the [SEC CIK Lookup
+    /// tool](https://www.sec.gov/search-filings/cik-lookup). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="periodEnd">
+    /// The last date of the reporting period (formatted as YYYY-MM-DD). Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="filingDate">
+    /// The date of the most recent SEC filing that included this period's data. This is not necessarily
+    /// the date this period was originally filed. Because SEC filings restate comparative data for
+    /// prior periods, multiple records can share the same filing_date. For example, an annual 10-K
+    /// reports three years of results, and a 10-Q includes prior period comparatives. To find the
+    /// original filing date for a specific 10-K or 10-Q, use the SEC EDGAR filings index endpoint
+    /// (/stocks/filings/vX/index). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="fiscalYear">The fiscal year for the reporting period. Accepts an exact value or a range.</param>
+    /// <param name="fiscalQuarter">
+    /// The fiscal quarter number (1, 2, 3, or 4) for the reporting period. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="timeframe">
+    /// The reporting period type. Possible values include: quarterly, annual, trailing_twelve_months.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<CashFlowStatement> EnumerateCashFlowStatementsAsync(
+        Filter<string>? cik = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        ArrayFilter<string>? tickers = null,
+        RangeFilter<long>? fiscalYear = null,
+        RangeFilter<long>? fiscalQuarter = null,
+        Filter<string>? timeframe = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListCashFlowStatementsUri(cik, periodEnd, filingDate, tickers, fiscalYear, fiscalQuarter, timeframe, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFinancialsV1CashFlowStatementsResponse, CashFlowStatement>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1CashFlowStatementsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves cash flow statements for US companies, filtered by company, by period end and filing
+    /// dates, and by fiscal period.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateCashFlowStatementsAsync"/> to walk every
+    /// page without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="periodEnd"/> and <paramref name="filingDate"/> are bare strings in the
+    /// description whose prose gives the ISO calendar form, so they take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9). <paramref name="timeframe"/> is <c>quarterly</c> or
+    /// <c>annual</c>. <paramref name="tickers"/> matches the ticker array a statement is reported
+    /// under, whose own description says only that it filters arrays.
+    /// </remarks>
+    /// <param name="cik">
+    /// The company's Central Index Key (CIK), a unique identifier assigned by the U.S. Securities and
+    /// Exchange Commission (SEC). You can look up a company’s CIK using the [SEC CIK Lookup
+    /// tool](https://www.sec.gov/search-filings/cik-lookup). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="periodEnd">
+    /// The last date of the reporting period (formatted as YYYY-MM-DD). Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="filingDate">
+    /// The date of the most recent SEC filing that included this period's data. This is not necessarily
+    /// the date this period was originally filed. Because SEC filings restate comparative data for
+    /// prior periods, multiple records can share the same filing_date. For example, an annual 10-K
+    /// reports three years of results, and a 10-Q includes prior period comparatives. To find the
+    /// original filing date for a specific 10-K or 10-Q, use the SEC EDGAR filings index endpoint
+    /// (/stocks/filings/vX/index). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="fiscalYear">The fiscal year for the reporting period. Accepts an exact value or a range.</param>
+    /// <param name="fiscalQuarter">
+    /// The fiscal quarter number (1, 2, 3, or 4) for the reporting period. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="timeframe">
+    /// The reporting period type. Possible values include: quarterly, annual, trailing_twelve_months.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<CashFlowStatement>> ListCashFlowStatementsAsync(
+        Filter<string>? cik = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        ArrayFilter<string>? tickers = null,
+        RangeFilter<long>? fiscalYear = null,
+        RangeFilter<long>? fiscalQuarter = null,
+        Filter<string>? timeframe = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListCashFlowStatementsUri(cik, periodEnd, filingDate, tickers, fiscalYear, fiscalQuarter, timeframe, limit, sort);
+        return SendListCashFlowStatementsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListCashFlowStatementsUri(
+        Filter<string>? cik,
+        RangeFilter<LocalDate>? periodEnd,
+        RangeFilter<LocalDate>? filingDate,
+        ArrayFilter<string>? tickers,
+        RangeFilter<long>? fiscalYear,
+        RangeFilter<long>? fiscalQuarter,
+        Filter<string>? timeframe,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/financials/v1/cash-flow-statements");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("period_end", periodEnd);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("fiscal_year", fiscalYear);
+        builder.AppendQuery("fiscal_quarter", fiscalQuarter);
+        builder.AppendQuery("timeframe", timeframe);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<CashFlowStatement>> SendListCashFlowStatementsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFinancialsV1CashFlowStatementsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1CashFlowStatementsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<CashFlowStatement>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves income statements for US companies, filtered by company, by period end and filing
+    /// dates, and by fiscal period, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListIncomeStatementsAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. <paramref name="periodEnd"/> and <paramref name="filingDate"/> are
+    /// bare strings in the description whose prose gives the ISO calendar form, so they take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9). <paramref name="timeframe"/> is <c>quarterly</c> or
+    /// <c>annual</c>. <paramref name="tickers"/> matches the ticker array a statement is reported
+    /// under, whose own description says only that it filters arrays.
+    /// </remarks>
+    /// <param name="cik">
+    /// The company's Central Index Key (CIK), a unique identifier assigned by the U.S. Securities and
+    /// Exchange Commission (SEC). You can look up a company’s CIK using the [SEC CIK Lookup
+    /// tool](https://www.sec.gov/search-filings/cik-lookup). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="periodEnd">
+    /// The last date of the reporting period (formatted as YYYY-MM-DD). Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="filingDate">
+    /// The date of the most recent SEC filing that included this period's data. This is not necessarily
+    /// the date this period was originally filed. Because SEC filings restate comparative data for
+    /// prior periods, multiple records can share the same filing_date. For example, an annual 10-K
+    /// reports three years of results, and a 10-Q includes prior period comparatives. To find the
+    /// original filing date for a specific 10-K or 10-Q, use the SEC EDGAR filings index endpoint
+    /// (/stocks/filings/vX/index). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="fiscalYear">The fiscal year for the reporting period. Accepts an exact value or a range.</param>
+    /// <param name="fiscalQuarter">
+    /// The fiscal quarter number (1, 2, 3, or 4) for the reporting period. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="timeframe">
+    /// The reporting period type. Possible values include: quarterly, annual, trailing_twelve_months.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<IncomeStatement> EnumerateIncomeStatementsAsync(
+        Filter<string>? cik = null,
+        ArrayFilter<string>? tickers = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<long>? fiscalYear = null,
+        RangeFilter<long>? fiscalQuarter = null,
+        Filter<string>? timeframe = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIncomeStatementsUri(cik, tickers, periodEnd, filingDate, fiscalYear, fiscalQuarter, timeframe, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFinancialsV1IncomeStatementsResponse, IncomeStatement>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1IncomeStatementsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves income statements for US companies, filtered by company, by period end and filing
+    /// dates, and by fiscal period.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateIncomeStatementsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="periodEnd"/> and <paramref name="filingDate"/> are bare strings in the
+    /// description whose prose gives the ISO calendar form, so they take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9). <paramref name="timeframe"/> is <c>quarterly</c> or
+    /// <c>annual</c>. <paramref name="tickers"/> matches the ticker array a statement is reported
+    /// under, whose own description says only that it filters arrays.
+    /// </remarks>
+    /// <param name="cik">
+    /// The company's Central Index Key (CIK), a unique identifier assigned by the U.S. Securities and
+    /// Exchange Commission (SEC). You can look up a company’s CIK using the [SEC CIK Lookup
+    /// tool](https://www.sec.gov/search-filings/cik-lookup). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="periodEnd">
+    /// The last date of the reporting period (formatted as YYYY-MM-DD). Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="filingDate">
+    /// The date of the most recent SEC filing that included this period's data. This is not necessarily
+    /// the date this period was originally filed. Because SEC filings restate comparative data for
+    /// prior periods, multiple records can share the same filing_date. For example, an annual 10-K
+    /// reports three years of results, and a 10-Q includes prior period comparatives. To find the
+    /// original filing date for a specific 10-K or 10-Q, use the SEC EDGAR filings index endpoint
+    /// (/stocks/filings/vX/index). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="fiscalYear">The fiscal year for the reporting period. Accepts an exact value or a range.</param>
+    /// <param name="fiscalQuarter">
+    /// The fiscal quarter number (1, 2, 3, or 4) for the reporting period. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="timeframe">
+    /// The reporting period type. Possible values include: quarterly, annual, trailing_twelve_months.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<IncomeStatement>> ListIncomeStatementsAsync(
+        Filter<string>? cik = null,
+        ArrayFilter<string>? tickers = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<long>? fiscalYear = null,
+        RangeFilter<long>? fiscalQuarter = null,
+        Filter<string>? timeframe = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIncomeStatementsUri(cik, tickers, periodEnd, filingDate, fiscalYear, fiscalQuarter, timeframe, limit, sort);
+        return SendListIncomeStatementsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListIncomeStatementsUri(
+        Filter<string>? cik,
+        ArrayFilter<string>? tickers,
+        RangeFilter<LocalDate>? periodEnd,
+        RangeFilter<LocalDate>? filingDate,
+        RangeFilter<long>? fiscalYear,
+        RangeFilter<long>? fiscalQuarter,
+        Filter<string>? timeframe,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/financials/v1/income-statements");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("period_end", periodEnd);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("fiscal_year", fiscalYear);
+        builder.AppendQuery("fiscal_quarter", fiscalQuarter);
+        builder.AppendQuery("timeframe", timeframe);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<IncomeStatement>> SendListIncomeStatementsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFinancialsV1IncomeStatementsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1IncomeStatementsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<IncomeStatement>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves computed financial ratios for US stocks, filtered by ticker or company and by any of
+    /// the ratios themselves, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListRatiosAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint, and every ratio the response carries is also a filter, so a screen reads as the row
+    /// does: <c>priceToEarnings: RangeFilter.Lt(15)</c>. <paramref name="currentRatio"/>, <paramref
+    /// name="quickRatio"/>, and <paramref name="cashRatio"/> render under the wire's bare
+    /// <c>current</c>, <c>quick</c>, and <c>cash</c>. The endpoint catalog advertises <c>.any_of</c> on
+    /// every numeric field; the description declares it on <paramref name="ticker"/> and <paramref
+    /// name="cik"/> alone, and the description is the contract (D21).
+    /// </remarks>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="cik">
+    /// Central Index Key (CIK) number assigned by the SEC to identify the company. Accepts an exact
+    /// value, a range, or a set of values.
+    /// </param>
+    /// <param name="price">
+    /// Stock price used in ratio calculations, typically the closing price for the given date. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="averageVolume">
+    /// Average trading volume over the last 30 trading days, providing context for liquidity. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="marketCap">
+    /// Market capitalization, calculated as stock price multiplied by total shares outstanding. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="earningsPerShare">
+    /// Earnings per share, calculated as trailing twelve months (TTM) net income available to common
+    /// shareholders divided by point-in-time shares outstanding as of the price date, assuming all
+    /// shares of other share classes are converted to this share class. This is not weighted average
+    /// basic or diluted shares outstanding, so this value will not match the reported basic or diluted
+    /// EPS on the income statements endpoint. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToEarnings">
+    /// Price-to-earnings ratio, calculated as stock price divided by earnings per share. Only
+    /// calculated when earnings per share is positive. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToBook">
+    /// Price-to-book ratio, calculated as stock price divided by book value per share, comparing market
+    /// value to book value. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToSales">
+    /// Price-to-sales ratio, calculated as stock price divided by revenue per share, measuring
+    /// valuation relative to sales. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToCashFlow">
+    /// Price-to-cash-flow ratio, calculated as stock price divided by operating cash flow per share.
+    /// Only calculated when operating cash flow per share is positive. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="priceToFreeCashFlow">
+    /// Price-to-free-cash-flow ratio, calculated as stock price divided by free cash flow per share.
+    /// Only calculated when free cash flow per share is positive. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="dividendYield">
+    /// Dividend yield, calculated as annual dividends per share divided by stock price, measuring the
+    /// income return on investment. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="returnOnAssets">
+    /// Return on assets ratio, calculated as net income divided by total assets, measuring how
+    /// efficiently a company uses its assets to generate profit. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="returnOnEquity">
+    /// Return on equity ratio, calculated as net income divided by total shareholders' equity,
+    /// measuring profitability relative to shareholders' equity. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="debtToEquity">
+    /// Debt-to-equity ratio, calculated as total debt (current debt plus long-term debt) divided by
+    /// total shareholders' equity, measuring financial leverage. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="currentRatio">
+    /// Current ratio, calculated as total current assets divided by total current liabilities,
+    /// measuring short-term liquidity. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="quickRatio">
+    /// Quick ratio (acid-test ratio), calculated as (current assets minus inventories) divided by
+    /// current liabilities, measuring immediate liquidity. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="cashRatio">
+    /// Cash ratio, calculated as cash and cash equivalents divided by current liabilities, measuring
+    /// the most liquid form of liquidity coverage. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="evToSales">
+    /// Enterprise value to sales ratio, calculated as enterprise value divided by revenue, measuring
+    /// company valuation relative to sales. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="evToEbitda">
+    /// Enterprise value to EBITDA ratio, calculated as enterprise value divided by EBITDA, measuring
+    /// company valuation relative to earnings before interest, taxes, depreciation, and amortization.
+    /// Accepts an exact value or a range.
+    /// </param>
+    /// <param name="enterpriseValue">
+    /// Enterprise value, calculated as market capitalization plus total debt minus cash and cash
+    /// equivalents, representing total company value. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="freeCashFlow">
+    /// Free cash flow, calculated as operating cash flow minus capital expenditures (purchase of
+    /// property, plant, and equipment). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<FinancialRatios> EnumerateRatiosAsync(
+        Filter<string>? ticker = null,
+        Filter<string>? cik = null,
+        RangeFilter<double>? price = null,
+        RangeFilter<double>? averageVolume = null,
+        RangeFilter<double>? marketCap = null,
+        RangeFilter<double>? earningsPerShare = null,
+        RangeFilter<double>? priceToEarnings = null,
+        RangeFilter<double>? priceToBook = null,
+        RangeFilter<double>? priceToSales = null,
+        RangeFilter<double>? priceToCashFlow = null,
+        RangeFilter<double>? priceToFreeCashFlow = null,
+        RangeFilter<double>? dividendYield = null,
+        RangeFilter<double>? returnOnAssets = null,
+        RangeFilter<double>? returnOnEquity = null,
+        RangeFilter<double>? debtToEquity = null,
+        RangeFilter<double>? currentRatio = null,
+        RangeFilter<double>? quickRatio = null,
+        RangeFilter<double>? cashRatio = null,
+        RangeFilter<double>? evToSales = null,
+        RangeFilter<double>? evToEbitda = null,
+        RangeFilter<double>? enterpriseValue = null,
+        RangeFilter<double>? freeCashFlow = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListRatiosUri(ticker, cik, price, averageVolume, marketCap, earningsPerShare, priceToEarnings, priceToBook, priceToSales, priceToCashFlow, priceToFreeCashFlow, dividendYield, returnOnAssets, returnOnEquity, debtToEquity, currentRatio, quickRatio, cashRatio, evToSales, evToEbitda, enterpriseValue, freeCashFlow, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFinancialsV1RatiosResponse, FinancialRatios>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1RatiosResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves computed financial ratios for US stocks, filtered by ticker or company and by any of
+    /// the ratios themselves.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateRatiosAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint, and every
+    /// ratio the response carries is also a filter, so a screen reads as the row does:
+    /// <c>priceToEarnings: RangeFilter.Lt(15)</c>. <paramref name="currentRatio"/>, <paramref
+    /// name="quickRatio"/>, and <paramref name="cashRatio"/> render under the wire's bare
+    /// <c>current</c>, <c>quick</c>, and <c>cash</c>. The endpoint catalog advertises <c>.any_of</c> on
+    /// every numeric field; the description declares it on <paramref name="ticker"/> and <paramref
+    /// name="cik"/> alone, and the description is the contract (D21).
+    /// </remarks>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="cik">
+    /// Central Index Key (CIK) number assigned by the SEC to identify the company. Accepts an exact
+    /// value, a range, or a set of values.
+    /// </param>
+    /// <param name="price">
+    /// Stock price used in ratio calculations, typically the closing price for the given date. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="averageVolume">
+    /// Average trading volume over the last 30 trading days, providing context for liquidity. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="marketCap">
+    /// Market capitalization, calculated as stock price multiplied by total shares outstanding. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="earningsPerShare">
+    /// Earnings per share, calculated as trailing twelve months (TTM) net income available to common
+    /// shareholders divided by point-in-time shares outstanding as of the price date, assuming all
+    /// shares of other share classes are converted to this share class. This is not weighted average
+    /// basic or diluted shares outstanding, so this value will not match the reported basic or diluted
+    /// EPS on the income statements endpoint. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToEarnings">
+    /// Price-to-earnings ratio, calculated as stock price divided by earnings per share. Only
+    /// calculated when earnings per share is positive. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToBook">
+    /// Price-to-book ratio, calculated as stock price divided by book value per share, comparing market
+    /// value to book value. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToSales">
+    /// Price-to-sales ratio, calculated as stock price divided by revenue per share, measuring
+    /// valuation relative to sales. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="priceToCashFlow">
+    /// Price-to-cash-flow ratio, calculated as stock price divided by operating cash flow per share.
+    /// Only calculated when operating cash flow per share is positive. Accepts an exact value or a
+    /// range.
+    /// </param>
+    /// <param name="priceToFreeCashFlow">
+    /// Price-to-free-cash-flow ratio, calculated as stock price divided by free cash flow per share.
+    /// Only calculated when free cash flow per share is positive. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="dividendYield">
+    /// Dividend yield, calculated as annual dividends per share divided by stock price, measuring the
+    /// income return on investment. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="returnOnAssets">
+    /// Return on assets ratio, calculated as net income divided by total assets, measuring how
+    /// efficiently a company uses its assets to generate profit. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="returnOnEquity">
+    /// Return on equity ratio, calculated as net income divided by total shareholders' equity,
+    /// measuring profitability relative to shareholders' equity. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="debtToEquity">
+    /// Debt-to-equity ratio, calculated as total debt (current debt plus long-term debt) divided by
+    /// total shareholders' equity, measuring financial leverage. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="currentRatio">
+    /// Current ratio, calculated as total current assets divided by total current liabilities,
+    /// measuring short-term liquidity. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="quickRatio">
+    /// Quick ratio (acid-test ratio), calculated as (current assets minus inventories) divided by
+    /// current liabilities, measuring immediate liquidity. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="cashRatio">
+    /// Cash ratio, calculated as cash and cash equivalents divided by current liabilities, measuring
+    /// the most liquid form of liquidity coverage. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="evToSales">
+    /// Enterprise value to sales ratio, calculated as enterprise value divided by revenue, measuring
+    /// company valuation relative to sales. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="evToEbitda">
+    /// Enterprise value to EBITDA ratio, calculated as enterprise value divided by EBITDA, measuring
+    /// company valuation relative to earnings before interest, taxes, depreciation, and amortization.
+    /// Accepts an exact value or a range.
+    /// </param>
+    /// <param name="enterpriseValue">
+    /// Enterprise value, calculated as market capitalization plus total debt minus cash and cash
+    /// equivalents, representing total company value. Accepts an exact value or a range.
+    /// </param>
+    /// <param name="freeCashFlow">
+    /// Free cash flow, calculated as operating cash flow minus capital expenditures (purchase of
+    /// property, plant, and equipment). Accepts an exact value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'ticker' if not specified. The sort order defaults
+    /// to 'asc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<FinancialRatios>> ListRatiosAsync(
+        Filter<string>? ticker = null,
+        Filter<string>? cik = null,
+        RangeFilter<double>? price = null,
+        RangeFilter<double>? averageVolume = null,
+        RangeFilter<double>? marketCap = null,
+        RangeFilter<double>? earningsPerShare = null,
+        RangeFilter<double>? priceToEarnings = null,
+        RangeFilter<double>? priceToBook = null,
+        RangeFilter<double>? priceToSales = null,
+        RangeFilter<double>? priceToCashFlow = null,
+        RangeFilter<double>? priceToFreeCashFlow = null,
+        RangeFilter<double>? dividendYield = null,
+        RangeFilter<double>? returnOnAssets = null,
+        RangeFilter<double>? returnOnEquity = null,
+        RangeFilter<double>? debtToEquity = null,
+        RangeFilter<double>? currentRatio = null,
+        RangeFilter<double>? quickRatio = null,
+        RangeFilter<double>? cashRatio = null,
+        RangeFilter<double>? evToSales = null,
+        RangeFilter<double>? evToEbitda = null,
+        RangeFilter<double>? enterpriseValue = null,
+        RangeFilter<double>? freeCashFlow = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListRatiosUri(ticker, cik, price, averageVolume, marketCap, earningsPerShare, priceToEarnings, priceToBook, priceToSales, priceToCashFlow, priceToFreeCashFlow, dividendYield, returnOnAssets, returnOnEquity, debtToEquity, currentRatio, quickRatio, cashRatio, evToSales, evToEbitda, enterpriseValue, freeCashFlow, limit, sort);
+        return SendListRatiosAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListRatiosUri(
+        Filter<string>? ticker,
+        Filter<string>? cik,
+        RangeFilter<double>? price,
+        RangeFilter<double>? averageVolume,
+        RangeFilter<double>? marketCap,
+        RangeFilter<double>? earningsPerShare,
+        RangeFilter<double>? priceToEarnings,
+        RangeFilter<double>? priceToBook,
+        RangeFilter<double>? priceToSales,
+        RangeFilter<double>? priceToCashFlow,
+        RangeFilter<double>? priceToFreeCashFlow,
+        RangeFilter<double>? dividendYield,
+        RangeFilter<double>? returnOnAssets,
+        RangeFilter<double>? returnOnEquity,
+        RangeFilter<double>? debtToEquity,
+        RangeFilter<double>? currentRatio,
+        RangeFilter<double>? quickRatio,
+        RangeFilter<double>? cashRatio,
+        RangeFilter<double>? evToSales,
+        RangeFilter<double>? evToEbitda,
+        RangeFilter<double>? enterpriseValue,
+        RangeFilter<double>? freeCashFlow,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/financials/v1/ratios");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("price", price);
+        builder.AppendQuery("average_volume", averageVolume);
+        builder.AppendQuery("market_cap", marketCap);
+        builder.AppendQuery("earnings_per_share", earningsPerShare);
+        builder.AppendQuery("price_to_earnings", priceToEarnings);
+        builder.AppendQuery("price_to_book", priceToBook);
+        builder.AppendQuery("price_to_sales", priceToSales);
+        builder.AppendQuery("price_to_cash_flow", priceToCashFlow);
+        builder.AppendQuery("price_to_free_cash_flow", priceToFreeCashFlow);
+        builder.AppendQuery("dividend_yield", dividendYield);
+        builder.AppendQuery("return_on_assets", returnOnAssets);
+        builder.AppendQuery("return_on_equity", returnOnEquity);
+        builder.AppendQuery("debt_to_equity", debtToEquity);
+        builder.AppendQuery("current", currentRatio);
+        builder.AppendQuery("quick", quickRatio);
+        builder.AppendQuery("cash", cashRatio);
+        builder.AppendQuery("ev_to_sales", evToSales);
+        builder.AppendQuery("ev_to_ebitda", evToEbitda);
+        builder.AppendQuery("enterprise_value", enterpriseValue);
+        builder.AppendQuery("free_cash_flow", freeCashFlow);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<FinancialRatios>> SendListRatiosAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFinancialsV1RatiosResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFinancialsV1RatiosResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<FinancialRatios>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }
