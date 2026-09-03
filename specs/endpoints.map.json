@@ -772,6 +772,37 @@
         "participant_id": { "name": "ParticipantId" },
         "url":            { "name": "Url" }
       }
+    },
+
+    "ReferenceDividend": {
+      "summary": "A cash dividend from the v3 reference route: the ticker, the four dates that govern it, the amount, its type, and how often it pays.",
+      "remarks": "Reference data, so a class (decision D4). Prefixed because the stocks/v1 route's <see cref=\"Dividend\"/> carries two properties this one lacks, so the two cannot share a model (decision D16, D-R7). The four dates are bare strings in the description; the published example carries ISO calendar dates, so the map binds them to <see cref=\"NodaTime.LocalDate\"/> (D-R9).",
+      "schema": { "operationId": "ListDividends", "pointer": "results/items" },
+      "properties": {
+        "id":               { "name": "Id" },
+        "ticker":           { "name": "Ticker" },
+        "cash_amount":      { "name": "CashAmount" },
+        "currency":         { "name": "Currency" },
+        "dividend_type":    { "name": "DividendType" },
+        "frequency":        { "name": "Frequency" },
+        "declaration_date": { "name": "DeclarationDate", "type": "LocalDate?", "summary": "The date the dividend was announced. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "ex_dividend_date": { "name": "ExDividendDate", "type": "LocalDate", "summary": "The first trading day on which a buyer is not entitled to the dividend. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "record_date":      { "name": "RecordDate", "type": "LocalDate?", "summary": "The date a holder must be on the register to receive the dividend. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "pay_date":         { "name": "PayDate", "type": "LocalDate?", "summary": "The date the dividend is paid. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." }
+      }
+    },
+
+    "ReferenceSplit": {
+      "summary": "A stock split from the v3 reference route: the ticker, the execution date, and the ratio.",
+      "remarks": "Reference data, so a class (decision D4). Prefixed because the stocks/v1 route's <see cref=\"Split\"/> carries two properties this one lacks (decision D16, D-R7). <see cref=\"ExecutionDate\"/> is a bare string in the description and an ISO calendar date on the wire, hence <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "schema": { "operationId": "ListStockSplits", "pointer": "results/items" },
+      "properties": {
+        "id":             { "name": "Id" },
+        "ticker":         { "name": "Ticker" },
+        "execution_date": { "name": "ExecutionDate", "type": "LocalDate", "summary": "The date the split took effect. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "split_from":     { "name": "SplitFrom" },
+        "split_to":       { "name": "SplitTo" }
+      }
     }
   },
 
@@ -1208,6 +1239,43 @@
       "parameters": {
         "asset_class": { "name": "assetClass", "type": "MarketType" },
         "locale":      { "name": "locale" }
+      }
+    },
+    {
+      "operationId": "ListDividends",
+      "group": "Reference",
+      "method": "ListDividends",
+      "summary": "Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four dates that govern a dividend, by amount, and by type.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality or a <see cref=\"RangeFilter\"/> factory for a range. The date filters are bare strings in the description and take <see cref=\"NodaTime.LocalDate\"/> here because that is what the route accepts (D-R9). <see cref=\"StocksGroup.ListDividendsAsync\"/> is the newer stocks route with a wider row; this one is kept because the description declares it.",
+      "result": { "kind": "array", "model": "ReferenceDividend", "property": "results" },
+      "parameters": {
+        "ticker":           { "name": "ticker" },
+        "ex_dividend_date": { "name": "exDividendDate" },
+        "record_date":      { "name": "recordDate" },
+        "declaration_date": { "name": "declarationDate" },
+        "pay_date":         { "name": "payDate" },
+        "frequency":        { "name": "frequency" },
+        "cash_amount":      { "name": "cashAmount" },
+        "dividend_type":    { "name": "dividendType" },
+        "order":            { "name": "order", "type": "SortOrder" },
+        "limit":            { "name": "limit" },
+        "sort":             { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListStockSplits",
+      "group": "Reference",
+      "method": "ListSplits",
+      "summary": "Retrieves stock splits from the v3 reference route, filtered by ticker, execution date, and direction.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"reverseSplit\"/> selects splits whose ratio reduces the share count. <see cref=\"StocksGroup.ListSplitsAsync\"/> is the newer stocks route with a wider row; this one is kept because the description declares it.",
+      "result": { "kind": "array", "model": "ReferenceSplit", "property": "results" },
+      "parameters": {
+        "ticker":         { "name": "ticker" },
+        "execution_date": { "name": "executionDate" },
+        "reverse_split":  { "name": "reverseSplit" },
+        "order":          { "name": "order", "type": "SortOrder" },
+        "limit":          { "name": "limit" },
+        "sort":           { "name": "sort" }
       }
     }
   ]

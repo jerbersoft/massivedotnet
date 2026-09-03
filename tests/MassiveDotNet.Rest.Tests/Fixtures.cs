@@ -1597,4 +1597,62 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /v3/reference/dividends. It carries a cursor of its own.</summary>
+    public const string ReferenceDividends = """
+        {
+          "next_url": "https://api.massive.com/v3/reference/dividends/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "cash_amount": 0.22,
+              "declaration_date": "2021-10-28",
+              "dividend_type": "CD",
+              "ex_dividend_date": "2021-11-05",
+              "frequency": 4,
+              "id": "E8e3c4f794613e9205e2f178a36c53fcc57cdabb55e1988c87b33f9e52e221444",
+              "pay_date": "2021-11-11",
+              "record_date": "2021-11-08",
+              "ticker": "AAPL"
+            },
+            {
+              "cash_amount": 0.22,
+              "declaration_date": "2021-07-27",
+              "dividend_type": "CD",
+              "ex_dividend_date": "2021-08-06",
+              "frequency": 4,
+              "id": "E6436c5475706773f03490acf0b63fdb90b2c72bfeed329a6eb4afc080acd80ae",
+              "pay_date": "2021-08-12",
+              "record_date": "2021-08-09",
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/splits. It carries a cursor of its own.</summary>
+    public const string ReferenceSplits = """
+        {
+          "next_url": "https://api.massive.com/v3/splits/AAPL?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "execution_date": "2020-08-31",
+              "id": "E36416cce743c3964c5da63e1ef1626c0aece30fb47302eea5a49c0055c04e8d0",
+              "split_from": 1,
+              "split_to": 4,
+              "ticker": "AAPL"
+            },
+            {
+              "execution_date": "2005-02-28",
+              "id": "E90a77bdf742661741ed7c8fc086415f0457c2816c45899d73aaa88bdc8ff6025",
+              "split_from": 1,
+              "split_to": 2,
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

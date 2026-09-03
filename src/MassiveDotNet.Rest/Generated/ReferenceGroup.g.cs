@@ -749,4 +749,282 @@ public readonly partial struct ReferenceGroup
 
         return response?.Results ?? [];
     }
+
+    /// <summary>
+    /// Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four
+    /// dates that govern a dividend, by amount, and by type, enumerating every page as a single lazy
+    /// sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListDividendsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Pass a plain value for equality or a <see cref="RangeFilter"/> factory for a
+    /// range. The date filters are bare strings in the description and take <see
+    /// cref="NodaTime.LocalDate"/> here because that is what the route accepts (D-R9). <see
+    /// cref="StocksGroup.ListDividendsAsync"/> is the newer stocks route with a wider row; this one is
+    /// kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="exDividendDate">Query by ex-dividend date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="recordDate">Query by record date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="declarationDate">Query by declaration date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="payDate">Query by pay date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="frequency">
+    /// Query by the number of times per year the dividend is paid out. Possible values are 0
+    /// (one-time), 1 (annually), 2 (bi-annually), 4 (quarterly), 12 (monthly), 24 (bi-monthly), and 52
+    /// (weekly).
+    /// </param>
+    /// <param name="cashAmount">Query by the cash amount of the dividend. Accepts an exact value or a range.</param>
+    /// <param name="dividendType">
+    /// Query by the type of dividend. Dividends that have been paid and/or are expected to be paid on
+    /// consistent schedules are denoted as CD. Special Cash dividends that have been paid that are
+    /// infrequent or unusual, and/or can not be expected to occur in the future are denoted as SC.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ReferenceDividend> EnumerateDividendsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? exDividendDate = null,
+        RangeFilter<LocalDate>? recordDate = null,
+        RangeFilter<LocalDate>? declarationDate = null,
+        RangeFilter<LocalDate>? payDate = null,
+        int? frequency = null,
+        RangeFilter<double>? cashAmount = null,
+        string? dividendType = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDividendsUri(ticker, exDividendDate, recordDate, declarationDate, payDate, frequency, cashAmount, dividendType, order, limit, sort);
+        return _transport.EnumerateAsync<ListDividendsResponse, ReferenceDividend>(
+            requestUri, MassiveRestJsonContext.Default.ListDividendsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four
+    /// dates that govern a dividend, by amount, and by type.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateDividendsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
+    /// a plain value for equality or a <see cref="RangeFilter"/> factory for a range. The date filters
+    /// are bare strings in the description and take <see cref="NodaTime.LocalDate"/> here because that
+    /// is what the route accepts (D-R9). <see cref="StocksGroup.ListDividendsAsync"/> is the newer
+    /// stocks route with a wider row; this one is kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="exDividendDate">Query by ex-dividend date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="recordDate">Query by record date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="declarationDate">Query by declaration date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="payDate">Query by pay date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="frequency">
+    /// Query by the number of times per year the dividend is paid out. Possible values are 0
+    /// (one-time), 1 (annually), 2 (bi-annually), 4 (quarterly), 12 (monthly), 24 (bi-monthly), and 52
+    /// (weekly).
+    /// </param>
+    /// <param name="cashAmount">Query by the cash amount of the dividend. Accepts an exact value or a range.</param>
+    /// <param name="dividendType">
+    /// Query by the type of dividend. Dividends that have been paid and/or are expected to be paid on
+    /// consistent schedules are denoted as CD. Special Cash dividends that have been paid that are
+    /// infrequent or unusual, and/or can not be expected to occur in the future are denoted as SC.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ReferenceDividend>> ListDividendsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? exDividendDate = null,
+        RangeFilter<LocalDate>? recordDate = null,
+        RangeFilter<LocalDate>? declarationDate = null,
+        RangeFilter<LocalDate>? payDate = null,
+        int? frequency = null,
+        RangeFilter<double>? cashAmount = null,
+        string? dividendType = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDividendsUri(ticker, exDividendDate, recordDate, declarationDate, payDate, frequency, cashAmount, dividendType, order, limit, sort);
+        return SendListDividendsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListDividendsUri(
+        RangeFilter<string>? ticker,
+        RangeFilter<LocalDate>? exDividendDate,
+        RangeFilter<LocalDate>? recordDate,
+        RangeFilter<LocalDate>? declarationDate,
+        RangeFilter<LocalDate>? payDate,
+        int? frequency,
+        RangeFilter<double>? cashAmount,
+        string? dividendType,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/dividends");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("ex_dividend_date", exDividendDate);
+        builder.AppendQuery("record_date", recordDate);
+        builder.AppendQuery("declaration_date", declarationDate);
+        builder.AppendQuery("pay_date", payDate);
+        builder.AppendQuery("frequency", frequency);
+        builder.AppendQuery("cash_amount", cashAmount);
+        builder.AppendQuery("dividend_type", dividendType);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ReferenceDividend>> SendListDividendsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListDividendsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListDividendsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ReferenceDividend>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves stock splits from the v3 reference route, filtered by ticker, execution date, and
+    /// direction, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListSplitsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. <paramref name="reverseSplit"/> selects splits whose ratio reduces the share count.
+    /// <see cref="StocksGroup.ListSplitsAsync"/> is the newer stocks route with a wider row; this one
+    /// is kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="executionDate">Query by execution date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="reverseSplit">
+    /// Query for reverse stock splits. A split ratio where split_from is greater than split_to
+    /// represents a reverse split. By default this filter is not used.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<ReferenceSplit> EnumerateSplitsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? executionDate = null,
+        bool? reverseSplit = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSplitsUri(ticker, executionDate, reverseSplit, order, limit, sort);
+        return _transport.EnumerateAsync<ListStockSplitsResponse, ReferenceSplit>(
+            requestUri, MassiveRestJsonContext.Default.ListStockSplitsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves stock splits from the v3 reference route, filtered by ticker, execution date, and
+    /// direction.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateSplitsAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. <paramref
+    /// name="reverseSplit"/> selects splits whose ratio reduces the share count. <see
+    /// cref="StocksGroup.ListSplitsAsync"/> is the newer stocks route with a wider row; this one is
+    /// kept because the description declares it.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="executionDate">Query by execution date with the format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="reverseSplit">
+    /// Query for reverse stock splits. A split ratio where split_from is greater than split_to
+    /// represents a reverse split. By default this filter is not used.
+    /// </param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<ReferenceSplit>> ListSplitsAsync(
+        RangeFilter<string>? ticker = null,
+        RangeFilter<LocalDate>? executionDate = null,
+        bool? reverseSplit = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListSplitsUri(ticker, executionDate, reverseSplit, order, limit, sort);
+        return SendListSplitsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListSplitsUri(
+        RangeFilter<string>? ticker,
+        RangeFilter<LocalDate>? executionDate,
+        bool? reverseSplit,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/splits");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("execution_date", executionDate);
+        builder.AppendQuery("reverse_split", reverseSplit);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ReferenceSplit>> SendListSplitsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListStockSplitsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListStockSplitsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ReferenceSplit>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }

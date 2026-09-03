@@ -613,3 +613,43 @@ internal sealed class ListExchangesResponse
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v3/reference/dividends.</summary>
+internal sealed class ListDividendsResponse : IPagedEnvelope<ReferenceDividend>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public ReferenceDividend[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/splits.</summary>
+internal sealed class ListStockSplitsResponse : IPagedEnvelope<ReferenceSplit>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public ReferenceSplit[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
