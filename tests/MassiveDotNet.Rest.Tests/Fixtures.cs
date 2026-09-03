@@ -1730,4 +1730,82 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// The documented sample for GET /vX/reference/ipos. Its <c>issue_start_date</c> and
+    /// <c>issue_end_date</c> are not in the schema and are ignored.
+    /// </summary>
+    public const string ReferenceIpos = """
+        {
+          "next_url": "https://api.massive.com/vX/reference/ipos?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "announced_date": "2024-06-01",
+              "currency_code": "USD",
+              "final_issue_price": 17,
+              "highest_offer_price": 17,
+              "ipo_status": "history",
+              "isin": "US75383L1026",
+              "issue_end_date": "2024-06-06",
+              "issue_start_date": "2024-06-01",
+              "issuer_name": "Rapport Therapeutics Inc.",
+              "last_updated": "2024-06-27",
+              "listing_date": "2024-06-07",
+              "lot_size": 100,
+              "lowest_offer_price": 17,
+              "max_shares_offered": 8000000,
+              "min_shares_offered": 1000000,
+              "primary_exchange": "XNAS",
+              "security_description": "Ordinary Shares",
+              "security_type": "CS",
+              "shares_outstanding": 35376457,
+              "ticker": "RAPP",
+              "total_offer_size": 136000000,
+              "us_code": "75383L102"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/reference/ipos, with three departures from the
+    /// published text: the schema types <c>announced_date</c>, <c>last_updated</c>, and
+    /// <c>listing_date</c> as 64-bit integers, while the sample shows the same calendar dates as
+    /// the <c>vX</c> sample. The model follows the schema, so the fixture carries each date as
+    /// the Unix nanosecond count of its midnight UTC, the unit the operation's own
+    /// <c>listing_date</c> filter documents (D-R10). The route answered a plain-text 404 on
+    /// 2026-09-03, so the wire cannot settle this; the live pin flips when it can.
+    /// </summary>
+    public const string ReferenceIposV1 = """
+        {
+          "request_id": "6a7e466379af0a71039d60cc78e72282",
+          "results": [
+            {
+              "announced_date": 1717200000000000000,
+              "currency_code": "USD",
+              "final_issue_price": 17,
+              "highest_offer_price": 17,
+              "ipo_status": "history",
+              "isin": "US75383L1026",
+              "issuer_name": "Rapport Therapeutics Inc.",
+              "last_updated": 1719446400000000000,
+              "listing_date": 1717718400000000000,
+              "lot_size": 100,
+              "lowest_offer_price": 17,
+              "max_shares_offered": 8000000,
+              "min_shares_offered": 1000000,
+              "primary_exchange": "XNAS",
+              "security_description": "Ordinary Shares",
+              "security_type": "CS",
+              "shares_outstanding": 35376457,
+              "ticker": "RAPP",
+              "total_offer_size": 136000000,
+              "us_code": "75383L102"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

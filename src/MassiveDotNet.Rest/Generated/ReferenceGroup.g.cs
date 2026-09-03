@@ -1227,4 +1227,284 @@ public readonly partial struct ReferenceGroup
                 $"The response from '{requestUri}' carried no 'results' payload.",
                 response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves initial public offerings, past and upcoming, filtered by ticker, identifier, listing
+    /// date, and status, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListIposAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. This is the served revision and
+    /// takes the plain name; <see cref="ListIposV1Async"/> is the <c>v1</c> route the description also
+    /// declares (decision D26). <paramref name="ipoStatus"/> is one of <c>direct_listing_process</c>,
+    /// <c>history</c>, <c>new</c>, <c>pending</c>, <c>postponed</c>, <c>rumor</c>, or <c>withdrawn</c>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, TSLA represents Tesla Inc.</param>
+    /// <param name="usCode">
+    /// Specify a us_code. This is a unique nine-character alphanumeric code that identifies a North
+    /// American financial security for the purposes of facilitating clearing and settlement of trades.
+    /// </param>
+    /// <param name="isin">
+    /// Specify an International Securities Identification Number (ISIN). This is a unique twelve-digit
+    /// code that is assigned to every security issuance in the world.
+    /// </param>
+    /// <param name="listingDate">
+    /// Specify a listing date. This is the first trading date for the newly listed entity. Accepts an
+    /// exact value or a range.
+    /// </param>
+    /// <param name="ipoStatus">Specify an IPO status.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<Ipo> EnumerateIposAsync(
+        string? ticker = null,
+        string? usCode = null,
+        string? isin = null,
+        RangeFilter<LocalDate>? listingDate = null,
+        string? ipoStatus = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposUri(ticker, usCode, isin, listingDate, ipoStatus, order, limit, sort);
+        return _transport.EnumerateAsync<ListIPOsResponse, Ipo>(
+            requestUri, MassiveRestJsonContext.Default.ListIPOsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings, past and upcoming, filtered by ticker, identifier, listing
+    /// date, and status.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateIposAsync"/> to walk every page without
+    /// handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision D18);
+    /// opt in with <c>MASSIVE0001</c>. This is the served revision and takes the plain name; <see
+    /// cref="ListIposV1Async"/> is the <c>v1</c> route the description also declares (decision D26).
+    /// <paramref name="ipoStatus"/> is one of <c>direct_listing_process</c>, <c>history</c>,
+    /// <c>new</c>, <c>pending</c>, <c>postponed</c>, <c>rumor</c>, or <c>withdrawn</c>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, TSLA represents Tesla Inc.</param>
+    /// <param name="usCode">
+    /// Specify a us_code. This is a unique nine-character alphanumeric code that identifies a North
+    /// American financial security for the purposes of facilitating clearing and settlement of trades.
+    /// </param>
+    /// <param name="isin">
+    /// Specify an International Securities Identification Number (ISIN). This is a unique twelve-digit
+    /// code that is assigned to every security issuance in the world.
+    /// </param>
+    /// <param name="listingDate">
+    /// Specify a listing date. This is the first trading date for the newly listed entity. Accepts an
+    /// exact value or a range.
+    /// </param>
+    /// <param name="ipoStatus">Specify an IPO status.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<Ipo>> ListIposAsync(
+        string? ticker = null,
+        string? usCode = null,
+        string? isin = null,
+        RangeFilter<LocalDate>? listingDate = null,
+        string? ipoStatus = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposUri(ticker, usCode, isin, listingDate, ipoStatus, order, limit, sort);
+        return SendListIposAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListIposUri(
+        string? ticker,
+        string? usCode,
+        string? isin,
+        RangeFilter<LocalDate>? listingDate,
+        string? ipoStatus,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/vX/reference/ipos");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("us_code", usCode);
+        builder.AppendQuery("isin", isin);
+        builder.AppendQuery("listing_date", listingDate);
+        builder.AppendQuery("ipo_status", ipoStatus);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Ipo>> SendListIposAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListIPOsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListIPOsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Ipo>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings from the v1 reference route, with comparator filters on
+    /// ticker, identifiers, listing date, and status, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListIposV1Async"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The description declares this route beside
+    /// <see cref="ListIposAsync"/>, and the service answered a plain-text 404 for it on 2026-09-03; it
+    /// stays mapped as declared (decision D21) and carries its version segment in its name because the
+    /// <c>vX</c> revision is the served one (decision D26). <paramref name="listingDate"/> takes a
+    /// calendar date or an <see cref="NodaTime.Instant"/>, rendered as Unix nanoseconds (decision D20).
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol of the IPO event. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="usCode">
+    /// Nine-character alphanumeric code that uniquely identifies a financial security in North America.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="isin">
+    /// International Securities Identification Number. This is a unique twelve-digit code that is
+    /// assigned to every security issuance in the world. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="listingDate">First trading date for the newly listed entity. Accepts an exact value or a range.</param>
+    /// <param name="ipoStatus">The status of the IPO. Accepts an exact value or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'listing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<IpoV1> EnumerateIposV1Async(
+        Filter<string>? ticker = null,
+        Filter<string>? usCode = null,
+        Filter<string>? isin = null,
+        RangeFilter<DateOrNanoseconds>? listingDate = null,
+        SetFilter<string>? ipoStatus = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposV1Uri(ticker, usCode, isin, listingDate, ipoStatus, limit, sort);
+        return _transport.EnumerateAsync<GetV1ReferenceIposResponse, IpoV1>(
+            requestUri, MassiveRestJsonContext.Default.GetV1ReferenceIposResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves initial public offerings from the v1 reference route, with comparator filters on
+    /// ticker, identifiers, listing date, and status.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateIposV1Async"/> to walk every page without
+    /// handling cursors yourself. The description declares this route beside <see
+    /// cref="ListIposAsync"/>, and the service answered a plain-text 404 for it on 2026-09-03; it stays
+    /// mapped as declared (decision D21) and carries its version segment in its name because the
+    /// <c>vX</c> revision is the served one (decision D26). <paramref name="listingDate"/> takes a
+    /// calendar date or an <see cref="NodaTime.Instant"/>, rendered as Unix nanoseconds (decision D20).
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol of the IPO event. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="usCode">
+    /// Nine-character alphanumeric code that uniquely identifies a financial security in North America.
+    /// Accepts an exact value, a range, or a set of values.
+    /// </param>
+    /// <param name="isin">
+    /// International Securities Identification Number. This is a unique twelve-digit code that is
+    /// assigned to every security issuance in the world. Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="listingDate">First trading date for the newly listed entity. Accepts an exact value or a range.</param>
+    /// <param name="ipoStatus">The status of the IPO. Accepts an exact value or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'listing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<IpoV1>> ListIposV1Async(
+        Filter<string>? ticker = null,
+        Filter<string>? usCode = null,
+        Filter<string>? isin = null,
+        RangeFilter<DateOrNanoseconds>? listingDate = null,
+        SetFilter<string>? ipoStatus = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListIposV1Uri(ticker, usCode, isin, listingDate, ipoStatus, limit, sort);
+        return SendListIposV1Async(requestUri, cancellationToken);
+    }
+
+    private static string BuildListIposV1Uri(
+        Filter<string>? ticker,
+        Filter<string>? usCode,
+        Filter<string>? isin,
+        RangeFilter<DateOrNanoseconds>? listingDate,
+        SetFilter<string>? ipoStatus,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/ipos");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("us_code", usCode);
+        builder.AppendQuery("isin", isin);
+        builder.AppendQuery("listing_date", listingDate);
+        builder.AppendQuery("ipo_status", ipoStatus);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<IpoV1>> SendListIposV1Async(string requestUri, CancellationToken cancellationToken)
+    {
+        GetV1ReferenceIposResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetV1ReferenceIposResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<IpoV1>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }

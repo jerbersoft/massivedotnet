@@ -832,6 +832,62 @@
         "type":       { "name": "Type" },
         "amount":     { "name": "Amount" }
       }
+    },
+
+    "Ipo": {
+      "summary": "An initial public offering from the vX reference route: the issuer, the security, its status, the offer's price and size, and the dates that mark it.",
+      "remarks": "Reference data, so a class (decision D4). The three dates carry <c>format: date</c> and bind <see cref=\"NodaTime.LocalDate\"/> on their own. <see cref=\"IpoV1\"/> is the same offering from the <c>v1</c> route, whose description types the dates as integers; the two are separate models because their wire types differ (D-R7). The route is experimental and this model is the served one (D-R5).",
+      "schema": { "operationId": "ListIPOs", "pointer": "results/items" },
+      "properties": {
+        "ticker":               { "name": "Ticker" },
+        "issuer_name":          { "name": "IssuerName" },
+        "ipo_status":           { "name": "IpoStatus" },
+        "security_type":        { "name": "SecurityType" },
+        "security_description": { "name": "SecurityDescription" },
+        "isin":                 { "name": "Isin" },
+        "us_code":              { "name": "UsCode" },
+        "currency_code":        { "name": "CurrencyCode" },
+        "primary_exchange":     { "name": "PrimaryExchange" },
+        "announced_date":       { "name": "AnnouncedDate" },
+        "listing_date":         { "name": "ListingDate" },
+        "last_updated":         { "name": "LastUpdated" },
+        "final_issue_price":    { "name": "FinalIssuePrice" },
+        "lowest_offer_price":   { "name": "LowestOfferPrice" },
+        "highest_offer_price":  { "name": "HighestOfferPrice" },
+        "min_shares_offered":   { "name": "MinSharesOffered" },
+        "max_shares_offered":   { "name": "MaxSharesOffered" },
+        "shares_outstanding":   { "name": "SharesOutstanding" },
+        "total_offer_size":     { "name": "TotalOfferSize" },
+        "lot_size":             { "name": "LotSize" }
+      }
+    },
+
+    "IpoV1": {
+      "summary": "An initial public offering from the v1 reference route: the same offering as <see cref=\"Ipo\"/>, with its dates as epoch integers and its share counts as integers.",
+      "remarks": "Reference data, so a class (decision D4). The description types the three dates as 64-bit integers and declares no unit; the route answered a plain-text 404 on 2026-09-03, so the wire cannot settle it. The model follows the description (decision D21) and offers no computed instant until it can (D-R10); the <c>Epoch</c> suffix says the value is a count, not a date. The route's own <c>listing_date</c> filter documents nanoseconds, which is what the fixture assumes.",
+      "schema": { "operationId": "get_v1_reference_ipos", "pointer": "results/items" },
+      "properties": {
+        "ticker":               { "name": "Ticker" },
+        "issuer_name":          { "name": "IssuerName" },
+        "ipo_status":           { "name": "IpoStatus" },
+        "security_type":        { "name": "SecurityType" },
+        "security_description": { "name": "SecurityDescription" },
+        "isin":                 { "name": "Isin" },
+        "us_code":              { "name": "UsCode" },
+        "currency_code":        { "name": "CurrencyCode" },
+        "primary_exchange":     { "name": "PrimaryExchange" },
+        "announced_date":       { "name": "AnnouncedDateEpoch", "summary": "The date the offering was announced, as an epoch count whose unit the description does not declare; its listing_date filter documents nanoseconds (D-R10)." },
+        "listing_date":         { "name": "ListingDateEpoch", "summary": "The first trading date, as an epoch count whose unit the description does not declare; its listing_date filter documents nanoseconds (D-R10)." },
+        "last_updated":         { "name": "LastUpdatedEpoch", "summary": "When the record was last updated, as an epoch count whose unit the description does not declare; its listing_date filter documents nanoseconds (D-R10)." },
+        "final_issue_price":    { "name": "FinalIssuePrice" },
+        "lowest_offer_price":   { "name": "LowestOfferPrice" },
+        "highest_offer_price":  { "name": "HighestOfferPrice" },
+        "min_shares_offered":   { "name": "MinSharesOffered" },
+        "max_shares_offered":   { "name": "MaxSharesOffered" },
+        "shares_outstanding":   { "name": "SharesOutstanding" },
+        "total_offer_size":     { "name": "TotalOfferSize" },
+        "lot_size":             { "name": "LotSize" }
+      }
     }
   },
 
@@ -1337,6 +1393,41 @@
       "parameters": {
         "options_ticker": { "name": "optionsTicker" },
         "as_of":          { "name": "asOf", "type": "LocalDate" }
+      }
+    },
+    {
+      "operationId": "ListIPOs",
+      "group": "Reference",
+      "method": "ListIpos",
+      "summary": "Retrieves initial public offerings, past and upcoming, filtered by ticker, identifier, listing date, and status.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. This is the served revision and takes the plain name; <see cref=\"ListIposV1Async\"/> is the <c>v1</c> route the description also declares (decision D26). <paramref name=\"ipoStatus\"/> is one of <c>direct_listing_process</c>, <c>history</c>, <c>new</c>, <c>pending</c>, <c>postponed</c>, <c>rumor</c>, or <c>withdrawn</c>.",
+      "result": { "kind": "array", "model": "Ipo", "property": "results" },
+      "parameters": {
+        "ticker":       { "name": "ticker" },
+        "us_code":      { "name": "usCode" },
+        "isin":         { "name": "isin" },
+        "listing_date": { "name": "listingDate" },
+        "ipo_status":   { "name": "ipoStatus" },
+        "order":        { "name": "order", "type": "SortOrder" },
+        "limit":        { "name": "limit" },
+        "sort":         { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_v1_reference_ipos",
+      "group": "Reference",
+      "method": "ListIposV1",
+      "summary": "Retrieves initial public offerings from the v1 reference route, with comparator filters on ticker, identifiers, listing date, and status.",
+      "remarks": "The description declares this route beside <see cref=\"ListIposAsync\"/>, and the service answered a plain-text 404 for it on 2026-09-03; it stays mapped as declared (decision D21) and carries its version segment in its name because the <c>vX</c> revision is the served one (decision D26). <paramref name=\"listingDate\"/> takes a calendar date or an <see cref=\"NodaTime.Instant\"/>, rendered as Unix nanoseconds (decision D20).",
+      "result": { "kind": "array", "model": "IpoV1", "property": "results" },
+      "parameters": {
+        "ticker":       { "name": "ticker" },
+        "us_code":      { "name": "usCode" },
+        "isin":         { "name": "isin" },
+        "listing_date": { "name": "listingDate", "type": "DateOrNanoseconds" },
+        "ipo_status":   { "name": "ipoStatus" },
+        "limit":        { "name": "limit" },
+        "sort":         { "name": "sort" }
       }
     }
   ]

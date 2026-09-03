@@ -19,7 +19,7 @@ public sealed class EndpointCoverageTests
     /// methods, and this constant go in the same commit, so the drop is visible in the diff
     /// that explains it. A live 404 is never grounds for lowering it.
     /// </summary>
-    private const int CoverageBaseline = 35;
+    private const int CoverageBaseline = 37;
 
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
