@@ -15,6 +15,17 @@
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      The financials route carries a vX segment, so it ships [Experimental] (D18). It is called
+      here on purpose: its payload is the SDK's only dictionary of nested models, and an
+      instantiation nothing reaches is trimmed away, which would make a clean publish prove
+      nothing about it. The suppression is scoped to this project, as the constitution's Stability
+      convention allows; nothing is ever suppressed inside generated code.
+    -->
+    <NoWarn>$(NoWarn);MASSIVE0001</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="../../src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
   </ItemGroup>

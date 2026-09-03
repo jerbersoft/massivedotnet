@@ -64,6 +64,7 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D23 | A route segment that **starts with** `vX` reads as experimental, so `vX_0` marks `/stocks/filings/10-K/vX_0/sections` exactly as `vX` marks its sibling. Read from the path, never from the map. | The description carries both a `vX` and a `vX_0` revision of the 10-K sections route, and only the `vX` one is served: `vX_0` answered a plain-text 404 on 2026-09-03. An equality reading ships the `vX_0` operation unmarked and stable, which contradicts Massive's own convention, and marking it from the map is the second stability source D18 forbids. A prefix is the smallest reading that covers every revision Massive might number; `dev` stays an exact match because it is a word, not a version. The cost if wrong is an `[Experimental]` on a route Massive considers released, which the next spec sync corrects the day the segment changes. |
 | D24 | A `oneOf` with exactly one branch reads as that branch, in `Spec.Shape` and `Spec.Collect`; a `oneOf` of scalars stays a scalar; a `oneOf` with more than one branch of which any is an object fails generation. | The description uses the one-branch form once, on the ticker events items, and the generator read it as an array of strings, which would have failed on every real response: the silent wrong binding D16 exists to prevent. A scalar union stays a scalar because the news parameters declare one and go through the same classifier. An object union has no honest model binding, so it is refused rather than guessed; none exists today. |
 | D26 | When the description declares two revisions of one route, the served, documented revision takes the plain method name and the other carries its version segment: `ListIposAsync` for `/vX/reference/ipos` beside `ListIposV1Async`, `List10KSectionsAsync` for the `vX` sections route beside `List10KSectionsVx0Async`. The rename lands in the D21 removal commit when Massive retires a revision. | Naming is the map's job, so this is not a second stability source: both revisions ship and both are marked from the path (D18). Giving the plain name to the versioned route because the description promotes it was rejected: `ListIposAsync` would 404 today, and the cost at the transition, one breaking rename noted in the changelog, is the same either way. D25 is reserved for the SEC filings plan. |
+| D25 | A route that serves a document where the description declares JSON ships **as declared**, and a hand-written download sits beside it: `GetFilingFileAsync` returns the declared `FilingFile` and throws on the HTML the service sends, while `DownloadFilingFileAsync` copies the bytes to a caller's stream through the same generated URI builder. `MassiveHttpTransport.DownloadAsync` inspects no content type. | The SEC filing file route declares a metadata object and serves `text/html` with either `Accept` header, observed 2026-09-03. A map-level `kind: document` would have the map overriding the description on a live observation, which is the second stability source D18 and D21 forbid, so the generated method stays as declared and its pinned live test flips the day either side moves. The download is hand-written because nothing in the description says it exists. Returning a `Stream` was rejected because it ties the response's lifetime to a value the caller may forget to dispose, and returning a `string` is wrong for the graphics and PDFs a filing carries. The content type is not inspected because the caller asked for the bytes and the files listing already names each file's type, name, and size. |
 
 ---
 
@@ -112,6 +113,10 @@ samples/MassiveDotNet.AotSmokeTest
   a synchronous `Build{Method}Uri`, and an async `Send{Method}Async`.
 - `.g.cs` files suppress the project's nullable context, so the generated header re-enables it
   explicitly with `#nullable enable`.
+- A **path parameter is required whether or not the description flags it**. OpenAPI mandates the
+  flag; the SEC v1 description omits it on `filing_id` and `file_id`, and reading it literally
+  would default those to `null` and append an empty segment. `Spec.Parameters` therefore reads
+  requiredness as `in == "path" || required` (D-R3).
 - Prose from the OpenAPI description contains HTML intended for the docs site. Run it through
   `Prose.Clean` before emitting it into XML comments; escape it unless it is map-authored markup.
 
@@ -315,6 +320,9 @@ skip would read as green.
 - **Naming**: groups are `{Asset}Group`; methods are verb-first and `Async`-suffixed
   (`ListAggregatesAsync`, `GetLastTradeAsync`). `CancellationToken` is always the last parameter,
   always defaulted.
+  A model or method named after an SEC form spells a leading form number, because C# forbids a
+  leading digit — `TenKSection`, `EightKDisclosure`, `ThirteenFHolding` — and keeps a trailing
+  one: `Form3Filing`, `Form4Filing`, `List10KSectionsAsync`, `List13FHoldingsAsync`.
 - **Pagination**: the 100 operations whose success schema declares `next_url` get two methods —
   `ListXxxAsync` returning `MassivePage<T>` (one page, reporting whether more exist) and
   `EnumerateXxxAsync` returning `IAsyncEnumerable<T>` (every page, one in flight at a time).
