@@ -214,4 +214,29 @@ public sealed class ParameterBindingTests
         Assert.Contains("RangeFilter<DateOrNanoseconds>? timestamp = null", group, StringComparison.Ordinal);
         Assert.Contains("builder.AppendQuery(\"timestamp\", timestamp);", group, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AContractTypeParameterRendersItsWireValue()
+    {
+        string spec = Document("""[ { "name": "contract_type", "in": "query", "schema": { "type": "string", "enum": ["call", "put"] } } ]""");
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument("""{ "contract_type": { "name": "contractType", "type": "ContractType" } }"""));
+
+        string group = files["ReferenceGroup.g.cs"];
+        Assert.Contains("ContractType? contractType = null", group, StringComparison.Ordinal);
+        Assert.Contains("builder.AppendQuery(\"contract_type\", contractType?.ToWireValue());", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AContractTypeMemberTheEnumLacksIsRefused()
+    {
+        // The #37 check runs for every core enum the table names; this pins that the new row is
+        // in the table rather than falling through to the plain-string arm.
+        string spec = Document("""[ { "name": "contract_type", "in": "query", "schema": { "type": "string", "enum": ["call", "put", "straddle"] } } ]""");
+
+        string message = Harness.Refusal(spec, MapDocument("""{ "contract_type": { "type": "ContractType" } }"""));
+
+        Assert.Contains("parameter 'contract_type' declares [straddle]", message, StringComparison.Ordinal);
+        Assert.Contains("ContractType", message, StringComparison.Ordinal);
+    }
 }

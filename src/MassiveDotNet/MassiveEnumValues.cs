@@ -80,6 +80,17 @@ public static class MassiveEnumValues
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
     };
 
+    /// <summary>Returns the wire representation of a <see cref="ContractType"/>.</summary>
+    /// <param name="value">The value to convert.</param>
+    /// <returns>Either <c>"call"</c> or <c>"put"</c>, the query value the contracts route takes.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a defined enum member.</exception>
+    public static string ToWireValue(this ContractType value) => value switch
+    {
+        ContractType.Call => "call",
+        ContractType.Put => "put",
+        _ => throw new ArgumentOutOfRangeException(nameof(value), value, null),
+    };
+
     /// <summary>Returns the wire representation of a calendar date.</summary>
     /// <param name="value">The date to convert.</param>
     /// <returns>The date in ISO <c>YYYY-MM-DD</c> form.</returns>
