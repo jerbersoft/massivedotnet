@@ -653,3 +653,39 @@ internal sealed class ListStockSplitsResponse : IPagedEnvelope<ReferenceSplit>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v3/reference/options/contracts.</summary>
+internal sealed class ListOptionsContractsResponse : IPagedEnvelope<OptionsContract>
+{
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public OptionsContract[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/options/contracts/{options_ticker}.</summary>
+internal sealed class GetOptionsContractResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Contains the requested data for the specified options contract.</summary>
+    [JsonPropertyName("results")]
+    public OptionsContract? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

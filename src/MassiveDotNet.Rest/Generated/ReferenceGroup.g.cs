@@ -1027,4 +1027,204 @@ public readonly partial struct ReferenceGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves options contracts, filtered by underlying, type, expiration, strike, and whether they
+    /// have expired, as of a chosen date, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListOptionsContractsAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and
+    /// defaults to no constraint. <paramref name="contractType"/> is a <see cref="ContractType"/>.
+    /// <paramref name="ticker"/> is a parameter the description itself calls deprecated; use <see
+    /// cref="GetOptionsContractAsync"/> to fetch one contract by its ticker. <paramref name="asOf"/>
+    /// and the expiration filter are bare strings in the description and take <see
+    /// cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="underlyingTicker">Query for contracts relating to an underlying stock ticker. Accepts an exact value or a range.</param>
+    /// <param name="ticker">
+    /// This parameter has been deprecated. To search by specific options ticker, use the Options
+    /// Contract endpoint [here](https://massive.com/docs/rest/options/contracts/contract-overview).
+    /// </param>
+    /// <param name="contractType">Query by the type of contract.</param>
+    /// <param name="expirationDate">Query by contract expiration with date format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="asOf">
+    /// Specify a point in time for contracts as of this date with format YYYY-MM-DD. Defaults to
+    /// today's date.
+    /// </param>
+    /// <param name="strikePrice">Query by strike price of a contract. Accepts an exact value or a range.</param>
+    /// <param name="expired">Query for expired contracts. Default is false.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<OptionsContract> EnumerateOptionsContractsAsync(
+        RangeFilter<string>? underlyingTicker = null,
+        string? ticker = null,
+        ContractType? contractType = null,
+        RangeFilter<LocalDate>? expirationDate = null,
+        LocalDate? asOf = null,
+        RangeFilter<double>? strikePrice = null,
+        bool? expired = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListOptionsContractsUri(underlyingTicker, ticker, contractType, expirationDate, asOf, strikePrice, expired, order, limit, sort);
+        return _transport.EnumerateAsync<ListOptionsContractsResponse, OptionsContract>(
+            requestUri, MassiveRestJsonContext.Default.ListOptionsContractsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves options contracts, filtered by underlying, type, expiration, strike, and whether they
+    /// have expired, as of a chosen date.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateOptionsContractsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="contractType"/> is a <see cref="ContractType"/>. <paramref name="ticker"/> is a
+    /// parameter the description itself calls deprecated; use <see cref="GetOptionsContractAsync"/> to
+    /// fetch one contract by its ticker. <paramref name="asOf"/> and the expiration filter are bare
+    /// strings in the description and take <see cref="NodaTime.LocalDate"/> here (D-R9).
+    /// </remarks>
+    /// <param name="underlyingTicker">Query for contracts relating to an underlying stock ticker. Accepts an exact value or a range.</param>
+    /// <param name="ticker">
+    /// This parameter has been deprecated. To search by specific options ticker, use the Options
+    /// Contract endpoint [here](https://massive.com/docs/rest/options/contracts/contract-overview).
+    /// </param>
+    /// <param name="contractType">Query by the type of contract.</param>
+    /// <param name="expirationDate">Query by contract expiration with date format YYYY-MM-DD. Accepts an exact value or a range.</param>
+    /// <param name="asOf">
+    /// Specify a point in time for contracts as of this date with format YYYY-MM-DD. Defaults to
+    /// today's date.
+    /// </param>
+    /// <param name="strikePrice">Query by strike price of a contract. Accepts an exact value or a range.</param>
+    /// <param name="expired">Query for expired contracts. Default is false.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<OptionsContract>> ListOptionsContractsAsync(
+        RangeFilter<string>? underlyingTicker = null,
+        string? ticker = null,
+        ContractType? contractType = null,
+        RangeFilter<LocalDate>? expirationDate = null,
+        LocalDate? asOf = null,
+        RangeFilter<double>? strikePrice = null,
+        bool? expired = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListOptionsContractsUri(underlyingTicker, ticker, contractType, expirationDate, asOf, strikePrice, expired, order, limit, sort);
+        return SendListOptionsContractsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListOptionsContractsUri(
+        RangeFilter<string>? underlyingTicker,
+        string? ticker,
+        ContractType? contractType,
+        RangeFilter<LocalDate>? expirationDate,
+        LocalDate? asOf,
+        RangeFilter<double>? strikePrice,
+        bool? expired,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/options/contracts");
+
+        builder.AppendQuery("underlying_ticker", underlyingTicker);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("contract_type", contractType?.ToWireValue());
+        builder.AppendQuery("expiration_date", expirationDate);
+        builder.AppendQuery("as_of", asOf?.ToWireValue());
+        builder.AppendQuery("strike_price", strikePrice);
+        builder.AppendQuery("expired", expired);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<OptionsContract>> SendListOptionsContractsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListOptionsContractsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListOptionsContractsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<OptionsContract>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>Retrieves one options contract by its ticker, as of a chosen date.</summary>
+    /// <remarks>
+    /// <paramref name="optionsTicker"/> is the <c>O:</c>-prefixed contract symbol; the colon is
+    /// percent-escaped in the path. A contract the service does not know answers 404, which surfaces as
+    /// a <see cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="optionsTicker">
+    /// Query for a contract by options ticker. You can learn more about the structure of options
+    /// tickers [here](https://massive.com/blog/how-to-read-a-stock-options-ticker/).
+    /// </param>
+    /// <param name="asOf">
+    /// Specify a point in time for the contract as of this date with format YYYY-MM-DD. Defaults to
+    /// today's date.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<OptionsContract> GetOptionsContractAsync(
+        string optionsTicker,
+        LocalDate? asOf = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(optionsTicker);
+        string requestUri = BuildGetOptionsContractUri(optionsTicker, asOf);
+        return SendGetOptionsContractAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetOptionsContractUri(
+        string optionsTicker,
+        LocalDate? asOf)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/options/contracts/");
+        builder.AppendPathSegment(optionsTicker);
+
+        builder.AppendQuery("as_of", asOf?.ToWireValue());
+
+        return builder.ToUriString();
+    }
+
+    private async Task<OptionsContract> SendGetOptionsContractAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetOptionsContractResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetOptionsContractResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
 }

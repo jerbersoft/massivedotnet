@@ -803,6 +803,35 @@
         "split_from":     { "name": "SplitFrom" },
         "split_to":       { "name": "SplitTo" }
       }
+    },
+
+    "OptionsContract": {
+      "summary": "An options contract's terms: its ticker and underlying, whether it is a call or a put, its style, expiration, strike, and share count, and any additional underlyings from a corporate action.",
+      "remarks": "Reference data, so a class (decision D4). Declared from the list and reused as the payload of <see cref=\"ReferenceGroup.GetOptionsContractAsync\"/>, where the generator verifies the shape (decision D16). <see cref=\"ContractType\"/> is the wire string, <c>call</c> or <c>put</c>; the request-side enum <see cref=\"MassiveDotNet.ContractType\"/> is for filtering. <see cref=\"ExpirationDate\"/> is a bare string in the description and an ISO calendar date on the wire (D-R9).",
+      "schema": { "operationId": "ListOptionsContracts", "pointer": "results/items" },
+      "properties": {
+        "ticker":                 { "name": "Ticker" },
+        "underlying_ticker":      { "name": "UnderlyingTicker" },
+        "contract_type":          { "name": "ContractType" },
+        "exercise_style":         { "name": "ExerciseStyle" },
+        "expiration_date":        { "name": "ExpirationDate", "type": "LocalDate?", "summary": "The contract's expiration date. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "strike_price":           { "name": "StrikePrice" },
+        "shares_per_contract":    { "name": "SharesPerContract" },
+        "primary_exchange":       { "name": "PrimaryExchange" },
+        "cfi":                    { "name": "Cfi" },
+        "correction":             { "name": "Correction" },
+        "additional_underlyings": { "name": "AdditionalUnderlyings", "model": "AdditionalUnderlying" }
+      }
+    },
+
+    "AdditionalUnderlying": {
+      "summary": "An extra deliverable on an adjusted options contract, such as shares of a spun-off company or a cash amount, and how much of it.",
+      "schema": { "operationId": "ListOptionsContracts", "pointer": "results/items/additional_underlyings/items" },
+      "properties": {
+        "underlying": { "name": "Underlying" },
+        "type":       { "name": "Type" },
+        "amount":     { "name": "Amount" }
+      }
     }
   },
 
@@ -1276,6 +1305,38 @@
         "order":          { "name": "order", "type": "SortOrder" },
         "limit":          { "name": "limit" },
         "sort":           { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListOptionsContracts",
+      "group": "Reference",
+      "method": "ListOptionsContracts",
+      "summary": "Retrieves options contracts, filtered by underlying, type, expiration, strike, and whether they have expired, as of a chosen date.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"contractType\"/> is a <see cref=\"ContractType\"/>. <paramref name=\"ticker\"/> is a parameter the description itself calls deprecated; use <see cref=\"GetOptionsContractAsync\"/> to fetch one contract by its ticker. <paramref name=\"asOf\"/> and the expiration filter are bare strings in the description and take <see cref=\"NodaTime.LocalDate\"/> here (D-R9).",
+      "result": { "kind": "array", "model": "OptionsContract", "property": "results" },
+      "parameters": {
+        "underlying_ticker": { "name": "underlyingTicker" },
+        "ticker":            { "name": "ticker" },
+        "contract_type":     { "name": "contractType", "type": "ContractType" },
+        "expiration_date":   { "name": "expirationDate", "type": "LocalDate" },
+        "as_of":             { "name": "asOf", "type": "LocalDate" },
+        "strike_price":      { "name": "strikePrice" },
+        "expired":           { "name": "expired" },
+        "order":             { "name": "order", "type": "SortOrder" },
+        "limit":             { "name": "limit" },
+        "sort":              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetOptionsContract",
+      "group": "Reference",
+      "method": "GetOptionsContract",
+      "summary": "Retrieves one options contract by its ticker, as of a chosen date.",
+      "remarks": "<paramref name=\"optionsTicker\"/> is the <c>O:</c>-prefixed contract symbol; the colon is percent-escaped in the path. A contract the service does not know answers 404, which surfaces as a <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "OptionsContract", "property": "results" },
+      "parameters": {
+        "options_ticker": { "name": "optionsTicker" },
+        "as_of":          { "name": "asOf", "type": "LocalDate" }
       }
     }
   ]

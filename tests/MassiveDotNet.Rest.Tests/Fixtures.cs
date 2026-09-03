@@ -1655,4 +1655,79 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /v3/reference/options/contracts.</summary>
+    public const string ReferenceOptionsContracts = """
+        {
+          "request_id": "603902c0-a5a5-406f-bd08-f030f92418fa",
+          "results": [
+            {
+              "cfi": "OCASPS",
+              "contract_type": "call",
+              "exercise_style": "american",
+              "expiration_date": "2021-11-19",
+              "primary_exchange": "BATO",
+              "shares_per_contract": 100,
+              "strike_price": 85,
+              "ticker": "O:AAPL211119C00085000",
+              "underlying_ticker": "AAPL"
+            },
+            {
+              "additional_underlyings": [
+                {
+                  "amount": 44,
+                  "type": "equity",
+                  "underlying": "VMW"
+                },
+                {
+                  "amount": 6.53,
+                  "type": "currency",
+                  "underlying": "USD"
+                }
+              ],
+              "cfi": "OCASPS",
+              "contract_type": "call",
+              "exercise_style": "american",
+              "expiration_date": "2021-11-19",
+              "primary_exchange": "BATO",
+              "shares_per_contract": 100,
+              "strike_price": 90,
+              "ticker": "O:AAPL211119C00090000",
+              "underlying_ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/options/contracts/{options_ticker}.</summary>
+    public const string ReferenceOptionsContract = """
+        {
+          "request_id": "603902c0-a5a5-406f-bd08-f030f92418fa",
+          "results": {
+            "additional_underlyings": [
+              {
+                "amount": 44,
+                "type": "equity",
+                "underlying": "VMW"
+              },
+              {
+                "amount": 6.53,
+                "type": "currency",
+                "underlying": "USD"
+              }
+            ],
+            "cfi": "OCASPS",
+            "contract_type": "call",
+            "exercise_style": "american",
+            "expiration_date": "2021-11-19",
+            "primary_exchange": "BATO",
+            "shares_per_contract": 100,
+            "strike_price": 85,
+            "ticker": "O:AAPL211119C00085000",
+            "underlying_ticker": "AAPL"
+          },
+          "status": "OK"
+        }
+        """;
 }
