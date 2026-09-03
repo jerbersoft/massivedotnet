@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/MassiveDotNet.AotSmokeTest/MassiveDotNet.AotSmokeTest.csproj" />
+    <Project Path="samples/MassiveDotNet.Quickstart/MassiveDotNet.Quickstart.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
