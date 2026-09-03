@@ -529,7 +529,8 @@ internal sealed class Spec
 
         foreach (JsonElement branch in branches.EnumerateArray())
         {
-            if (IsObject(branch))
+            // A branch that is itself a one-branch oneOf is its branch under D24, so it must be unwrapped before judging.
+            if (IsObject(Unwrap(branch)))
             {
                 throw new InvalidOperationException(
                     $"A oneOf with {branches.GetArrayLength()} branches, at least one an object, has no model binding. "

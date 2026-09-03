@@ -381,4 +381,36 @@ public sealed class ModelBindingTests
         Assert.Contains("oneOf with 2 branches", message, StringComparison.Ordinal);
         Assert.Contains("D24", message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void RefusesAUnionWhoseObjectBranchIsWrapped()
+    {
+        // A multi-branch union where one branch wraps an object in a single-branch oneOf.
+        // The outer oneOf has two branches: the first is { oneOf: [ { type: object } ] },
+        // the second is { type: string }. Without unwrapping each branch before judging,
+        // IsObject sees only the outer oneOf wrapper (no type, properties, or allOf) and
+        // returns false, so the loop falls through and the union silently reads as a scalar.
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "payload": {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        { "type": "object", "properties": { "a": { "type": "string" } } }
+                      ]
+                    },
+                    { "type": "string" }
+                  ]
+                }
+              }
+            }
+            """);
+
+        string message = Harness.Refusal(spec, MapDocument());
+
+        Assert.Contains("oneOf with 2 branches", message, StringComparison.Ordinal);
+        Assert.Contains("D24", message, StringComparison.Ordinal);
+    }
 }
