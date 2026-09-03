@@ -1882,4 +1882,862 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// GET /v1/reference/sec/filings?type=10-K&amp;limit=2&amp;sort=filing_date&amp;order=desc,
+    /// captured from the live service on 2026-09-03 because the description publishes no example
+    /// for it (D-R12). Reviewed: it carries no account identifier and no URL embeds a key. The
+    /// wire carries fields the description does not declare (<c>main_file_url</c>,
+    /// <c>xbrl_instance_url</c>, and a <c>tickers</c> array on the company), which the models
+    /// ignore, and its dates are the compact digits D-R9 binds as strings.
+    /// </summary>
+    public const string ReferenceSecFilings = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/v1/reference/sec/filings?cursor=YXA9MjAyNjA5MDImYXM9MDAwMTAxMDQ3MC0yNi0wMDAwMTAmbGltaXQ9MiZvcmRlcj1kZXNjJnNvcnQ9ZmlsaW5nX2RhdGUmdHlwZT0xMC1L",
+          "request_id": "18a640368b180ab2bc59c32d803c411c",
+          "results": [
+            {
+              "acceptance_datetime": "20260902103943",
+              "accession_number": "0001683168-26-006873",
+              "entities": [
+                {
+                  "company_data": {
+                    "cik": "0002087656",
+                    "name": "MYX Inc.",
+                    "sic": "7374"
+                  },
+                  "relation": "filer"
+                }
+              ],
+              "files_count": 65,
+              "filing_date": "20260902",
+              "id": "0001683168-26-006873",
+              "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126.htm",
+              "period_of_report_date": "20260531",
+              "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/0001683168-26-006873.txt",
+              "type": "10-K",
+              "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126_htm.xml"
+            },
+            {
+              "acceptance_datetime": "20260902151927",
+              "accession_number": "0001010470-26-000010",
+              "entities": [
+                {
+                  "company_data": {
+                    "cik": "0001010470",
+                    "name": "PROVIDENT FINANCIAL HOLDINGS INC",
+                    "sic": "6035",
+                    "ticker": "PROV",
+                    "tickers": [
+                      "PROV"
+                    ]
+                  },
+                  "relation": "filer"
+                }
+              ],
+              "files_count": 142,
+              "filing_date": "20260902",
+              "id": "0001010470-26-000010",
+              "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0001010470-26-000010/files/prov-20260630x10k.htm",
+              "period_of_report_date": "20260630",
+              "source_url": "https://www.sec.gov/Archives/edgar/data/1010470/000101047026000010/0001010470-26-000010.txt",
+              "type": "10-K",
+              "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0001010470-26-000010/files/prov-20260630x10k_htm.xml"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The page after <see cref="ReferenceSecFilings"/>, captured on 2026-09-03 by following its
+    /// cursor and trimmed to its first filing with the cursor removed, so a traversal that starts
+    /// on the first page ends here. Reviewed as the first page was.
+    /// </summary>
+    public const string ReferenceSecFilingsLastPage = """
+        {
+          "count": 1,
+          "request_id": "0801eb323ee313fc400388d884bc1020",
+          "results": [
+            {
+              "acceptance_datetime": "20260902163656",
+              "accession_number": "0000858877-26-000132",
+              "entities": [
+                {
+                  "company_data": {
+                    "cik": "0000858877",
+                    "name": "CISCO SYSTEMS, INC.",
+                    "sic": "3576",
+                    "ticker": "CSCO",
+                    "tickers": [
+                      "CSCO"
+                    ]
+                  },
+                  "relation": "filer"
+                }
+              ],
+              "files_count": 155,
+              "filing_date": "20260902",
+              "id": "0000858877-26-000132",
+              "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0000858877-26-000132/files/csco-20260725.htm",
+              "period_of_report_date": "20260725",
+              "source_url": "https://www.sec.gov/Archives/edgar/data/858877/000085887726000132/0000858877-26-000132.txt",
+              "type": "10-K",
+              "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0000858877-26-000132/files/csco-20260725_htm.xml"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v1/reference/sec/filings/0001683168-26-006873, captured from the live service on
+    /// 2026-09-03 because the description publishes no example for it (D-R12). Reviewed: it
+    /// carries no account identifier and no URL embeds a key. The payload is the first filing of
+    /// <see cref="ReferenceSecFilings"/> as one object under <c>results</c>.
+    /// </summary>
+    public const string ReferenceSecFiling = """
+        {
+          "count": 1,
+          "request_id": "d47da93daf98dacd49b64aa826f9fd40",
+          "results": {
+            "acceptance_datetime": "20260902103943",
+            "accession_number": "0001683168-26-006873",
+            "entities": [
+              {
+                "company_data": {
+                  "cik": "0002087656",
+                  "name": "MYX Inc.",
+                  "sic": "7374"
+                },
+                "relation": "filer"
+              }
+            ],
+            "files_count": 65,
+            "filing_date": "20260902",
+            "id": "0001683168-26-006873",
+            "main_file_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126.htm",
+            "period_of_report_date": "20260531",
+            "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/0001683168-26-006873.txt",
+            "type": "10-K",
+            "xbrl_instance_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126_htm.xml"
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v1/reference/sec/filings/0001683168-26-006873/files?limit=2&amp;sort=sequence&amp;order=asc,
+    /// captured from the live service on 2026-09-03 because the description publishes no example
+    /// for it (D-R12). Reviewed: it carries no account identifier and no URL embeds a key. The
+    /// wire carries a <c>filing_id</c> the description does not declare, which the model ignores.
+    /// </summary>
+    public const string ReferenceSecFilingFiles = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/v1/reference/sec/filings/0001683168-26-006873/files?cursor=YXA9MiZhcz1teXhfZXgyMzAxLmh0bSZsaW1pdD0yJm9yZGVyPWFzYyZzb3J0PXNlcXVlbmNl",
+          "request_id": "62c18c45afd33e7312ed59d6aa1d417b",
+          "results": [
+            {
+              "description": "FORM 10-K FOR MAY 2026",
+              "filename": "myx_i10k-053126.htm",
+              "filing_id": "0001683168-26-006873",
+              "id": "myx_i10k-053126.htm",
+              "sequence": 1,
+              "size_bytes": 377038,
+              "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/myx_i10k-053126.htm",
+              "type": "10-K"
+            },
+            {
+              "description": "CONSENT OF INDEPENDENT REGISTERED PUBLIC ACCOUNTING FIRM",
+              "filename": "myx_ex2301.htm",
+              "filing_id": "0001683168-26-006873",
+              "id": "myx_ex2301.htm",
+              "sequence": 2,
+              "size_bytes": 4408,
+              "source_url": "https://www.sec.gov/Archives/edgar/data/2087656/000168316826006873/myx_ex2301.htm",
+              "type": "EX-32.1"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/filings/10-K/vX/sections. The <c>vX_0</c> revision
+    /// publishes the identical sample, so one fixture serves both (D26). It carries a cursor of
+    /// its own.
+    /// </summary>
+    public const string ReferenceTenKSections = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/stocks/filings/10-K/vX/sections?cursor=eyJsaW1pd...",
+          "request_id": "a3f8b2c1d4e5f6g7",
+          "results": [
+            {
+              "cik": "0000320193",
+              "filing_date": "2023-11-03",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-23-000106.txt",
+              "period_end": "2023-09-30",
+              "section": "risk_factors",
+              "text": "Item 1A. Risk Factors\n\nInvesting in our stock involves risk. In addition to the other information in this Annual Report on Form 10-K, the following risk factors should be carefully considered...",
+              "ticker": "AAPL"
+            },
+            {
+              "cik": "0000789019",
+              "filing_date": "2023-07-27",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/789019/0000950170-23-035122.txt",
+              "period_end": "2023-06-30",
+              "section": "risk_factors",
+              "text": "Item 1A. RISK FACTORS\n\nOur operations and financial results are subject to various risks and uncertainties...",
+              "ticker": "MSFT"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/8-K/vX/disclosures. It carries a cursor of its own.</summary>
+    public const string ReferenceEightKDisclosures = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/stocks/filings/8-K/vX/disclosures?cursor=eyJsaW1pd...",
+          "request_id": "b4e7c2a1f3d8e9g0",
+          "results": [
+            {
+              "accession_number": "0000320193-25-000010",
+              "cik": "0000320193",
+              "filing_date": "2025-01-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000010.txt",
+              "primary_category": "financial_results",
+              "secondary_category": "earnings_announcement",
+              "supporting_text": "On January 14, 2025, Apple Inc. announced financial results for the fiscal quarter ended December 28, 2024.",
+              "tertiary_category": "quarterly_results",
+              "tickers": [
+                "AAPL"
+              ]
+            },
+            {
+              "accession_number": "0000004962-25-000002",
+              "cik": "0000004962",
+              "filing_date": "2025-01-15",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/4962/0000004962-25-000002.txt",
+              "primary_category": "regulatory_compliance",
+              "secondary_category": "regulation_fd",
+              "supporting_text": "American Express Company is hereby furnishing below delinquency and write-off statistics for its U.S. Consumer and Small Business portfolios.",
+              "tertiary_category": "financial_data_disclosure",
+              "tickers": [
+                "AXP"
+              ]
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/8-K/vX/text. It carries a cursor of its own.</summary>
+    public const string ReferenceEightKText = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/stocks/filings/8-K/vX/text?cursor=eyJsaW1pd...",
+          "request_id": "a3f8b2c1d4e5f6g7",
+          "results": [
+            {
+              "accession_number": "0000004962-25-000002",
+              "cik": "0000004962",
+              "filing_date": "2025-01-15",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/4962/0000004962-25-000002.txt",
+              "form_type": "8-K",
+              "items_text": "Item 7.01\tRegulation FD Disclosure\n\nAmerican Express Company is hereby furnishing below delinquency and write-off statistics...",
+              "ticker": "AXP"
+            },
+            {
+              "accession_number": "0000320193-25-000010",
+              "cik": "0000320193",
+              "filing_date": "2025-01-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000010.txt",
+              "form_type": "8-K",
+              "items_text": "Item 2.02\tResults of Operations and Financial Condition\n\nOn January 14, 2025, Apple Inc. announced financial results...",
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/13-F. It carries a cursor of its own and a null <c>put_call</c>.</summary>
+    public const string ReferenceThirteenFHoldings = """
+        {
+          "next_url": "https://api.massive.com/stocks/filings/vX/13-F?cursor=eyJsaW1pd...",
+          "request_id": "a3f8b2c1d4e5f6g7",
+          "results": [
+            {
+              "accession_number": "0000950123-24-011775",
+              "cusip": "023135106",
+              "file_number": "028-04545",
+              "filer_cik": "0001067983",
+              "filing_date": "2024-11-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1067983/0000950123-24-011775.txt",
+              "film_number": "241461756",
+              "form_type": "13F-HR",
+              "investment_discretion": "DFND",
+              "issuer_name": "AMAZON COM INC",
+              "market_value": 1439212920,
+              "other_managers": [
+                "Buffett Warren E"
+              ],
+              "period": "2024-09-30",
+              "put_call": null,
+              "shares_or_principal_amount": 7724000,
+              "shares_or_principal_type": "SH",
+              "title_of_class": "COM",
+              "voting_authority_none": 0,
+              "voting_authority_shared": 0,
+              "voting_authority_sole": 7724000
+            },
+            {
+              "accession_number": "0000950123-24-011775",
+              "cusip": "025816109",
+              "file_number": "028-04545",
+              "filer_cik": "0001067983",
+              "filing_date": "2024-11-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1067983/0000950123-24-011775.txt",
+              "film_number": "241461756",
+              "form_type": "13F-HR",
+              "investment_discretion": "DFND",
+              "issuer_name": "AMERICAN EXPRESS CO",
+              "market_value": 311864270,
+              "other_managers": [
+                "Buffett Warren E"
+              ],
+              "period": "2024-09-30",
+              "put_call": null,
+              "shares_or_principal_amount": 1149942,
+              "shares_or_principal_type": "SH",
+              "title_of_class": "COM",
+              "voting_authority_none": 0,
+              "voting_authority_shared": 0,
+              "voting_authority_sole": 1149942
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/form-3. It carries a cursor of its own and several explicit nulls.</summary>
+    public const string ReferenceForm3Filings = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/stocks/filings/vX/form-3?cursor=eyJsaW1pd...",
+          "request_id": "047c7035a86042b1925118e5f68d81b0",
+          "results": [
+            {
+              "accession_number": "0001628280-26-022046",
+              "aff_10b5_one": null,
+              "date_of_original_submission": null,
+              "direct_or_indirect": "D",
+              "exercise_date": null,
+              "exercise_price": null,
+              "filing_date": "2026-03-30",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1903508/0001628280-26-022046.txt",
+              "footnotes": [
+                {
+                  "description": "The options granted on May 17, 2022 vested 100% on the third anniversary of the grant date.",
+                  "id": "F1"
+                },
+                {
+                  "description": "The exercise price of the options granted on May 17, 2022 was GPB 8.85, or approximately $11.80 based on a GBP to USD exchange rate as of March 27, 2026 of 1.3336.",
+                  "id": "F2"
+                }
+              ],
+              "form_type": "3",
+              "is_director": false,
+              "is_officer": true,
+              "is_other": false,
+              "is_ten_percent_owner": false,
+              "issuer_cik": "0001903508",
+              "issuer_name": "Public Policy Holding Company, Inc.",
+              "nature_of_ownership": null,
+              "not_subject_to_section_16": null,
+              "officer_title": "Chief Administrative Officer",
+              "owner_cik": "0002125791",
+              "owner_name": "Mazzanti Matthew Ross",
+              "period_of_report": "2026-03-20",
+              "remarks": null,
+              "security_title": "Options",
+              "security_type": "derivative",
+              "shares_owned": null,
+              "tickers": [
+                "PPHC"
+              ],
+              "underlying_security_shares": 9000,
+              "underlying_security_title": "Common Stock, $0.001 par value"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/form-4. It carries a cursor of its own.</summary>
+    public const string ReferenceForm4Filings = """
+        {
+          "next_url": "https://api.massive.com/stocks/filings/vX/form-4?cursor=eyJsaW1pd...",
+          "request_id": "047c7035a86042b1925118e5f68d81b0",
+          "results": [
+            {
+              "accession_number": "0002123147-26-000002",
+              "aff_10b5_one": false,
+              "date_of_original_submission": null,
+              "deemed_execution_date": "2026-03-27",
+              "direct_or_indirect": "D",
+              "equity_swap_involved": false,
+              "exercise_date": "2026-03-27",
+              "exercise_price": 88.167,
+              "expiration_date": "2026-03-27",
+              "filing_date": "2026-03-30",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1469395/0002123147-26-000002.txt",
+              "footnotes": [
+                {
+                  "description": "These shares were acquired at a price of 4955 argentine pesos per share. For reporting purposes, the exercise price has been converted to US dollars based on the exchange rate reported by Banco de la Nacion Argentina for the date of the acquisition, which was 1405 argentine pesos per US dollar. Then multiplied by 25, the Par value or rate of common shares to one ADR.",
+                  "id": "F1"
+                }
+              ],
+              "form_type": "4",
+              "is_director": false,
+              "is_officer": true,
+              "is_other": false,
+              "is_ten_percent_owner": false,
+              "issuer_cik": "0001469395",
+              "issuer_name": "Pampa Energy Inc.",
+              "not_subject_to_section_16": false,
+              "officer_title": "Chief Financial Officer",
+              "owner_cik": "0002123147",
+              "owner_name": "Zuberbuhler Adolfo Fernando",
+              "period_of_report": "2026-03-27",
+              "record_type": "transaction",
+              "security_title": "Common Stock, $25 Par Value",
+              "security_type": "derivative",
+              "shares_owned_following_transaction": 2759,
+              "tickers": [
+                "PAM"
+              ],
+              "transaction_acquired_disposed": "A",
+              "transaction_code": "A",
+              "transaction_date": "2026-03-27",
+              "transaction_price_per_share": 88.167,
+              "transaction_shares": 12923,
+              "transaction_timeliness": "O",
+              "transaction_value": 1139382.141,
+              "underlying_security_shares": 12923,
+              "underlying_security_title": "PAMP"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/index. It carries a cursor of its own.</summary>
+    public const string ReferenceFilingIndex = """
+        {
+          "next_url": "https://api.massive.com/stocks/filings/vX/index?cursor=eyJsaW1pd...",
+          "request_id": "1daccfd9794e482e96d104dee6ed432b",
+          "results": [
+            {
+              "accession_number": "0000320193-25-000079",
+              "cik": "0000320193",
+              "filing_date": "2025-10-31",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000079.txt",
+              "form_type": "10-K",
+              "issuer_name": "Apple Inc.",
+              "ticker": "AAPL"
+            },
+            {
+              "accession_number": "0000950170-25-010491",
+              "cik": "0000789019",
+              "filing_date": "2025-01-29",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/789019/0000950170-25-010491.txt",
+              "form_type": "10-Q",
+              "issuer_name": "MICROSOFT CORP",
+              "ticker": "MSFT"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/risk-factors. It carries no cursor.</summary>
+    public const string ReferenceRiskFactors = """
+        {
+          "request_id": "c7856101f86c20d855b0ea1c5a6d6efa",
+          "results": [
+            {
+              "cik": "0001005101",
+              "filing_date": "2025-09-19",
+              "primary_category": "financial_and_market",
+              "secondary_category": "credit_and_liquidity",
+              "supporting_text": "In addition to the net proceeds we received from our recent equity and debt financings, we may need to raise additional equity or debt financing to continue the development and marketing of our Fintech app, to fund ongoing operations, invest in acquisitions, and for working capital purposes. Our inability to raise such additional financing may limit our ability to continue the development of our Fintech app.",
+              "tertiary_category": "access_to_capital_and_financing",
+              "ticker": "MGLD"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/taxonomies/vX/disclosures. It carries no cursor.</summary>
+    public const string ReferenceDisclosureTaxonomy = """
+        {
+          "request_id": "a1b2c3d4e5f6a7b8c9d0e1f2",
+          "results": [
+            {
+              "description": "New CEO appointment with background, employment terms, and compensation.",
+              "primary_category": "leadership_and_governance",
+              "secondary_category": "executive_leadership",
+              "taxonomy": "1.0",
+              "tertiary_category": "ceo_appointment"
+            },
+            {
+              "description": "Quarterly financial results including revenue, net income, EPS, and key operating metrics with management commentary.",
+              "primary_category": "financial_results",
+              "secondary_category": "earnings_and_performance",
+              "taxonomy": "1.0",
+              "tertiary_category": "quarterly_earnings"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/taxonomies/vX/risk-factors, with one departure from
+    /// the published text: <c>"taxonomy": "1.0"</c> becomes the number <c>1.0</c>. The schema
+    /// declares a required number, and the live wire sent one on 2026-09-03; the example's string
+    /// would fail on the type the schema and the wire agree on (D-R12).
+    /// </summary>
+    public const string ReferenceRiskFactorTaxonomy = """
+        {
+          "request_id": "daac836f71724420b66011d55d88b30b",
+          "results": [
+            {
+              "description": "Risk from inadequate performance management systems, unclear accountability structures, or ineffective measurement and incentive systems that could affect employee performance, goal achievement, and organizational effectiveness.",
+              "primary_category": "Governance & Stakeholder",
+              "secondary_category": "Organizational & Management",
+              "taxonomy": 1.0,
+              "tertiary_category": "Performance management and accountability"
+            },
+            {
+              "description": "Risk from requirements to monitor, document, and report on compliance with privacy and data protection regulations including risks from compliance program effectiveness, record-keeping requirements, and breach notification obligations.",
+              "primary_category": "Regulatory & Compliance",
+              "secondary_category": "Data & Privacy",
+              "taxonomy": 1.0,
+              "tertiary_category": "Compliance monitoring and reporting"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /vX/reference/financials: one quarterly report with four
+    /// statements, each a dictionary of data points keyed by the platform's field names (D-R11).
+    /// Its <c>next_url</c> is the route with an empty query, which is still a cursor.
+    /// </summary>
+    /// <remarks>
+    /// One departure from the published text: <c>"timeframe": "quarterly"</c> is added. The
+    /// description marks <c>timeframe</c> required and the live service sends it, but the
+    /// published example omits it, and a required property that never arrives fails
+    /// deserialization outright (D-R12). <c>tickers</c> is also absent from the example and is
+    /// left absent, since the description makes it optional; the live tier asserts it arrives.
+    /// </remarks>
+    public const string ReferenceFinancials = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/vX/reference/financials?",
+          "request_id": "55eb92ed43b25568ab0cce159830ea34",
+          "results": [
+            {
+              "cik": "0001650729",
+              "company_name": "SiteOne Landscape Supply, Inc.",
+              "end_date": "2022-04-03",
+              "filing_date": "2022-05-04",
+              "financials": {
+                "balance_sheet": {
+                  "assets": {
+                    "label": "Assets",
+                    "order": 100,
+                    "unit": "USD",
+                    "value": 2407400000
+                  },
+                  "current_assets": {
+                    "label": "Current Assets",
+                    "order": 200,
+                    "unit": "USD",
+                    "value": 1385900000
+                  },
+                  "current_liabilities": {
+                    "label": "Current Liabilities",
+                    "order": 700,
+                    "unit": "USD",
+                    "value": 597500000
+                  },
+                  "equity": {
+                    "label": "Equity",
+                    "order": 1400,
+                    "unit": "USD",
+                    "value": 1099200000
+                  },
+                  "equity_attributable_to_noncontrolling_interest": {
+                    "label": "Equity Attributable To Noncontrolling Interest",
+                    "order": 1500,
+                    "unit": "USD",
+                    "value": 0
+                  },
+                  "equity_attributable_to_parent": {
+                    "label": "Equity Attributable To Parent",
+                    "order": 1600,
+                    "unit": "USD",
+                    "value": 1099200000
+                  },
+                  "liabilities": {
+                    "label": "Liabilities",
+                    "order": 600,
+                    "unit": "USD",
+                    "value": 1308200000
+                  },
+                  "liabilities_and_equity": {
+                    "label": "Liabilities And Equity",
+                    "order": 1900,
+                    "unit": "USD",
+                    "value": 2407400000
+                  },
+                  "noncurrent_assets": {
+                    "label": "Noncurrent Assets",
+                    "order": 300,
+                    "unit": "USD",
+                    "value": 1021500000
+                  },
+                  "noncurrent_liabilities": {
+                    "label": "Noncurrent Liabilities",
+                    "order": 800,
+                    "unit": "USD",
+                    "value": 710700000
+                  }
+                },
+                "cash_flow_statement": {
+                  "exchange_gains_losses": {
+                    "label": "Exchange Gains/Losses",
+                    "order": 1000,
+                    "unit": "USD",
+                    "value": 100000
+                  },
+                  "net_cash_flow": {
+                    "label": "Net Cash Flow",
+                    "order": 1100,
+                    "unit": "USD",
+                    "value": -8600000
+                  },
+                  "net_cash_flow_continuing": {
+                    "label": "Net Cash Flow, Continuing",
+                    "order": 1200,
+                    "unit": "USD",
+                    "value": -8700000
+                  },
+                  "net_cash_flow_from_financing_activities": {
+                    "label": "Net Cash Flow From Financing Activities",
+                    "order": 700,
+                    "unit": "USD",
+                    "value": 150600000
+                  },
+                  "net_cash_flow_from_financing_activities_continuing": {
+                    "label": "Net Cash Flow From Financing Activities, Continuing",
+                    "order": 800,
+                    "unit": "USD",
+                    "value": 150600000
+                  },
+                  "net_cash_flow_from_investing_activities": {
+                    "label": "Net Cash Flow From Investing Activities",
+                    "order": 400,
+                    "unit": "USD",
+                    "value": -41000000
+                  },
+                  "net_cash_flow_from_investing_activities_continuing": {
+                    "label": "Net Cash Flow From Investing Activities, Continuing",
+                    "order": 500,
+                    "unit": "USD",
+                    "value": -41000000
+                  },
+                  "net_cash_flow_from_operating_activities": {
+                    "label": "Net Cash Flow From Operating Activities",
+                    "order": 100,
+                    "unit": "USD",
+                    "value": -118300000
+                  },
+                  "net_cash_flow_from_operating_activities_continuing": {
+                    "label": "Net Cash Flow From Operating Activities, Continuing",
+                    "order": 200,
+                    "unit": "USD",
+                    "value": -118300000
+                  }
+                },
+                "comprehensive_income": {
+                  "comprehensive_income_loss": {
+                    "label": "Comprehensive Income/Loss",
+                    "order": 100,
+                    "unit": "USD",
+                    "value": 40500000
+                  },
+                  "comprehensive_income_loss_attributable_to_noncontrolling_interest": {
+                    "label": "Comprehensive Income/Loss Attributable To Noncontrolling Interest",
+                    "order": 200,
+                    "unit": "USD",
+                    "value": 0
+                  },
+                  "comprehensive_income_loss_attributable_to_parent": {
+                    "label": "Comprehensive Income/Loss Attributable To Parent",
+                    "order": 300,
+                    "unit": "USD",
+                    "value": 40500000
+                  },
+                  "other_comprehensive_income_loss": {
+                    "label": "Other Comprehensive Income/Loss",
+                    "order": 400,
+                    "unit": "USD",
+                    "value": 40500000
+                  },
+                  "other_comprehensive_income_loss_attributable_to_parent": {
+                    "label": "Other Comprehensive Income/Loss Attributable To Parent",
+                    "order": 600,
+                    "unit": "USD",
+                    "value": 8200000
+                  }
+                },
+                "income_statement": {
+                  "basic_earnings_per_share": {
+                    "label": "Basic Earnings Per Share",
+                    "order": 4200,
+                    "unit": "USD / shares",
+                    "value": 0.72
+                  },
+                  "benefits_costs_expenses": {
+                    "label": "Benefits Costs and Expenses",
+                    "order": 200,
+                    "unit": "USD",
+                    "value": 768400000
+                  },
+                  "cost_of_revenue": {
+                    "label": "Cost Of Revenue",
+                    "order": 300,
+                    "unit": "USD",
+                    "value": 536100000
+                  },
+                  "costs_and_expenses": {
+                    "label": "Costs And Expenses",
+                    "order": 600,
+                    "unit": "USD",
+                    "value": 768400000
+                  },
+                  "diluted_earnings_per_share": {
+                    "label": "Diluted Earnings Per Share",
+                    "order": 4300,
+                    "unit": "USD / shares",
+                    "value": 0.7
+                  },
+                  "gross_profit": {
+                    "label": "Gross Profit",
+                    "order": 800,
+                    "unit": "USD",
+                    "value": 269200000
+                  },
+                  "income_loss_from_continuing_operations_after_tax": {
+                    "label": "Income/Loss From Continuing Operations After Tax",
+                    "order": 1400,
+                    "unit": "USD",
+                    "value": 32300000
+                  },
+                  "income_loss_from_continuing_operations_before_tax": {
+                    "label": "Income/Loss From Continuing Operations Before Tax",
+                    "order": 1500,
+                    "unit": "USD",
+                    "value": 36900000
+                  },
+                  "income_tax_expense_benefit": {
+                    "label": "Income Tax Expense/Benefit",
+                    "order": 2200,
+                    "unit": "USD",
+                    "value": 4600000
+                  },
+                  "interest_expense_operating": {
+                    "label": "Interest Expense, Operating",
+                    "order": 2700,
+                    "unit": "USD",
+                    "value": 4300000
+                  },
+                  "net_income_loss": {
+                    "label": "Net Income/Loss",
+                    "order": 3200,
+                    "unit": "USD",
+                    "value": 32300000
+                  },
+                  "net_income_loss_attributable_to_noncontrolling_interest": {
+                    "label": "Net Income/Loss Attributable To Noncontrolling Interest",
+                    "order": 3300,
+                    "unit": "USD",
+                    "value": 0
+                  },
+                  "net_income_loss_attributable_to_parent": {
+                    "label": "Net Income/Loss Attributable To Parent",
+                    "order": 3500,
+                    "unit": "USD",
+                    "value": 32300000
+                  },
+                  "net_income_loss_available_to_common_stockholders_basic": {
+                    "label": "Net Income/Loss Available To Common Stockholders, Basic",
+                    "order": 3700,
+                    "unit": "USD",
+                    "value": 32300000
+                  },
+                  "operating_expenses": {
+                    "label": "Operating Expenses",
+                    "order": 1000,
+                    "unit": "USD",
+                    "value": 228000000
+                  },
+                  "operating_income_loss": {
+                    "label": "Operating Income/Loss",
+                    "order": 1100,
+                    "unit": "USD",
+                    "value": 41200000
+                  },
+                  "participating_securities_distributed_and_undistributed_earnings_loss_basic": {
+                    "label": "Participating Securities, Distributed And Undistributed Earnings/Loss, Basic",
+                    "order": 3800,
+                    "unit": "USD",
+                    "value": 0
+                  },
+                  "preferred_stock_dividends_and_other_adjustments": {
+                    "label": "Preferred Stock Dividends And Other Adjustments",
+                    "order": 3900,
+                    "unit": "USD",
+                    "value": 0
+                  },
+                  "revenues": {
+                    "label": "Revenues",
+                    "order": 100,
+                    "unit": "USD",
+                    "value": 805300000
+                  }
+                }
+              },
+              "fiscal_period": "Q1",
+              "fiscal_year": "2022",
+              "source_filing_file_url": "https://api.massive.com/v1/reference/sec/filings/0001650729-22-000010/files/site-20220403_htm.xml",
+              "source_filing_url": "https://api.massive.com/v1/reference/sec/filings/0001650729-22-000010",
+              "start_date": "2022-01-03",
+              "timeframe": "quarterly"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

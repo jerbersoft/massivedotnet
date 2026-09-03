@@ -1887,4 +1887,2110 @@ public readonly partial struct ReferenceGroup
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);
     }
+
+    /// <summary>
+    /// Retrieves SEC filings, filtered by form type, by filing and report dates, by the presence of
+    /// XBRL, and by the filing company's name, CIK, ticker, and SIC code, enumerating every page as a
+    /// single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFilingsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. The date filters take the compact form the route reads, <c>yyyyMMdd</c>, as strings:
+    /// the ISO form a <see cref="NodaTime.LocalDate"/> renders is accepted by the server and silently
+    /// misread, so it is not bindable here (D-R9). The company filters are the description's dotted
+    /// <c>entities.company_data</c> parameters, rendered under those names; <paramref
+    /// name="companyNameSearch"/> is a text search where <paramref name="companyName"/> is an exact
+    /// match.
+    /// </remarks>
+    /// <param name="type">Query by filing type.</param>
+    /// <param name="filingDate">Query by filing date. Accepts an exact value or a range.</param>
+    /// <param name="periodOfReportDate">Query by period of report. Accepts an exact value or a range.</param>
+    /// <param name="hasXbrl">
+    /// If true, query only for filings with an XBRL instance file. If false, query for filings without
+    /// an XBRL instance file. If this parameter is not provided, query for filings with or without XBRL
+    /// instance files.
+    /// </param>
+    /// <param name="companyName">Query by entity company name.</param>
+    /// <param name="companyCik">Query by entity company CIK.</param>
+    /// <param name="companyTicker">Query by entity company ticker.</param>
+    /// <param name="companySic">Query by entity company SIC.</param>
+    /// <param name="companyNameSearch">Search by entities.company_data.name.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Filing> EnumerateFilingsAsync(
+        string? type = null,
+        RangeFilter<string>? filingDate = null,
+        RangeFilter<string>? periodOfReportDate = null,
+        bool? hasXbrl = null,
+        string? companyName = null,
+        string? companyCik = null,
+        string? companyTicker = null,
+        string? companySic = null,
+        string? companyNameSearch = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFilingsUri(type, filingDate, periodOfReportDate, hasXbrl, companyName, companyCik, companyTicker, companySic, companyNameSearch, order, limit, sort);
+        return _transport.EnumerateAsync<ListFilingsResponse, Filing>(
+            requestUri, MassiveRestJsonContext.Default.ListFilingsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves SEC filings, filtered by form type, by filing and report dates, by the presence of
+    /// XBRL, and by the filing company's name, CIK, ticker, and SIC code.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFilingsAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. The date
+    /// filters take the compact form the route reads, <c>yyyyMMdd</c>, as strings: the ISO form a <see
+    /// cref="NodaTime.LocalDate"/> renders is accepted by the server and silently misread, so it is not
+    /// bindable here (D-R9). The company filters are the description's dotted
+    /// <c>entities.company_data</c> parameters, rendered under those names; <paramref
+    /// name="companyNameSearch"/> is a text search where <paramref name="companyName"/> is an exact
+    /// match.
+    /// </remarks>
+    /// <param name="type">Query by filing type.</param>
+    /// <param name="filingDate">Query by filing date. Accepts an exact value or a range.</param>
+    /// <param name="periodOfReportDate">Query by period of report. Accepts an exact value or a range.</param>
+    /// <param name="hasXbrl">
+    /// If true, query only for filings with an XBRL instance file. If false, query for filings without
+    /// an XBRL instance file. If this parameter is not provided, query for filings with or without XBRL
+    /// instance files.
+    /// </param>
+    /// <param name="companyName">Query by entity company name.</param>
+    /// <param name="companyCik">Query by entity company CIK.</param>
+    /// <param name="companyTicker">Query by entity company ticker.</param>
+    /// <param name="companySic">Query by entity company SIC.</param>
+    /// <param name="companyNameSearch">Search by entities.company_data.name.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Filing>> ListFilingsAsync(
+        string? type = null,
+        RangeFilter<string>? filingDate = null,
+        RangeFilter<string>? periodOfReportDate = null,
+        bool? hasXbrl = null,
+        string? companyName = null,
+        string? companyCik = null,
+        string? companyTicker = null,
+        string? companySic = null,
+        string? companyNameSearch = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFilingsUri(type, filingDate, periodOfReportDate, hasXbrl, companyName, companyCik, companyTicker, companySic, companyNameSearch, order, limit, sort);
+        return SendListFilingsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFilingsUri(
+        string? type,
+        RangeFilter<string>? filingDate,
+        RangeFilter<string>? periodOfReportDate,
+        bool? hasXbrl,
+        string? companyName,
+        string? companyCik,
+        string? companyTicker,
+        string? companySic,
+        string? companyNameSearch,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings");
+
+        builder.AppendQuery("type", type);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("period_of_report_date", periodOfReportDate);
+        builder.AppendQuery("has_xbrl", hasXbrl);
+        builder.AppendQuery("entities.company_data.name", companyName);
+        builder.AppendQuery("entities.company_data.cik", companyCik);
+        builder.AppendQuery("entities.company_data.ticker", companyTicker);
+        builder.AppendQuery("entities.company_data.sic", companySic);
+        builder.AppendQuery("entities.company_data.name.search", companyNameSearch);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Filing>> SendListFilingsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListFilingsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListFilingsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Filing>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>Retrieves one SEC filing by its identifier.</summary>
+    /// <remarks>
+    /// <paramref name="filingId"/> is the accession number, as <see cref="Filing.Id"/> reports it. The
+    /// description does not flag the path parameter required; the generator reads every path parameter
+    /// as required, since a segment cannot be left out of a route (D-R3). A filing the service does not
+    /// know answers 404, which surfaces as a <see cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<Filing> GetFilingAsync(
+        string filingId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        string requestUri = BuildGetFilingUri(filingId);
+        return SendGetFilingAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetFilingUri(
+        string filingId)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings/");
+        builder.AppendPathSegment(filingId);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<Filing> SendGetFilingAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetFilingResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetFilingResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.");
+    }
+
+    /// <summary>
+    /// Retrieves the files that make up one SEC filing, filtered by sequence number and file name,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFilingFilesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. Each row names the file's type and size, which is what a caller consults
+    /// before retrieving one.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="sequence">Query by file sequence number. Accepts an exact value or a range.</param>
+    /// <param name="filename">Query by file name. Accepts an exact value or a range.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<FilingFile> EnumerateFilingFilesAsync(
+        string filingId,
+        RangeFilter<long>? sequence = null,
+        RangeFilter<string>? filename = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        string requestUri = BuildListFilingFilesUri(filingId, sequence, filename, order, limit, sort);
+        return _transport.EnumerateAsync<ListFilingFilesResponse, FilingFile>(
+            requestUri, MassiveRestJsonContext.Default.ListFilingFilesResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the files that make up one SEC filing, filtered by sequence number and file name.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFilingFilesAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Each
+    /// row names the file's type and size, which is what a caller consults before retrieving one.
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="sequence">Query by file sequence number. Accepts an exact value or a range.</param>
+    /// <param name="filename">Query by file name. Accepts an exact value or a range.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<FilingFile>> ListFilingFilesAsync(
+        string filingId,
+        RangeFilter<long>? sequence = null,
+        RangeFilter<string>? filename = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        string requestUri = BuildListFilingFilesUri(filingId, sequence, filename, order, limit, sort);
+        return SendListFilingFilesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFilingFilesUri(
+        string filingId,
+        RangeFilter<long>? sequence,
+        RangeFilter<string>? filename,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings/");
+        builder.AppendPathSegment(filingId);
+        builder.AppendPathLiteral("/files");
+
+        builder.AppendQuery("sequence", sequence);
+        builder.AppendQuery("filename", filename);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<FilingFile>> SendListFilingFilesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListFilingFilesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListFilingFilesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<FilingFile>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>Retrieves the metadata object the description declares for one file within an SEC filing.</summary>
+    /// <remarks>
+    /// Generated as the description declares it (decision D21). The service serves the file's own
+    /// content at this route, <c>text/html</c> for a filing document, rather than the declared JSON
+    /// object, so on 2026-09-03 this method threw a <see cref="MassiveApiException"/> whose inner
+    /// exception is the deserialization failure; that flips the day the service or the description
+    /// moves. Use <see cref="DownloadFilingFileAsync"/> to retrieve the file (decision D25).
+    /// </remarks>
+    /// <param name="filingId">Select by filing id.</param>
+    /// <param name="fileId">Select by file id.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The response body, deserialized as one object.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<FilingFile> GetFilingFileAsync(
+        string filingId,
+        string fileId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
+        string requestUri = BuildGetFilingFileUri(filingId, fileId);
+        return SendGetFilingFileAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetFilingFileUri(
+        string filingId,
+        string fileId)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/reference/sec/filings/");
+        builder.AppendPathSegment(filingId);
+        builder.AppendPathLiteral("/files/");
+        builder.AppendPathSegment(fileId);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<FilingFile> SendGetFilingFileAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        FilingFile? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.FilingFile, cancellationToken)
+            .ConfigureAwait(false);
+
+        // An empty body is a success the caller cannot use, reported the same way as a body that
+        // fails to deserialize (D17). There is no envelope here, so no request id can be reported.
+        return response
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no payload.");
+    }
+
+    /// <summary>
+    /// Retrieves standardized sections of 10-K filings, filtered by filer, section, filing date, and
+    /// period end, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="List10KSectionsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="section"/> takes the identifiers the description
+    /// names, <c>business</c> and <c>risk_factors</c>, singly or as a set. The date filters are bare
+    /// strings in the description whose prose says <c>YYYY-MM-DD</c>, so they bind <see
+    /// cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="section">
+    /// Standardized section identifier from the filing (e.g. 'business', 'risk_factors', etc.). Accepts
+    /// an exact value or a set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="periodEnd">
+    /// Period end date that the filing relates to (formatted as YYYY-MM-DD). Accepts an exact value or
+    /// a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '100'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<TenKSection> Enumerate10KSectionsAsync(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        SetFilter<string>? section = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList10KSectionsUri(cik, ticker, section, filingDate, periodEnd, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilings10KVXSectionsResponse, TenKSection>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilings10KVXSectionsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves standardized sections of 10-K filings, filtered by filer, section, filing date, and
+    /// period end.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="Enumerate10KSectionsAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="section"/> takes the identifiers the description names, <c>business</c> and
+    /// <c>risk_factors</c>, singly or as a set. The date filters are bare strings in the description
+    /// whose prose says <c>YYYY-MM-DD</c>, so they bind <see cref="NodaTime.LocalDate"/> from the map
+    /// (D-R9).
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="section">
+    /// Standardized section identifier from the filing (e.g. 'business', 'risk_factors', etc.). Accepts
+    /// an exact value or a set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="periodEnd">
+    /// Period end date that the filing relates to (formatted as YYYY-MM-DD). Accepts an exact value or
+    /// a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '100'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<TenKSection>> List10KSectionsAsync(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        SetFilter<string>? section = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList10KSectionsUri(cik, ticker, section, filingDate, periodEnd, limit, sort);
+        return SendList10KSectionsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildList10KSectionsUri(
+        Filter<string>? cik,
+        Filter<string>? ticker,
+        SetFilter<string>? section,
+        RangeFilter<LocalDate>? filingDate,
+        RangeFilter<LocalDate>? periodEnd,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/10-K/vX/sections");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("section", section);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("period_end", periodEnd);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<TenKSection>> SendList10KSectionsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilings10KVXSectionsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilings10KVXSectionsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<TenKSection>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves standardized sections of 10-K filings from the vX_0 revision of the route, filtered by
+    /// filer, section, filing date, and period end, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="List10KSectionsVx0Async"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. The description declares
+    /// this <c>vX_0</c> revision beside the <c>vX</c> one, and the service answered a plain-text 404
+    /// for it on 2026-09-03; it stays mapped as declared (decision D21) and carries its version segment
+    /// in its name because the <c>vX</c> revision is the served one (decision D26). The segment marks
+    /// it experimental (decision D23); opt in with <c>MASSIVE0001</c>. The parameters and the payload
+    /// are those of the <c>vX</c> revision.
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="section">
+    /// Standardized section identifier from the filing (e.g. 'business', 'risk_factors', etc.). Accepts
+    /// an exact value or a set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="periodEnd">
+    /// Period end date that the filing relates to (formatted as YYYY-MM-DD). Accepts an exact value or
+    /// a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '100'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<TenKSection> Enumerate10KSectionsVx0Async(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        SetFilter<string>? section = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList10KSectionsVx0Uri(cik, ticker, section, filingDate, periodEnd, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilings10KVX0SectionsResponse, TenKSection>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilings10KVX0SectionsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves standardized sections of 10-K filings from the vX_0 revision of the route, filtered by
+    /// filer, section, filing date, and period end.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="Enumerate10KSectionsVx0Async"/> to walk every page
+    /// without handling cursors yourself. The description declares this <c>vX_0</c> revision beside the
+    /// <c>vX</c> one, and the service answered a plain-text 404 for it on 2026-09-03; it stays mapped
+    /// as declared (decision D21) and carries its version segment in its name because the <c>vX</c>
+    /// revision is the served one (decision D26). The segment marks it experimental (decision D23); opt
+    /// in with <c>MASSIVE0001</c>. The parameters and the payload are those of the <c>vX</c> revision.
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="section">
+    /// Standardized section identifier from the filing (e.g. 'business', 'risk_factors', etc.). Accepts
+    /// an exact value or a set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="periodEnd">
+    /// Period end date that the filing relates to (formatted as YYYY-MM-DD). Accepts an exact value or
+    /// a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '100'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'period_end' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<TenKSection>> List10KSectionsVx0Async(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        SetFilter<string>? section = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<LocalDate>? periodEnd = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList10KSectionsVx0Uri(cik, ticker, section, filingDate, periodEnd, limit, sort);
+        return SendList10KSectionsVx0Async(requestUri, cancellationToken);
+    }
+
+    private static string BuildList10KSectionsVx0Uri(
+        Filter<string>? cik,
+        Filter<string>? ticker,
+        SetFilter<string>? section,
+        RangeFilter<LocalDate>? filingDate,
+        RangeFilter<LocalDate>? periodEnd,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/10-K/vX_0/sections");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("section", section);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("period_end", periodEnd);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<TenKSection>> SendList10KSectionsVx0Async(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilings10KVX0SectionsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilings10KVX0SectionsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<TenKSection>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves classified disclosures from 8-K filings, filtered by filer, ticker, filing date, and
+    /// the most specific category, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="List8KDisclosuresAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c>
+    /// segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is
+    /// optional and defaults to no constraint. <paramref name="tickers"/> filters an array field: pass
+    /// a plain value for rows that contain it, or an <see cref="ArrayFilter"/> factory for any or all
+    /// of several. <paramref name="filingDate"/> is a bare string in the description whose prose says
+    /// <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9). <paramref
+    /// name="tertiaryCategory"/> is an exact match against the disclosure taxonomy.
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key of the filer (10 digits, zero-padded). Accepts an exact value or a set of
+    /// values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value,
+    /// a range, or a set of values.
+    /// </param>
+    /// <param name="tertiaryCategory">
+    /// Most specific disclosure category (e.g., 'quarterly_results'). Filtering on this column must use
+    /// an exact match. See the full taxonomy at /stocks/taxonomies/vX/disclosures.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<EightKDisclosure> Enumerate8KDisclosuresAsync(
+        SetFilter<string>? cik = null,
+        ArrayFilter<string>? tickers = null,
+        Filter<LocalDate>? filingDate = null,
+        string? tertiaryCategory = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList8KDisclosuresUri(cik, tickers, filingDate, tertiaryCategory, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilings8KVXDisclosuresResponse, EightKDisclosure>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilings8KVXDisclosuresResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves classified disclosures from 8-K filings, filtered by filer, ticker, filing date, and
+    /// the most specific category.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="Enumerate8KDisclosuresAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="tickers"/> filters an array field: pass a plain value for rows that contain it,
+    /// or an <see cref="ArrayFilter"/> factory for any or all of several. <paramref name="filingDate"/>
+    /// is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see
+    /// cref="NodaTime.LocalDate"/> from the map (D-R9). <paramref name="tertiaryCategory"/> is an exact
+    /// match against the disclosure taxonomy.
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key of the filer (10 digits, zero-padded). Accepts an exact value or a set of
+    /// values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value,
+    /// a range, or a set of values.
+    /// </param>
+    /// <param name="tertiaryCategory">
+    /// Most specific disclosure category (e.g., 'quarterly_results'). Filtering on this column must use
+    /// an exact match. See the full taxonomy at /stocks/taxonomies/vX/disclosures.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<EightKDisclosure>> List8KDisclosuresAsync(
+        SetFilter<string>? cik = null,
+        ArrayFilter<string>? tickers = null,
+        Filter<LocalDate>? filingDate = null,
+        string? tertiaryCategory = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList8KDisclosuresUri(cik, tickers, filingDate, tertiaryCategory, limit, sort);
+        return SendList8KDisclosuresAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildList8KDisclosuresUri(
+        SetFilter<string>? cik,
+        ArrayFilter<string>? tickers,
+        Filter<LocalDate>? filingDate,
+        string? tertiaryCategory,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/8-K/vX/disclosures");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("tertiary_category", tertiaryCategory);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<EightKDisclosure>> SendList8KDisclosuresAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilings8KVXDisclosuresResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilings8KVXDisclosuresResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<EightKDisclosure>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the item text of 8-K filings, filtered by filer, form type, and filing date,
+    /// enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="List8KTextAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="filingDate"/> is a bare string in the description
+    /// whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map
+    /// (D-R9).
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="formType">
+    /// SEC form type (e.g., '8-K', '8-K/A' for amendments). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '100'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<EightKText> Enumerate8KTextAsync(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        Filter<string>? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList8KTextUri(cik, ticker, formType, filingDate, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilings8KVXTextResponse, EightKText>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilings8KVXTextResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the item text of 8-K filings, filtered by filer, form type, and filing date.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="Enumerate8KTextAsync"/> to walk every page without
+    /// handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision D18);
+    /// opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="filingDate"/> is a bare string in the description whose prose says
+    /// <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="formType">
+    /// SEC form type (e.g., '8-K', '8-K/A' for amendments). Accepts an exact value, a range, or a set
+    /// of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '10' if not specified. The maximum
+    /// allowed limit is '100'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<EightKText>> List8KTextAsync(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        Filter<string>? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList8KTextUri(cik, ticker, formType, filingDate, limit, sort);
+        return SendList8KTextAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildList8KTextUri(
+        Filter<string>? cik,
+        Filter<string>? ticker,
+        Filter<string>? formType,
+        RangeFilter<LocalDate>? filingDate,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/8-K/vX/text");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("form_type", formType);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<EightKText>> SendList8KTextAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilings8KVXTextResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilings8KVXTextResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<EightKText>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the holdings reported on 13-F filings, filtered by the filing institution and the
+    /// filing date, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="List13FHoldingsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="filerCik"/> is the institution's CIK, singly or as a
+    /// set. <paramref name="filingDate"/> is a bare string in the description whose prose says
+    /// <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="filerCik">
+    /// SEC Central Index Key (10 digits, zero-padded) of the filing entity. Accepts an exact value or a
+    /// set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<ThirteenFHolding> Enumerate13FHoldingsAsync(
+        SetFilter<string>? filerCik = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList13FHoldingsUri(filerCik, filingDate, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilingsVX13FResponse, ThirteenFHolding>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVX13FResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the holdings reported on 13-F filings, filtered by the filing institution and the
+    /// filing date.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="Enumerate13FHoldingsAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="filerCik"/> is the institution's CIK, singly or as a set. <paramref
+    /// name="filingDate"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so
+    /// it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="filerCik">
+    /// SEC Central Index Key (10 digits, zero-padded) of the filing entity. Accepts an exact value or a
+    /// set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<ThirteenFHolding>> List13FHoldingsAsync(
+        SetFilter<string>? filerCik = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildList13FHoldingsUri(filerCik, filingDate, limit, sort);
+        return SendList13FHoldingsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildList13FHoldingsUri(
+        SetFilter<string>? filerCik,
+        RangeFilter<LocalDate>? filingDate,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/vX/13-F");
+
+        builder.AppendQuery("filer_cik", filerCik);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<ThirteenFHolding>> SendList13FHoldingsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilingsVX13FResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVX13FResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<ThirteenFHolding>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves initial statements of beneficial ownership, form 3, filtered by issuer, reporting
+    /// owner, ticker, form type, and filing date, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListForm3FilingsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="tickers"/> filters an array field: pass a plain value
+    /// for rows that contain it, or an <see cref="ArrayFilter"/> factory for any or all of several.
+    /// <paramref name="formType"/> is <c>3</c> or <c>3/A</c>. <paramref name="filingDate"/> is a bare
+    /// string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see
+    /// cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="issuerCik">
+    /// SEC Central Index Key of the issuer company (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="ownerCik">
+    /// SEC Central Index Key of the reporting owner (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="formType">SEC form type ('3' for initial filing, '3/A' for amendments).</param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '10000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<Form3Filing> EnumerateForm3FilingsAsync(
+        SetFilter<string>? issuerCik = null,
+        SetFilter<string>? ownerCik = null,
+        ArrayFilter<string>? tickers = null,
+        string? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListForm3FilingsUri(issuerCik, ownerCik, tickers, formType, filingDate, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilingsVXForm3Response, Form3Filing>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXForm3Response, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves initial statements of beneficial ownership, form 3, filtered by issuer, reporting
+    /// owner, ticker, form type, and filing date.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateForm3FilingsAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="tickers"/> filters an array field: pass a plain value for rows that contain it,
+    /// or an <see cref="ArrayFilter"/> factory for any or all of several. <paramref name="formType"/>
+    /// is <c>3</c> or <c>3/A</c>. <paramref name="filingDate"/> is a bare string in the description
+    /// whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map
+    /// (D-R9).
+    /// </remarks>
+    /// <param name="issuerCik">
+    /// SEC Central Index Key of the issuer company (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="ownerCik">
+    /// SEC Central Index Key of the reporting owner (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="formType">SEC form type ('3' for initial filing, '3/A' for amendments).</param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '10000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<Form3Filing>> ListForm3FilingsAsync(
+        SetFilter<string>? issuerCik = null,
+        SetFilter<string>? ownerCik = null,
+        ArrayFilter<string>? tickers = null,
+        string? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListForm3FilingsUri(issuerCik, ownerCik, tickers, formType, filingDate, limit, sort);
+        return SendListForm3FilingsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListForm3FilingsUri(
+        SetFilter<string>? issuerCik,
+        SetFilter<string>? ownerCik,
+        ArrayFilter<string>? tickers,
+        string? formType,
+        RangeFilter<LocalDate>? filingDate,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/vX/form-3");
+
+        builder.AppendQuery("issuer_cik", issuerCik);
+        builder.AppendQuery("owner_cik", ownerCik);
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("form_type", formType);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Form3Filing>> SendListForm3FilingsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilingsVXForm3Response? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXForm3Response, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Form3Filing>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves statements of changes in beneficial ownership, form 4, filtered by issuer, reporting
+    /// owner, ticker, form type, filing date, and transaction code, enumerating every page as a single
+    /// lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListForm4FilingsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="tickers"/> filters an array field: pass a plain value
+    /// for rows that contain it, or an <see cref="ArrayFilter"/> factory for any or all of several.
+    /// <paramref name="formType"/> is <c>4</c> or <c>4/A</c>; <paramref name="transactionCode"/> is the
+    /// SEC's one-letter code, such as <c>P</c> for a purchase or <c>S</c> for a sale. <paramref
+    /// name="filingDate"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so
+    /// it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="issuerCik">
+    /// SEC Central Index Key of the issuer company (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="ownerCik">
+    /// SEC Central Index Key of the reporting owner (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="formType">SEC form type ('4' for standard filing, '4/A' for amendments).</param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="transactionCode">
+    /// SEC transaction code indicating the type of transaction (e.g., 'P' for purchase, 'S' for sale,
+    /// 'A' for grant/award, 'M' for exercise/conversion).
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '10000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<Form4Filing> EnumerateForm4FilingsAsync(
+        SetFilter<string>? issuerCik = null,
+        SetFilter<string>? ownerCik = null,
+        ArrayFilter<string>? tickers = null,
+        string? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        string? transactionCode = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListForm4FilingsUri(issuerCik, ownerCik, tickers, formType, filingDate, transactionCode, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilingsVXForm4Response, Form4Filing>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXForm4Response, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves statements of changes in beneficial ownership, form 4, filtered by issuer, reporting
+    /// owner, ticker, form type, filing date, and transaction code.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateForm4FilingsAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="tickers"/> filters an array field: pass a plain value for rows that contain it,
+    /// or an <see cref="ArrayFilter"/> factory for any or all of several. <paramref name="formType"/>
+    /// is <c>4</c> or <c>4/A</c>; <paramref name="transactionCode"/> is the SEC's one-letter code, such
+    /// as <c>P</c> for a purchase or <c>S</c> for a sale. <paramref name="filingDate"/> is a bare
+    /// string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see
+    /// cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="issuerCik">
+    /// SEC Central Index Key of the issuer company (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="ownerCik">
+    /// SEC Central Index Key of the reporting owner (10 digits, zero-padded). Accepts an exact value or
+    /// a set of values.
+    /// </param>
+    /// <param name="tickers">
+    /// Filter for arrays that contain the value. Matches arrays containing the value, any of the
+    /// values, or all of the values.
+    /// </param>
+    /// <param name="formType">SEC form type ('4' for standard filing, '4/A' for amendments).</param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="transactionCode">
+    /// SEC transaction code indicating the type of transaction (e.g., 'P' for purchase, 'S' for sale,
+    /// 'A' for grant/award, 'M' for exercise/conversion).
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '10000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<Form4Filing>> ListForm4FilingsAsync(
+        SetFilter<string>? issuerCik = null,
+        SetFilter<string>? ownerCik = null,
+        ArrayFilter<string>? tickers = null,
+        string? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        string? transactionCode = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListForm4FilingsUri(issuerCik, ownerCik, tickers, formType, filingDate, transactionCode, limit, sort);
+        return SendListForm4FilingsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListForm4FilingsUri(
+        SetFilter<string>? issuerCik,
+        SetFilter<string>? ownerCik,
+        ArrayFilter<string>? tickers,
+        string? formType,
+        RangeFilter<LocalDate>? filingDate,
+        string? transactionCode,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/vX/form-4");
+
+        builder.AppendQuery("issuer_cik", issuerCik);
+        builder.AppendQuery("owner_cik", ownerCik);
+        builder.AppendQuery("tickers", tickers);
+        builder.AppendQuery("form_type", formType);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("transaction_code", transactionCode);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Form4Filing>> SendListForm4FilingsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilingsVXForm4Response? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXForm4Response, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Form4Filing>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the index of SEC filings, filtered by filer, form type, and filing date, enumerating
+    /// every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFilingIndexAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="filingDate"/> is a bare string in the description
+    /// whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map
+    /// (D-R9).
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (CIK) identifying the filing entity. Accepts an exact value, a range, or a
+    /// set of values.
+    /// </param>
+    /// <param name="ticker">
+    /// Stock ticker symbol for the filing entity, if available. Accepts an exact value, a range, or a
+    /// set of values.
+    /// </param>
+    /// <param name="formType">
+    /// SEC form type (e.g., '10-K', '10-Q', '8-K', 'S-1', '4', etc.). Accepts an exact value, a range,
+    /// or a set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '1000' if not specified. The maximum
+    /// allowed limit is '10000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<FilingIndexEntry> EnumerateFilingIndexAsync(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        Filter<string>? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFilingIndexUri(cik, ticker, formType, filingDate, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilingsVXIndexResponse, FilingIndexEntry>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXIndexResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves the index of SEC filings, filtered by filer, form type, and filing date.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFilingIndexAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="filingDate"/> is a bare string in the description whose prose says
+    /// <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9).
+    /// </remarks>
+    /// <param name="cik">
+    /// SEC Central Index Key (CIK) identifying the filing entity. Accepts an exact value, a range, or a
+    /// set of values.
+    /// </param>
+    /// <param name="ticker">
+    /// Stock ticker symbol for the filing entity, if available. Accepts an exact value, a range, or a
+    /// set of values.
+    /// </param>
+    /// <param name="formType">
+    /// SEC form type (e.g., '10-K', '10-Q', '8-K', 'S-1', '4', etc.). Accepts an exact value, a range,
+    /// or a set of values.
+    /// </param>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value
+    /// or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '1000' if not specified. The maximum
+    /// allowed limit is '10000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<FilingIndexEntry>> ListFilingIndexAsync(
+        Filter<string>? cik = null,
+        Filter<string>? ticker = null,
+        Filter<string>? formType = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFilingIndexUri(cik, ticker, formType, filingDate, limit, sort);
+        return SendListFilingIndexAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFilingIndexUri(
+        Filter<string>? cik,
+        Filter<string>? ticker,
+        Filter<string>? formType,
+        RangeFilter<LocalDate>? filingDate,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/vX/index");
+
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("form_type", formType);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<FilingIndexEntry>> SendListFilingIndexAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilingsVXIndexResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXIndexResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<FilingIndexEntry>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves classified risk factors from filings, filtered by filing date and filer, enumerating
+    /// every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListRiskFactorsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="filingDate"/> is a bare string in the description
+    /// whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map
+    /// (D-R9); it carries the full comparator set, so a set of dates is accepted too.
+    /// </remarks>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value,
+    /// a range, or a set of values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<RiskFactor> EnumerateRiskFactorsAsync(
+        Filter<LocalDate>? filingDate = null,
+        Filter<string>? ticker = null,
+        Filter<string>? cik = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListRiskFactorsUri(filingDate, ticker, cik, limit, sort);
+        return _transport.EnumerateAsync<GetStocksFilingsVXRiskFactorsResponse, RiskFactor>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXRiskFactorsResponse, cancellationToken);
+    }
+
+    /// <summary>Retrieves classified risk factors from filings, filtered by filing date and filer.</summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateRiskFactorsAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="filingDate"/> is a bare string in the description whose prose says
+    /// <c>YYYY-MM-DD</c>, so it binds <see cref="NodaTime.LocalDate"/> from the map (D-R9); it carries
+    /// the full comparator set, so a set of dates is accepted too.
+    /// </remarks>
+    /// <param name="filingDate">
+    /// Date when the filing was submitted to the SEC (formatted as YYYY-MM-DD). Accepts an exact value,
+    /// a range, or a set of values.
+    /// </param>
+    /// <param name="ticker">Stock ticker symbol for the company. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="cik">
+    /// SEC Central Index Key (10 digits, zero-padded). Accepts an exact value, a range, or a set of
+    /// values.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'filing_date' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<RiskFactor>> ListRiskFactorsAsync(
+        Filter<LocalDate>? filingDate = null,
+        Filter<string>? ticker = null,
+        Filter<string>? cik = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListRiskFactorsUri(filingDate, ticker, cik, limit, sort);
+        return SendListRiskFactorsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListRiskFactorsUri(
+        Filter<LocalDate>? filingDate,
+        Filter<string>? ticker,
+        Filter<string>? cik,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/filings/vX/risk-factors");
+
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<RiskFactor>> SendListRiskFactorsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksFilingsVXRiskFactorsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksFilingsVXRiskFactorsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<RiskFactor>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the disclosure taxonomy: the categories 8-K disclosures are classified into, filtered
+    /// by version and by level, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListDisclosureTaxonomyAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c>
+    /// segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is
+    /// optional and defaults to no constraint. <paramref name="taxonomy"/> is the version, a string
+    /// such as <c>1.0</c> on this route.
+    /// </remarks>
+    /// <param name="taxonomy">
+    /// Taxonomy version that defines this classification (e.g., '1.0'). Accepts an exact value, a
+    /// range, or a set of values.
+    /// </param>
+    /// <param name="primaryCategory">Top-level disclosure category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="secondaryCategory">Mid-level disclosure category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="tertiaryCategory">Most specific disclosure category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '200' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'taxonomy' if not specified. The sort order defaults
+    /// to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<DisclosureTaxonomyEntry> EnumerateDisclosureTaxonomyAsync(
+        Filter<string>? taxonomy = null,
+        Filter<string>? primaryCategory = null,
+        Filter<string>? secondaryCategory = null,
+        Filter<string>? tertiaryCategory = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDisclosureTaxonomyUri(taxonomy, primaryCategory, secondaryCategory, tertiaryCategory, limit, sort);
+        return _transport.EnumerateAsync<GetStocksTaxonomiesVXDisclosuresResponse, DisclosureTaxonomyEntry>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksTaxonomiesVXDisclosuresResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the disclosure taxonomy: the categories 8-K disclosures are classified into, filtered
+    /// by version and by level.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateDisclosureTaxonomyAsync"/> to walk every
+    /// page without handling cursors yourself. The route's <c>vX</c> segment marks it experimental
+    /// (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no
+    /// constraint. <paramref name="taxonomy"/> is the version, a string such as <c>1.0</c> on this
+    /// route.
+    /// </remarks>
+    /// <param name="taxonomy">
+    /// Taxonomy version that defines this classification (e.g., '1.0'). Accepts an exact value, a
+    /// range, or a set of values.
+    /// </param>
+    /// <param name="primaryCategory">Top-level disclosure category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="secondaryCategory">Mid-level disclosure category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="tertiaryCategory">Most specific disclosure category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '200' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'taxonomy' if not specified. The sort order defaults
+    /// to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<DisclosureTaxonomyEntry>> ListDisclosureTaxonomyAsync(
+        Filter<string>? taxonomy = null,
+        Filter<string>? primaryCategory = null,
+        Filter<string>? secondaryCategory = null,
+        Filter<string>? tertiaryCategory = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListDisclosureTaxonomyUri(taxonomy, primaryCategory, secondaryCategory, tertiaryCategory, limit, sort);
+        return SendListDisclosureTaxonomyAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListDisclosureTaxonomyUri(
+        Filter<string>? taxonomy,
+        Filter<string>? primaryCategory,
+        Filter<string>? secondaryCategory,
+        Filter<string>? tertiaryCategory,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/taxonomies/vX/disclosures");
+
+        builder.AppendQuery("taxonomy", taxonomy);
+        builder.AppendQuery("primary_category", primaryCategory);
+        builder.AppendQuery("secondary_category", secondaryCategory);
+        builder.AppendQuery("tertiary_category", tertiaryCategory);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<DisclosureTaxonomyEntry>> SendListDisclosureTaxonomyAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksTaxonomiesVXDisclosuresResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksTaxonomiesVXDisclosuresResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<DisclosureTaxonomyEntry>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the risk-factor taxonomy: the categories risk factors are classified into, filtered by
+    /// version and by level, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListRiskFactorTaxonomyAsync"/> to retrieve a single page instead. <paramref name="limit"/>
+    /// sizes each page rather than the traversal, so lowering it issues more requests rather than
+    /// returning fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c>
+    /// segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is
+    /// optional and defaults to no constraint. <paramref name="taxonomy"/> is the version, a number on
+    /// this route where the disclosure taxonomy takes a string.
+    /// </remarks>
+    /// <param name="taxonomy">Version identifier (e.g., '1.0', '1.1') for the taxonomy. Accepts an exact value or a range.</param>
+    /// <param name="primaryCategory">Top-level risk category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="secondaryCategory">Mid-level risk category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="tertiaryCategory">Most specific risk classification. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '200' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'taxonomy' if not specified. The sort order defaults
+    /// to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<RiskFactorTaxonomyEntry> EnumerateRiskFactorTaxonomyAsync(
+        RangeFilter<double>? taxonomy = null,
+        Filter<string>? primaryCategory = null,
+        Filter<string>? secondaryCategory = null,
+        Filter<string>? tertiaryCategory = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListRiskFactorTaxonomyUri(taxonomy, primaryCategory, secondaryCategory, tertiaryCategory, limit, sort);
+        return _transport.EnumerateAsync<GetStocksTaxonomiesVXRiskFactorsResponse, RiskFactorTaxonomyEntry>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksTaxonomiesVXRiskFactorsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the risk-factor taxonomy: the categories risk factors are classified into, filtered by
+    /// version and by level.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateRiskFactorTaxonomyAsync"/> to walk every
+    /// page without handling cursors yourself. The route's <c>vX</c> segment marks it experimental
+    /// (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no
+    /// constraint. <paramref name="taxonomy"/> is the version, a number on this route where the
+    /// disclosure taxonomy takes a string.
+    /// </remarks>
+    /// <param name="taxonomy">Version identifier (e.g., '1.0', '1.1') for the taxonomy. Accepts an exact value or a range.</param>
+    /// <param name="primaryCategory">Top-level risk category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="secondaryCategory">Mid-level risk category. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="tertiaryCategory">Most specific risk classification. Accepts an exact value, a range, or a set of values.</param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '200' if not specified. The maximum
+    /// allowed limit is '1000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'taxonomy' if not specified. The sort order defaults
+    /// to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<RiskFactorTaxonomyEntry>> ListRiskFactorTaxonomyAsync(
+        RangeFilter<double>? taxonomy = null,
+        Filter<string>? primaryCategory = null,
+        Filter<string>? secondaryCategory = null,
+        Filter<string>? tertiaryCategory = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListRiskFactorTaxonomyUri(taxonomy, primaryCategory, secondaryCategory, tertiaryCategory, limit, sort);
+        return SendListRiskFactorTaxonomyAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListRiskFactorTaxonomyUri(
+        RangeFilter<double>? taxonomy,
+        Filter<string>? primaryCategory,
+        Filter<string>? secondaryCategory,
+        Filter<string>? tertiaryCategory,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/taxonomies/vX/risk-factors");
+
+        builder.AppendQuery("taxonomy", taxonomy);
+        builder.AppendQuery("primary_category", primaryCategory);
+        builder.AppendQuery("secondary_category", secondaryCategory);
+        builder.AppendQuery("tertiary_category", tertiaryCategory);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<RiskFactorTaxonomyEntry>> SendListRiskFactorTaxonomyAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksTaxonomiesVXRiskFactorsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksTaxonomiesVXRiskFactorsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<RiskFactorTaxonomyEntry>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves financial statements derived from SEC filings, filtered by company, by filing and
+    /// report dates, and by timeframe, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListFinancialsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
+    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
+    /// defaults to no constraint. <paramref name="timeframe"/> is <c>annual</c>, <c>quarterly</c>, or
+    /// <c>ttm</c>. <paramref name="includeSources"/> asks for the <see
+    /// cref="FinancialDataPoint.XPath"/> and <see cref="FinancialDataPoint.Formula"/> of every data
+    /// point. <paramref name="companyNameSearch"/> is a text search where <paramref
+    /// name="companyName"/> is an exact match; both render under the description's wire names.
+    /// </remarks>
+    /// <param name="ticker">Query by company ticker.</param>
+    /// <param name="cik">Query by central index key (CIK) Number</param>
+    /// <param name="companyName">Query by company name.</param>
+    /// <param name="sic">Query by standard industrial classification (SIC)</param>
+    /// <param name="filingDate">
+    /// Query by the date when the filing with financials data was filed in YYYY-MM-DD format. Best used
+    /// when querying over date ranges to find financials based on filings that happen in a time period.
+    /// Examples: To get financials based on filings that have happened after January 1, 2009 use the
+    /// query param filing_date.gte=2009-01-01 To get financials based on filings that happened in the
+    /// year 2009 use the query params filing_date.gte=2009-01-01&amp;filing_date.lt=2010-01-01. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="periodOfReportDate">
+    /// The period of report for the filing with financials data in YYYY-MM-DD format. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="timeframe">
+    /// Query by timeframe. Annual financials originate from 10-K filings, and quarterly financials
+    /// originate from 10-Q filings. Note: Most companies do not file quarterly reports for Q4 and
+    /// instead include those financials in their annual report, so some companies my not return
+    /// quarterly financials for Q4
+    /// </param>
+    /// <param name="includeSources">
+    /// Whether or not to include the xpath and formula attributes for each financial data point. See
+    /// the xpath and formula response attributes for more info. False by default.
+    /// </param>
+    /// <param name="companyNameSearch">Search by company_name.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 100.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<FinancialReport> EnumerateFinancialsAsync(
+        string? ticker = null,
+        string? cik = null,
+        string? companyName = null,
+        string? sic = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<LocalDate>? periodOfReportDate = null,
+        string? timeframe = null,
+        bool? includeSources = null,
+        string? companyNameSearch = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFinancialsUri(ticker, cik, companyName, sic, filingDate, periodOfReportDate, timeframe, includeSources, companyNameSearch, order, limit, sort);
+        return _transport.EnumerateAsync<ListFinancialsResponse, FinancialReport>(
+            requestUri, MassiveRestJsonContext.Default.ListFinancialsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves financial statements derived from SEC filings, filtered by company, by filing and
+    /// report dates, and by timeframe.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateFinancialsAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
+    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
+    /// <paramref name="timeframe"/> is <c>annual</c>, <c>quarterly</c>, or <c>ttm</c>. <paramref
+    /// name="includeSources"/> asks for the <see cref="FinancialDataPoint.XPath"/> and <see
+    /// cref="FinancialDataPoint.Formula"/> of every data point. <paramref name="companyNameSearch"/> is
+    /// a text search where <paramref name="companyName"/> is an exact match; both render under the
+    /// description's wire names.
+    /// </remarks>
+    /// <param name="ticker">Query by company ticker.</param>
+    /// <param name="cik">Query by central index key (CIK) Number</param>
+    /// <param name="companyName">Query by company name.</param>
+    /// <param name="sic">Query by standard industrial classification (SIC)</param>
+    /// <param name="filingDate">
+    /// Query by the date when the filing with financials data was filed in YYYY-MM-DD format. Best used
+    /// when querying over date ranges to find financials based on filings that happen in a time period.
+    /// Examples: To get financials based on filings that have happened after January 1, 2009 use the
+    /// query param filing_date.gte=2009-01-01 To get financials based on filings that happened in the
+    /// year 2009 use the query params filing_date.gte=2009-01-01&amp;filing_date.lt=2010-01-01. Accepts
+    /// an exact value or a range.
+    /// </param>
+    /// <param name="periodOfReportDate">
+    /// The period of report for the filing with financials data in YYYY-MM-DD format. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="timeframe">
+    /// Query by timeframe. Annual financials originate from 10-K filings, and quarterly financials
+    /// originate from 10-Q filings. Note: Most companies do not file quarterly reports for Q4 and
+    /// instead include those financials in their annual report, so some companies my not return
+    /// quarterly financials for Q4
+    /// </param>
+    /// <param name="includeSources">
+    /// Whether or not to include the xpath and formula attributes for each financial data point. See
+    /// the xpath and formula response attributes for more info. False by default.
+    /// </param>
+    /// <param name="companyNameSearch">Search by company_name.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 100.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<FinancialReport>> ListFinancialsAsync(
+        string? ticker = null,
+        string? cik = null,
+        string? companyName = null,
+        string? sic = null,
+        RangeFilter<LocalDate>? filingDate = null,
+        RangeFilter<LocalDate>? periodOfReportDate = null,
+        string? timeframe = null,
+        bool? includeSources = null,
+        string? companyNameSearch = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListFinancialsUri(ticker, cik, companyName, sic, filingDate, periodOfReportDate, timeframe, includeSources, companyNameSearch, order, limit, sort);
+        return SendListFinancialsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListFinancialsUri(
+        string? ticker,
+        string? cik,
+        string? companyName,
+        string? sic,
+        RangeFilter<LocalDate>? filingDate,
+        RangeFilter<LocalDate>? periodOfReportDate,
+        string? timeframe,
+        bool? includeSources,
+        string? companyNameSearch,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/vX/reference/financials");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("company_name", companyName);
+        builder.AppendQuery("sic", sic);
+        builder.AppendQuery("filing_date", filingDate);
+        builder.AppendQuery("period_of_report_date", periodOfReportDate);
+        builder.AppendQuery("timeframe", timeframe);
+        builder.AppendQuery("include_sources", includeSources);
+        builder.AppendQuery("company_name.search", companyNameSearch);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<FinancialReport>> SendListFinancialsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListFinancialsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListFinancialsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<FinancialReport>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
 }

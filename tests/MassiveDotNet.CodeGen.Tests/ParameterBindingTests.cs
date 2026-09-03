@@ -239,4 +239,25 @@ public sealed class ParameterBindingTests
         Assert.Contains("parameter 'contract_type' declares [straddle]", message, StringComparison.Ordinal);
         Assert.Contains("ContractType", message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void APathParameterIsRequiredWhetherOrNotTheDescriptionSaysSo()
+    {
+        // OpenAPI mandates the flag on a path parameter, and the SEC v1 description omits it on
+        // filing_id and file_id. Read as optional, the parameter would default to null and append
+        // an empty segment; reading the location instead of the flag makes the omission harmless
+        // (D-R3).
+        string spec = Harness.Document(new Operation(
+            "ListThings",
+            "/v1/things/{thing_id}",
+            Harness.Envelope(Item),
+            """[ { "name": "thing_id", "in": "path", "schema": { "type": "string" } }, { "name": "verbose", "in": "query", "schema": { "type": "boolean" } } ]"""));
+
+        string group = Harness.Generate(spec, MapDocument("""{ "thing_id": { "name": "thingId" }, "verbose": { "name": "verbose" } }"""))["ReferenceGroup.g.cs"];
+
+        Assert.Contains("string thingId,", group, StringComparison.Ordinal);
+        Assert.Contains("ArgumentException.ThrowIfNullOrWhiteSpace(thingId);", group, StringComparison.Ordinal);
+        Assert.Contains("builder.AppendPathSegment(thingId);", group, StringComparison.Ordinal);
+        Assert.DoesNotContain("string? thingId", group, StringComparison.Ordinal);
+    }
 }

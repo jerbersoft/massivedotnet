@@ -348,6 +348,62 @@ if (contracts.Results is not [{ AdditionalUnderlyings: null }, { AdditionalUnder
     return 1;
 }
 
+// The financials page is the SDK's only dictionary of nested models, so its converter and the
+// Dictionary<string, FinancialDataPoint> instantiation are reachable only through this call; the
+// download is the only response body read without deserializing, so it is the only thing that
+// roots the transport's copy path. A clean publish says nothing about either otherwise.
+Console.WriteLine("\nfinancials, one quarterly report:");
+
+MassivePage<FinancialReport> financials = await client.Reference.ListFinancialsAsync(
+    ticker: "SITE",
+    timeframe: "quarterly",
+    includeSources: false,
+    limit: 1);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+
+foreach (FinancialReport report in financials.Results)
+{
+    Console.WriteLine(
+        $"  {report.CompanyName}  {report.FiscalPeriod} {report.FiscalYear} ({report.Timeframe})"
+        + $"  assets {report.Financials.BalanceSheet?["assets"].Value,18:N0}"
+        + $"  revenues {report.Financials.IncomeStatement?["revenues"].Value,18:N0}");
+}
+
+const string ExpectedFinancialsQuery = "?ticker=SITE&timeframe=quarterly&include_sources=false&limit=1";
+
+if (handler.LastRequestUri?.Query != ExpectedFinancialsQuery)
+{
+    Console.Error.WriteLine($"FAIL: expected the financials query {ExpectedFinancialsQuery}; got {handler.LastRequestUri?.Query}.");
+    return 1;
+}
+
+if (financials.Results is not [{ FiscalPeriod: "Q1", Timeframe: "quarterly" } report0]
+    || report0.StartDate != new LocalDate(2022, 1, 3)
+    || report0.Financials.BalanceSheet is not { Count: 2 } balanceSheet
+    || report0.Financials.IncomeStatement is not { Count: 1 } incomeStatement
+    || balanceSheet["assets"] is not { Label: "Assets", Unit: "USD", Value: 2407400000d }
+    || incomeStatement["revenues"].Value != 805300000d)
+{
+    Console.Error.WriteLine("FAIL: expected one quarterly Q1 report whose balance sheet holds two data points, assets at 2,407,400,000.");
+    return 1;
+}
+
+Console.WriteLine("\ndownloading one filing file:");
+
+using MemoryStream file = new();
+
+await client.Reference.DownloadFilingFileAsync("0001683168-26-006873", "myx_i10k-053126.htm", file);
+
+Console.WriteLine($"request : {handler.LastRequestUri}");
+Console.WriteLine($"  {file.Length} bytes, starting {Encoding.UTF8.GetString(file.ToArray(), 0, 14)}");
+
+if (file.Length == 0 || !Encoding.UTF8.GetString(file.ToArray()).StartsWith("<html", StringComparison.Ordinal))
+{
+    Console.Error.WriteLine("FAIL: expected the filing file body to be copied to the stream, starting with <html.");
+    return 1;
+}
+
 Console.WriteLine($"\nrequests: {handler.Requests}");
 
 if (bars.Length != 2 || !page.HasMore)
@@ -358,12 +414,12 @@ if (bars.Length != 2 || !page.HasMore)
 
 // Two pages of the aggregates enumeration, the single-page aggregates call, the dividends call,
 // the news call, one SMA page, two SMA pages enumerated, the last trade, the open/close day, the
-// holidays, the trades page, the snapshots, the market status, the tickers page, and the
-// contracts page.
-if (enumerated != 3 || handler.Requests != 16)
+// holidays, the trades page, the snapshots, the market status, the tickers page, the contracts
+// page, the financials page, and the filing file download.
+if (enumerated != 3 || handler.Requests != 18)
 {
     Console.Error.WriteLine(
-        $"FAIL: expected 3 enumerated bars over 16 requests; got {enumerated} over {handler.Requests}.");
+        $"FAIL: expected 3 enumerated bars over 18 requests; got {enumerated} over {handler.Requests}.");
     return 1;
 }
 
@@ -654,6 +710,42 @@ internal sealed class StubHandler : HttpMessageHandler
         }
         """;
 
+    // Trimmed to two balance-sheet points and one income-statement point: the sample proves the
+    // dictionary deserializes and is reachable by key, not that the statement is complete.
+    private const string Financials = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/vX/reference/financials?cursor=next",
+          "request_id": "55eb92ed43b25568ab0cce159830ea34",
+          "results": [
+            {
+              "cik": "0001650729",
+              "company_name": "SiteOne Landscape Supply, Inc.",
+              "end_date": "2022-04-03",
+              "filing_date": "2022-05-04",
+              "financials": {
+                "balance_sheet": {
+                  "assets": { "label": "Assets", "order": 100, "unit": "USD", "value": 2407400000 },
+                  "equity": { "label": "Equity", "order": 1400, "unit": "USD", "value": 1099200000 }
+                },
+                "income_statement": {
+                  "revenues": { "label": "Revenues", "order": 100, "unit": "USD", "value": 805300000 }
+                }
+              },
+              "fiscal_period": "Q1",
+              "fiscal_year": "2022",
+              "source_filing_url": "https://api.massive.com/v1/reference/sec/filings/0001650729-22-000010",
+              "start_date": "2022-01-03",
+              "tickers": [ "SITE" ],
+              "timeframe": "quarterly"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    private const string FilingFileBody = "<html><body><p>Item 1A. Risk Factors</p></body></html>";
+
     public Uri? LastRequestUri { get; private set; }
 
     public int Requests { get; private set; }
@@ -682,6 +774,8 @@ internal sealed class StubHandler : HttpMessageHandler
             "/v1/marketstatus/now" => MarketStatusBody,
             "/v3/reference/tickers" => Tickers,
             "/v3/reference/options/contracts" => Contracts,
+            "/vX/reference/financials" => Financials,
+            "/v1/reference/sec/filings/0001683168-26-006873/files/myx_i10k-053126.htm" => FilingFileBody,
             _ => cursored ? FinalPage : FirstPage,
         };
 

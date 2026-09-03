@@ -789,3 +789,292 @@ internal sealed class GetStocksVXFloatResponse : IPagedEnvelope<ShareFloat>
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v1/reference/sec/filings.</summary>
+internal sealed class ListFilingsResponse : IPagedEnvelope<Filing>
+{
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    [JsonPropertyName("results")]
+    public Filing[]? Results { get; init; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/reference/sec/filings/{filing_id}.</summary>
+internal sealed class GetFilingResponse
+{
+    [JsonPropertyName("results")]
+    public Filing? Results { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/reference/sec/filings/{filing_id}/files.</summary>
+internal sealed class ListFilingFilesResponse : IPagedEnvelope<FilingFile>
+{
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    [JsonPropertyName("results")]
+    public FilingFile[]? Results { get; init; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/10-K/vX/sections.</summary>
+internal sealed class GetStocksFilings10KVXSectionsResponse : IPagedEnvelope<TenKSection>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public TenKSection[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/10-K/vX_0/sections.</summary>
+internal sealed class GetStocksFilings10KVX0SectionsResponse : IPagedEnvelope<TenKSection>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public TenKSection[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/8-K/vX/disclosures.</summary>
+internal sealed class GetStocksFilings8KVXDisclosuresResponse : IPagedEnvelope<EightKDisclosure>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public EightKDisclosure[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/8-K/vX/text.</summary>
+internal sealed class GetStocksFilings8KVXTextResponse : IPagedEnvelope<EightKText>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public EightKText[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/13-F.</summary>
+internal sealed class GetStocksFilingsVX13FResponse : IPagedEnvelope<ThirteenFHolding>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public ThirteenFHolding[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/form-3.</summary>
+internal sealed class GetStocksFilingsVXForm3Response : IPagedEnvelope<Form3Filing>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public Form3Filing[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/form-4.</summary>
+internal sealed class GetStocksFilingsVXForm4Response : IPagedEnvelope<Form4Filing>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public Form4Filing[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/index.</summary>
+internal sealed class GetStocksFilingsVXIndexResponse : IPagedEnvelope<FilingIndexEntry>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public FilingIndexEntry[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/risk-factors.</summary>
+internal sealed class GetStocksFilingsVXRiskFactorsResponse : IPagedEnvelope<RiskFactor>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public RiskFactor[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/taxonomies/vX/disclosures.</summary>
+internal sealed class GetStocksTaxonomiesVXDisclosuresResponse : IPagedEnvelope<DisclosureTaxonomyEntry>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public DisclosureTaxonomyEntry[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/taxonomies/vX/risk-factors.</summary>
+internal sealed class GetStocksTaxonomiesVXRiskFactorsResponse : IPagedEnvelope<RiskFactorTaxonomyEntry>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public RiskFactorTaxonomyEntry[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /vX/reference/financials.</summary>
+internal sealed class ListFinancialsResponse : IPagedEnvelope<FinancialReport>
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public FinancialReport[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

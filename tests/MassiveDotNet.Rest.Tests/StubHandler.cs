@@ -17,16 +17,23 @@ internal sealed class StubHandler(HttpStatusCode status, string body) : HttpMess
 
     public Duration? RetryAfter { get; init; }
 
+    /// <summary>How many requests this handler has seen, so a test can assert none were sent.</summary>
+    public int RequestCount { get; private set; }
+
+    /// <summary>The content type of the canned body. The filing file route serves a document, not JSON (D-R4).</summary>
+    public string MediaType { get; init; } = "application/json";
+
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        RequestCount++;
         LastRequestUri = request.RequestUri;
         LastAuthorization = request.Headers.Authorization?.ToString();
 
         HttpResponseMessage response = new(status)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            Content = new StringContent(body, Encoding.UTF8, MediaType),
         };
 
         if (RetryAfter is { } retryAfter)

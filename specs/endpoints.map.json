@@ -936,6 +936,335 @@
         "free_float":         { "name": "FreeFloat" },
         "free_float_percent": { "name": "FreeFloatPercent" }
       }
+    },
+
+    "Filing": {
+      "summary": "One SEC filing from the v1 route: its accession number and form type, the dates that govern it, the entities that filed it, and where its files live.",
+      "remarks": "Reference data, so a class (decision D4). Also the payload of <see cref=\"ReferenceGroup.GetFilingAsync\"/>, where decision D16 verifies the shape. The three dates are bare strings in the description and compact digits on the wire, <c>yyyyMMdd</c> and <c>yyyyMMddHHmmss</c>, so they stay strings rather than binding a type that renders another form (D-R9). The wire also carries <c>main_file_url</c> and <c>xbrl_instance_url</c>, which the description does not declare and this model therefore omits.",
+      "schema": { "operationId": "ListFilings", "pointer": "results/items" },
+      "properties": {
+        "id":                    { "name": "Id" },
+        "accession_number":      { "name": "AccessionNumber" },
+        "type":                  { "name": "Type" },
+        "filing_date":           { "name": "FilingDate", "summary": "The date the filing was filed, in the compact form the wire carries, <c>yyyyMMdd</c> (D-R9)." },
+        "period_of_report_date": { "name": "PeriodOfReportDate", "summary": "The period the filing reports on, in the compact form the wire carries, <c>yyyyMMdd</c> (D-R9)." },
+        "acceptance_datetime":   { "name": "AcceptanceTimestamp", "summary": "When EDGAR accepted the filing, in Eastern Time, in the compact form the wire carries, <c>yyyyMMddHHmmss</c> (D-R9)." },
+        "entities":              { "name": "Entities", "model": "FilingEntity" },
+        "files_count":           { "name": "FilesCount" },
+        "source_url":            { "name": "SourceUrl" }
+      }
+    },
+
+    "FilingEntity": {
+      "summary": "A party to an SEC filing: the company and its relation to the filing.",
+      "schema": { "operationId": "ListFilings", "pointer": "results/items/entities/items" },
+      "properties": {
+        "relation":     { "name": "Relation" },
+        "company_data": { "name": "CompanyData", "model": "FilingCompany", "summary": "The company this entity is, when the description has one to give." }
+      }
+    },
+
+    "FilingCompany": {
+      "summary": "The company behind a filing entity: its CIK, name, SIC code, and ticker.",
+      "remarks": "The wire also carries a <c>tickers</c> array the description does not declare, which this model omits.",
+      "schema": { "operationId": "ListFilings", "pointer": "results/items/entities/items/company_data" },
+      "properties": {
+        "cik":    { "name": "Cik" },
+        "name":   { "name": "Name", "summary": "The company's name as registered with the SEC." },
+        "sic":    { "name": "Sic" },
+        "ticker": { "name": "Ticker" }
+      }
+    },
+
+    "FilingFile": {
+      "summary": "One file within an SEC filing: its identifier, name, sequence, size, type, and source.",
+      "remarks": "Reference data, so a class (decision D4). Also the declared payload of <see cref=\"ReferenceGroup.GetFilingFileAsync\"/>, where decision D16 verifies the shape; that route serves the file itself rather than this object, so <see cref=\"ReferenceGroup.DownloadFilingFileAsync\"/> is the method that retrieves one (decision D25). The item schema's own <c>required</c> list names a <c>file</c> property the schema never declares, and omits <c>filename</c>, which it does; the generator follows the declared property over the required list, so <see cref=\"Filename\"/> binds optional rather than required.",
+      "schema": { "operationId": "ListFilingFiles", "pointer": "results/items" },
+      "properties": {
+        "id":          { "name": "Id" },
+        "filename":    { "name": "Filename" },
+        "description": { "name": "Description" },
+        "sequence":    { "name": "Sequence" },
+        "size_bytes":  { "name": "SizeBytes" },
+        "type":        { "name": "Type" },
+        "source_url":  { "name": "SourceUrl" }
+      }
+    },
+
+    "TenKSection": {
+      "summary": "One standardized section of a 10-K filing: the filer, the filing and period-end dates, the section identifier, and its text.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8). Generated from the <c>vX</c> revision of the route and shared with the <c>vX_0</c> revision, where decision D16 verifies the shape.",
+      "schema": { "operationId": "get_stocks_filings_10-K_vX_sections", "pointer": "results/items" },
+      "properties": {
+        "cik":         { "name": "Cik" },
+        "ticker":      { "name": "Ticker" },
+        "section":     { "name": "Section" },
+        "filing_date": { "name": "FilingDate" },
+        "period_end":  { "name": "PeriodEnd" },
+        "filing_url":  { "name": "FilingUrl" },
+        "text":        { "name": "Text" }
+      }
+    },
+
+    "EightKDisclosure": {
+      "summary": "One classified disclosure from an 8-K filing: the filer, the filing date, the three-level category, and the text that supports the classification.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8). <see cref=\"FilingDate\"/> is a bare string in the description and an ISO calendar date on the wire, hence <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9). The categories come from the taxonomy the disclosure taxonomy route serves.",
+      "schema": { "operationId": "get_stocks_filings_8-K_vX_disclosures", "pointer": "results/items" },
+      "properties": {
+        "accession_number":   { "name": "AccessionNumber" },
+        "cik":                { "name": "Cik" },
+        "tickers":            { "name": "Tickers" },
+        "filing_date":        { "name": "FilingDate", "type": "LocalDate?", "summary": "The date the filing was submitted to the SEC. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "filing_url":         { "name": "FilingUrl" },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "supporting_text":    { "name": "SupportingText" }
+      }
+    },
+
+    "EightKText": {
+      "summary": "The item text of one 8-K filing: the filer, the form type, the filing date, and the text of the items it reports.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8).",
+      "schema": { "operationId": "get_stocks_filings_8-K_vX_text", "pointer": "results/items" },
+      "properties": {
+        "accession_number": { "name": "AccessionNumber" },
+        "cik":              { "name": "Cik" },
+        "ticker":           { "name": "Ticker" },
+        "form_type":        { "name": "FormType" },
+        "filing_date":      { "name": "FilingDate" },
+        "filing_url":       { "name": "FilingUrl" },
+        "items_text":       { "name": "ItemsText" }
+      }
+    },
+
+    "ThirteenFHolding": {
+      "summary": "One holding reported on a 13-F filing: the filer, the security, the amount and value held, and the voting authority over it.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8). One filing reports many holdings, so the filing's own fields repeat on every row.",
+      "schema": { "operationId": "get_stocks_filings_vX_13-F", "pointer": "results/items" },
+      "properties": {
+        "accession_number":           { "name": "AccessionNumber" },
+        "filer_cik":                  { "name": "FilerCik" },
+        "form_type":                  { "name": "FormType" },
+        "filing_date":                { "name": "FilingDate" },
+        "period":                     { "name": "Period" },
+        "filing_url":                 { "name": "FilingUrl" },
+        "file_number":                { "name": "FileNumber" },
+        "film_number":                { "name": "FilmNumber" },
+        "issuer_name":                { "name": "IssuerName" },
+        "cusip":                      { "name": "Cusip" },
+        "title_of_class":             { "name": "TitleOfClass" },
+        "put_call":                   { "name": "PutCall" },
+        "market_value":               { "name": "MarketValue" },
+        "shares_or_principal_amount": { "name": "SharesOrPrincipalAmount" },
+        "shares_or_principal_type":   { "name": "SharesOrPrincipalType" },
+        "investment_discretion":      { "name": "InvestmentDiscretion" },
+        "other_managers":             { "name": "OtherManagers" },
+        "voting_authority_sole":      { "name": "VotingAuthoritySole" },
+        "voting_authority_shared":    { "name": "VotingAuthorityShared" },
+        "voting_authority_none":      { "name": "VotingAuthorityNone" }
+      }
+    },
+
+    "FilingFootnote": {
+      "summary": "A footnote on an ownership filing: its identifier, as the filing's fields cite it, and its text.",
+      "remarks": "Generated from the form 3 route and shared with form 4, where decision D16 verifies the shape. The description gives its two properties no prose, so the summaries here are the map's.",
+      "schema": { "operationId": "get_stocks_filings_vX_form-3", "pointer": "results/items/footnotes/items" },
+      "properties": {
+        "id":          { "name": "Id", "summary": "The footnote's identifier, such as <c>F1</c>, which the filing's fields cite." },
+        "description": { "name": "Description", "summary": "The footnote's text." }
+      }
+    },
+
+    "Form3Filing": {
+      "summary": "One initial statement of beneficial ownership, form 3: the issuer, the reporting owner and their relationship to it, and the security held.",
+      "remarks": "Reference data, so a class (decision D4). A trailing form number keeps its digits (D-R8). The description marks nothing required, and the published sample carries explicit nulls, so every property is nullable. The six flags take an <c>Is</c> prefix; <see cref=\"IsRule10b51Plan\"/> is the wire's <c>aff_10b5_one</c>.",
+      "schema": { "operationId": "get_stocks_filings_vX_form-3", "pointer": "results/items" },
+      "properties": {
+        "accession_number":            { "name": "AccessionNumber" },
+        "form_type":                   { "name": "FormType" },
+        "filing_date":                 { "name": "FilingDate" },
+        "filing_url":                  { "name": "FilingUrl" },
+        "period_of_report":            { "name": "PeriodOfReport" },
+        "date_of_original_submission": { "name": "DateOfOriginalSubmission" },
+        "issuer_cik":                  { "name": "IssuerCik" },
+        "issuer_name":                 { "name": "IssuerName" },
+        "tickers":                     { "name": "Tickers" },
+        "owner_cik":                   { "name": "OwnerCik" },
+        "owner_name":                  { "name": "OwnerName" },
+        "is_director":                 { "name": "IsDirector" },
+        "is_officer":                  { "name": "IsOfficer" },
+        "is_ten_percent_owner":        { "name": "IsTenPercentOwner" },
+        "is_other":                    { "name": "IsOther" },
+        "officer_title":               { "name": "OfficerTitle" },
+        "not_subject_to_section_16":   { "name": "IsNotSubjectToSection16" },
+        "aff_10b5_one":                { "name": "IsRule10b51Plan", "summary": "Whether the transaction was made under a Rule 10b5-1 trading plan; the wire's <c>aff_10b5_one</c>." },
+        "security_title":              { "name": "SecurityTitle" },
+        "security_type":               { "name": "SecurityType" },
+        "shares_owned":                { "name": "SharesOwned" },
+        "direct_or_indirect":          { "name": "DirectOrIndirect" },
+        "nature_of_ownership":         { "name": "NatureOfOwnership" },
+        "exercise_date":               { "name": "ExerciseDate" },
+        "exercise_price":              { "name": "ExercisePrice" },
+        "underlying_security_title":   { "name": "UnderlyingSecurityTitle" },
+        "underlying_security_shares":  { "name": "UnderlyingSecurityShares" },
+        "footnotes":                   { "name": "Footnotes", "model": "FilingFootnote" },
+        "remarks":                     { "name": "Remarks" }
+      }
+    },
+
+    "Form4Filing": {
+      "summary": "One statement of changes in beneficial ownership, form 4: the issuer, the reporting owner, the security, and the transaction reported.",
+      "remarks": "Reference data, so a class (decision D4). A trailing form number keeps its digits (D-R8). The description marks nothing required, so every property is nullable; a holding row rather than a transaction row leaves the transaction fields null. The seven flags take an <c>Is</c> prefix; <see cref=\"IsRule10b51Plan\"/> is the wire's <c>aff_10b5_one</c>.",
+      "schema": { "operationId": "get_stocks_filings_vX_form-4", "pointer": "results/items" },
+      "properties": {
+        "accession_number":                   { "name": "AccessionNumber" },
+        "form_type":                          { "name": "FormType" },
+        "filing_date":                        { "name": "FilingDate" },
+        "filing_url":                         { "name": "FilingUrl" },
+        "period_of_report":                   { "name": "PeriodOfReport" },
+        "date_of_original_submission":        { "name": "DateOfOriginalSubmission" },
+        "issuer_cik":                         { "name": "IssuerCik" },
+        "issuer_name":                        { "name": "IssuerName" },
+        "tickers":                            { "name": "Tickers" },
+        "owner_cik":                          { "name": "OwnerCik" },
+        "owner_name":                         { "name": "OwnerName" },
+        "is_director":                        { "name": "IsDirector" },
+        "is_officer":                         { "name": "IsOfficer" },
+        "is_ten_percent_owner":               { "name": "IsTenPercentOwner" },
+        "is_other":                           { "name": "IsOther" },
+        "officer_title":                      { "name": "OfficerTitle" },
+        "not_subject_to_section_16":          { "name": "IsNotSubjectToSection16" },
+        "aff_10b5_one":                       { "name": "IsRule10b51Plan", "summary": "Whether the transaction was made under a Rule 10b5-1 trading plan; the wire's <c>aff_10b5_one</c>." },
+        "record_type":                        { "name": "RecordType" },
+        "security_title":                     { "name": "SecurityTitle" },
+        "security_type":                      { "name": "SecurityType" },
+        "transaction_date":                   { "name": "TransactionDate" },
+        "deemed_execution_date":              { "name": "DeemedExecutionDate" },
+        "transaction_code":                   { "name": "TransactionCode" },
+        "transaction_timeliness":             { "name": "TransactionTimeliness" },
+        "transaction_acquired_disposed":      { "name": "TransactionAcquiredDisposed" },
+        "transaction_shares":                 { "name": "TransactionShares" },
+        "transaction_price_per_share":        { "name": "TransactionPricePerShare" },
+        "transaction_value":                  { "name": "TransactionValue" },
+        "shares_owned_following_transaction": { "name": "SharesOwnedFollowingTransaction" },
+        "direct_or_indirect":                 { "name": "DirectOrIndirect" },
+        "nature_of_ownership":                { "name": "NatureOfOwnership" },
+        "equity_swap_involved":               { "name": "IsEquitySwapInvolved" },
+        "exercise_date":                      { "name": "ExerciseDate" },
+        "exercise_price":                     { "name": "ExercisePrice" },
+        "expiration_date":                    { "name": "ExpirationDate" },
+        "underlying_security_title":          { "name": "UnderlyingSecurityTitle" },
+        "underlying_security_shares":         { "name": "UnderlyingSecurityShares" },
+        "footnotes":                          { "name": "Footnotes", "model": "FilingFootnote" },
+        "remarks":                            { "name": "Remarks" }
+      }
+    },
+
+    "FilingIndexEntry": {
+      "summary": "One entry in the SEC filing index: the filer, the form type, the filing date, and where the filing lives.",
+      "remarks": "Reference data, so a class (decision D4). Named for its place in the index rather than <c>Filing</c>, which is the fuller SEC v1 row.",
+      "schema": { "operationId": "get_stocks_filings_vX_index", "pointer": "results/items" },
+      "properties": {
+        "accession_number": { "name": "AccessionNumber" },
+        "cik":              { "name": "Cik" },
+        "ticker":           { "name": "Ticker" },
+        "issuer_name":      { "name": "IssuerName" },
+        "form_type":        { "name": "FormType" },
+        "filing_date":      { "name": "FilingDate" },
+        "filing_url":       { "name": "FilingUrl" }
+      }
+    },
+
+    "RiskFactor": {
+      "summary": "One classified risk factor from a filing: the filer, the filing date, the three-level category, and the text that supports the classification.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"FilingDate\"/> is a bare string in the description and an ISO calendar date on the wire, hence <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9). The categories come from the taxonomy the risk-factor taxonomy route serves.",
+      "schema": { "operationId": "get_stocks_filings_vX_risk-factors", "pointer": "results/items" },
+      "properties": {
+        "cik":                { "name": "Cik" },
+        "ticker":             { "name": "Ticker" },
+        "filing_date":        { "name": "FilingDate", "type": "LocalDate?", "summary": "The date the filing was submitted to the SEC. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "supporting_text":    { "name": "SupportingText" }
+      }
+    },
+
+    "DisclosureTaxonomyEntry": {
+      "summary": "One category in the disclosure taxonomy: its three levels, the taxonomy version that defines it, and a description.",
+      "remarks": "Reference data, so a class (decision D4). The version is a string here where the risk-factor taxonomy declares a number; each model follows its own route.",
+      "schema": { "operationId": "get_stocks_taxonomies_vX_disclosures", "pointer": "results/items" },
+      "properties": {
+        "taxonomy":           { "name": "Taxonomy" },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "description":        { "name": "Description" }
+      }
+    },
+
+    "RiskFactorTaxonomyEntry": {
+      "summary": "One category in the risk-factor taxonomy: its three levels, the taxonomy version that defines it, and a description.",
+      "remarks": "Reference data, so a class (decision D4). The version is a number here where the disclosure taxonomy declares a string; each model follows its own route. The published example spells it as a string; the schema and the live wire carry the number.",
+      "schema": { "operationId": "get_stocks_taxonomies_vX_risk-factors", "pointer": "results/items" },
+      "properties": {
+        "taxonomy":           { "name": "Taxonomy" },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "description":        { "name": "Description" }
+      }
+    },
+
+    "FinancialReport": {
+      "summary": "One set of financial statements for a company and period, derived from an SEC filing: the company, the fiscal period, the dates, the source filing, and the four statements.",
+      "remarks": "Reference data, so a class (decision D4). The three period dates are bare strings whose prose claims a compact <c>YYYYMMDD</c> form, while both the published example and the live wire carry ISO calendar dates; the map follows the example and the wire, which agree against the prose, and binds <see cref=\"NodaTime.LocalDate\"/> (D-R9). This is the opposite reading from the SEC v1 filings, whose wire really is compact, so the two families differ on purpose. The published example omits the required <c>timeframe</c> and the optional <c>tickers</c>, both of which the live wire sends.",
+      "schema": { "operationId": "ListFinancials", "pointer": "results/items" },
+      "properties": {
+        "cik":                    { "name": "Cik" },
+        "company_name":           { "name": "CompanyName" },
+        "tickers":                { "name": "Tickers" },
+        "sic":                    { "name": "Sic" },
+        "fiscal_year":            { "name": "FiscalYear" },
+        "fiscal_period":          { "name": "FiscalPeriod" },
+        "timeframe":              { "name": "Timeframe" },
+        "start_date":             { "name": "StartDate", "type": "LocalDate?", "summary": "The first day of the period the statements cover. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "end_date":               { "name": "EndDate", "type": "LocalDate?", "summary": "The last day of the period the statements cover. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "filing_date":            { "name": "FilingDate", "type": "LocalDate?", "summary": "The date the source filing was made available, which is not necessarily the date its contents became public. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "acceptance_datetime":    { "name": "AcceptanceTimestamp", "summary": "When EDGAR accepted the source filing, as the wire sends it. The description says the compact Eastern-time form, <c>yyyyMMddHHmmss</c>; the live wire sent RFC 3339 on 2026-09-03. Kept a string so either form deserializes." },
+        "source_filing_url":      { "name": "SourceFilingUrl" },
+        "source_filing_file_url": { "name": "SourceFilingFileUrl" },
+        "financials":             { "name": "Financials", "model": "FinancialStatements" }
+      }
+    },
+
+    "FinancialStatements": {
+      "summary": "The four statements of a financial report, each a dictionary of data points keyed by the platform's field name.",
+      "remarks": "The description documents the balance sheet's shape under a property literally named <c>*</c> and leaves the other three free-form; all four are one dictionary type over <see cref=\"FinancialDataPoint\"/>, and a statement the report lacks is null (D-R11). The keys are the field names Massive documents for each statement, such as <c>assets</c> or <c>revenues</c>.",
+      "schema": { "operationId": "ListFinancials", "pointer": "results/items/financials" },
+      "properties": {
+        "balance_sheet":        { "name": "BalanceSheet", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The balance sheet: one data point per line item, keyed by the platform's field name, such as <c>assets</c> (D-R11)." },
+        "cash_flow_statement":  { "name": "CashFlowStatement", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The cash flow statement: one data point per line item, keyed by the platform's field name, such as <c>net_cash_flow</c> (D-R11)." },
+        "comprehensive_income": { "name": "ComprehensiveIncome", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The statement of comprehensive income: one data point per line item, keyed by the platform's field name, such as <c>comprehensive_income_loss</c> (D-R11)." },
+        "income_statement":     { "name": "IncomeStatement", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The income statement: one data point per line item, keyed by the platform's field name, such as <c>revenues</c> (D-R11)." }
+      }
+    },
+
+    "FinancialDataPoint": {
+      "summary": "One line item of a financial statement: its label, value, and unit, its place in the statement, and, when sources are requested, where it came from.",
+      "remarks": "Generated from the shape the description documents under the balance sheet's <c>*</c> property and used for every statement (D-R11). <see cref=\"Source\"/>, <see cref=\"Formula\"/>, <see cref=\"XPath\"/>, and <see cref=\"DerivedFrom\"/> arrive only when the request asked for sources.",
+      "schema": { "operationId": "ListFinancials", "pointer": "results/items/financials/balance_sheet/*" },
+      "properties": {
+        "label":        { "name": "Label" },
+        "value":        { "name": "Value" },
+        "unit":         { "name": "Unit" },
+        "order":        { "name": "Order" },
+        "source":       { "name": "Source" },
+        "derived_from": { "name": "DerivedFrom" },
+        "formula":      { "name": "Formula" },
+        "xpath":        { "name": "XPath" }
+      }
     }
   },
 
@@ -1521,6 +1850,267 @@
         "free_float_percent": { "name": "freeFloatPercent" },
         "limit":              { "name": "limit" },
         "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListFilings",
+      "group": "Reference",
+      "method": "ListFilings",
+      "summary": "Retrieves SEC filings, filtered by form type, by filing and report dates, by the presence of XBRL, and by the filing company's name, CIK, ticker, and SIC code.",
+      "remarks": "Every filter is optional and defaults to no constraint. The date filters take the compact form the route reads, <c>yyyyMMdd</c>, as strings: the ISO form a <see cref=\"NodaTime.LocalDate\"/> renders is accepted by the server and silently misread, so it is not bindable here (D-R9). The company filters are the description's dotted <c>entities.company_data</c> parameters, rendered under those names; <paramref name=\"companyNameSearch\"/> is a text search where <paramref name=\"companyName\"/> is an exact match.",
+      "result": { "kind": "array", "model": "Filing", "property": "results" },
+      "parameters": {
+        "type":                              { "name": "type" },
+        "filing_date":                       { "name": "filingDate" },
+        "period_of_report_date":             { "name": "periodOfReportDate" },
+        "has_xbrl":                          { "name": "hasXbrl" },
+        "entities.company_data.name":        { "name": "companyName" },
+        "entities.company_data.cik":         { "name": "companyCik" },
+        "entities.company_data.ticker":      { "name": "companyTicker" },
+        "entities.company_data.sic":         { "name": "companySic" },
+        "entities.company_data.name.search": { "name": "companyNameSearch" },
+        "order":                             { "name": "order", "type": "SortOrder" },
+        "limit":                             { "name": "limit" },
+        "sort":                              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetFiling",
+      "group": "Reference",
+      "method": "GetFiling",
+      "summary": "Retrieves one SEC filing by its identifier.",
+      "remarks": "<paramref name=\"filingId\"/> is the accession number, as <see cref=\"Filing.Id\"/> reports it. The description does not flag the path parameter required; the generator reads every path parameter as required, since a segment cannot be left out of a route (D-R3). A filing the service does not know answers 404, which surfaces as a <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "Filing", "property": "results" },
+      "parameters": {
+        "filing_id": { "name": "filingId" }
+      }
+    },
+    {
+      "operationId": "ListFilingFiles",
+      "group": "Reference",
+      "method": "ListFilingFiles",
+      "summary": "Retrieves the files that make up one SEC filing, filtered by sequence number and file name.",
+      "remarks": "Every filter is optional and defaults to no constraint. Each row names the file's type and size, which is what a caller consults before retrieving one.",
+      "result": { "kind": "array", "model": "FilingFile", "property": "results" },
+      "parameters": {
+        "filing_id": { "name": "filingId" },
+        "sequence":  { "name": "sequence" },
+        "filename":  { "name": "filename" },
+        "order":     { "name": "order", "type": "SortOrder" },
+        "limit":     { "name": "limit" },
+        "sort":      { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetFilingFile",
+      "group": "Reference",
+      "method": "GetFilingFile",
+      "summary": "Retrieves the metadata object the description declares for one file within an SEC filing.",
+      "remarks": "Generated as the description declares it (decision D21). The service serves the file's own content at this route, <c>text/html</c> for a filing document, rather than the declared JSON object, so on 2026-09-03 this method threw a <see cref=\"MassiveApiException\"/> whose inner exception is the deserialization failure; that flips the day the service or the description moves. Use <see cref=\"DownloadFilingFileAsync\"/> to retrieve the file (decision D25).",
+      "result": { "kind": "object", "model": "FilingFile" },
+      "parameters": {
+        "filing_id": { "name": "filingId" },
+        "file_id":   { "name": "fileId" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_10-K_vX_sections",
+      "group": "Reference",
+      "method": "List10KSections",
+      "summary": "Retrieves standardized sections of 10-K filings, filtered by filer, section, filing date, and period end.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"section\"/> takes the identifiers the description names, <c>business</c> and <c>risk_factors</c>, singly or as a set. The date filters are bare strings in the description whose prose says <c>YYYY-MM-DD</c>, so they bind <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "TenKSection", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "section":     { "name": "section" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "period_end":  { "name": "periodEnd", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_10-K_vX_0_sections",
+      "group": "Reference",
+      "method": "List10KSectionsVx0",
+      "summary": "Retrieves standardized sections of 10-K filings from the vX_0 revision of the route, filtered by filer, section, filing date, and period end.",
+      "remarks": "The description declares this <c>vX_0</c> revision beside the <c>vX</c> one, and the service answered a plain-text 404 for it on 2026-09-03; it stays mapped as declared (decision D21) and carries its version segment in its name because the <c>vX</c> revision is the served one (decision D26). The segment marks it experimental (decision D23); opt in with <c>MASSIVE0001</c>. The parameters and the payload are those of the <c>vX</c> revision.",
+      "result": { "kind": "array", "model": "TenKSection", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "section":     { "name": "section" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "period_end":  { "name": "periodEnd", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_8-K_vX_disclosures",
+      "group": "Reference",
+      "method": "List8KDisclosures",
+      "summary": "Retrieves classified disclosures from 8-K filings, filtered by filer, ticker, filing date, and the most specific category.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"tickers\"/> filters an array field: pass a plain value for rows that contain it, or an <see cref=\"ArrayFilter\"/> factory for any or all of several. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9). <paramref name=\"tertiaryCategory\"/> is an exact match against the disclosure taxonomy.",
+      "result": { "kind": "array", "model": "EightKDisclosure", "property": "results" },
+      "parameters": {
+        "cik":               { "name": "cik" },
+        "tickers":           { "name": "tickers" },
+        "filing_date":       { "name": "filingDate", "type": "LocalDate" },
+        "tertiary_category": { "name": "tertiaryCategory" },
+        "limit":             { "name": "limit" },
+        "sort":              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_8-K_vX_text",
+      "group": "Reference",
+      "method": "List8KText",
+      "summary": "Retrieves the item text of 8-K filings, filtered by filer, form type, and filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "EightKText", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "form_type":   { "name": "formType" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_13-F",
+      "group": "Reference",
+      "method": "List13FHoldings",
+      "summary": "Retrieves the holdings reported on 13-F filings, filtered by the filing institution and the filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filerCik\"/> is the institution's CIK, singly or as a set. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "ThirteenFHolding", "property": "results" },
+      "parameters": {
+        "filer_cik":   { "name": "filerCik" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_form-3",
+      "group": "Reference",
+      "method": "ListForm3Filings",
+      "summary": "Retrieves initial statements of beneficial ownership, form 3, filtered by issuer, reporting owner, ticker, form type, and filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"tickers\"/> filters an array field: pass a plain value for rows that contain it, or an <see cref=\"ArrayFilter\"/> factory for any or all of several. <paramref name=\"formType\"/> is <c>3</c> or <c>3/A</c>. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "Form3Filing", "property": "results" },
+      "parameters": {
+        "issuer_cik":  { "name": "issuerCik" },
+        "owner_cik":   { "name": "ownerCik" },
+        "tickers":     { "name": "tickers" },
+        "form_type":   { "name": "formType" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_form-4",
+      "group": "Reference",
+      "method": "ListForm4Filings",
+      "summary": "Retrieves statements of changes in beneficial ownership, form 4, filtered by issuer, reporting owner, ticker, form type, filing date, and transaction code.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"tickers\"/> filters an array field: pass a plain value for rows that contain it, or an <see cref=\"ArrayFilter\"/> factory for any or all of several. <paramref name=\"formType\"/> is <c>4</c> or <c>4/A</c>; <paramref name=\"transactionCode\"/> is the SEC's one-letter code, such as <c>P</c> for a purchase or <c>S</c> for a sale. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "Form4Filing", "property": "results" },
+      "parameters": {
+        "issuer_cik":       { "name": "issuerCik" },
+        "owner_cik":        { "name": "ownerCik" },
+        "tickers":          { "name": "tickers" },
+        "form_type":        { "name": "formType" },
+        "filing_date":      { "name": "filingDate", "type": "LocalDate" },
+        "transaction_code": { "name": "transactionCode" },
+        "limit":            { "name": "limit" },
+        "sort":             { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_index",
+      "group": "Reference",
+      "method": "ListFilingIndex",
+      "summary": "Retrieves the index of SEC filings, filtered by filer, form type, and filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "FilingIndexEntry", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "form_type":   { "name": "formType" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_risk-factors",
+      "group": "Reference",
+      "method": "ListRiskFactors",
+      "summary": "Retrieves classified risk factors from filings, filtered by filing date and filer.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9); it carries the full comparator set, so a set of dates is accepted too.",
+      "result": { "kind": "array", "model": "RiskFactor", "property": "results" },
+      "parameters": {
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "ticker":      { "name": "ticker" },
+        "cik":         { "name": "cik" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_taxonomies_vX_disclosures",
+      "group": "Reference",
+      "method": "ListDisclosureTaxonomy",
+      "summary": "Retrieves the disclosure taxonomy: the categories 8-K disclosures are classified into, filtered by version and by level.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"taxonomy\"/> is the version, a string such as <c>1.0</c> on this route.",
+      "result": { "kind": "array", "model": "DisclosureTaxonomyEntry", "property": "results" },
+      "parameters": {
+        "taxonomy":           { "name": "taxonomy" },
+        "primary_category":   { "name": "primaryCategory" },
+        "secondary_category": { "name": "secondaryCategory" },
+        "tertiary_category":  { "name": "tertiaryCategory" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_taxonomies_vX_risk-factors",
+      "group": "Reference",
+      "method": "ListRiskFactorTaxonomy",
+      "summary": "Retrieves the risk-factor taxonomy: the categories risk factors are classified into, filtered by version and by level.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"taxonomy\"/> is the version, a number on this route where the disclosure taxonomy takes a string.",
+      "result": { "kind": "array", "model": "RiskFactorTaxonomyEntry", "property": "results" },
+      "parameters": {
+        "taxonomy":           { "name": "taxonomy" },
+        "primary_category":   { "name": "primaryCategory" },
+        "secondary_category": { "name": "secondaryCategory" },
+        "tertiary_category":  { "name": "tertiaryCategory" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListFinancials",
+      "group": "Reference",
+      "method": "ListFinancials",
+      "summary": "Retrieves financial statements derived from SEC filings, filtered by company, by filing and report dates, and by timeframe.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"timeframe\"/> is <c>annual</c>, <c>quarterly</c>, or <c>ttm</c>. <paramref name=\"includeSources\"/> asks for the <see cref=\"FinancialDataPoint.XPath\"/> and <see cref=\"FinancialDataPoint.Formula\"/> of every data point. <paramref name=\"companyNameSearch\"/> is a text search where <paramref name=\"companyName\"/> is an exact match; both render under the description's wire names.",
+      "result": { "kind": "array", "model": "FinancialReport", "property": "results" },
+      "parameters": {
+        "ticker":                { "name": "ticker" },
+        "cik":                   { "name": "cik" },
+        "company_name":          { "name": "companyName" },
+        "sic":                   { "name": "sic" },
+        "filing_date":           { "name": "filingDate" },
+        "period_of_report_date": { "name": "periodOfReportDate" },
+        "timeframe":             { "name": "timeframe" },
+        "include_sources":       { "name": "includeSources" },
+        "company_name.search":   { "name": "companyNameSearch" },
+        "order":                 { "name": "order", "type": "SortOrder" },
+        "limit":                 { "name": "limit" },
+        "sort":                  { "name": "sort" }
       }
     }
   ]

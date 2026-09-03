@@ -245,6 +245,12 @@ exchanges, and ticker types. The filing file is a document, not JSON, and gets n
 offline test stubs an HTML body. The other five are captured live with the local key during the
 plan, reviewed for account identifiers and embedded keys, and committed with a doc comment naming
 the capture date. Every other fixture is the published example, departing only as D-R10 says.
+One further departure: the risk-factor taxonomy example spells `taxonomy` as the string `"1.0"`
+where the schema declares a required number and the live wire (2026-09-03) sends `1.0`; the
+fixture follows the schema and the wire, commented.
+The financials example omits `timeframe`, which the description marks required and the live wire
+sends, so the fixture supplies it: a required property that never arrives fails deserialization
+outright.
 
 ### D-R13 · The live tier pins what fixtures cannot, then touches everything once
 
@@ -394,7 +400,7 @@ tests/MassiveDotNet.CodeGen.Tests/                     oneOf unwrap and refusal;
 tests/MassiveDotNet.Rest.Tests/                        fixtures, rendering, deserialization, traversal; ContractTypeTests; CoverageBaseline 40
 tests/MassiveDotNet.IntegrationTests/                  one class per family; the D-R13 pins
 samples/MassiveDotNet.AotSmokeTest/Program.cs          market status body; tickers with a MarketType; a contract with a ContractType
-CLAUDE.md                                              D24, D25 (see Bookkeeping); Conventions
+CLAUDE.md                                              D24, D26 (see Bookkeeping); Conventions
 ```
 
 Plan B:
@@ -409,7 +415,7 @@ tests/MassiveDotNet.CodeGen.Tests/                     path requiredness; verbat
 tests/MassiveDotNet.Rest.Tests/                        fixtures, rendering, deserialization, traversal, download; CoverageBaseline 56
 tests/MassiveDotNet.IntegrationTests/                  one class per family; the D-R13 pins
 samples/MassiveDotNet.AotSmokeTest/Program.cs          financials with a data point dictionary; a download into a MemoryStream
-CLAUDE.md                                              D26 (see Bookkeeping); the generator constraint on path parameters
+CLAUDE.md                                              D25 (see Bookkeeping); the generator constraint on path parameters
 ```
 
 ## Testing
