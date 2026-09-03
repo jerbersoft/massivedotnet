@@ -153,6 +153,49 @@ public sealed class ParameterBindingTests
     }
 
     [Fact]
+    public void ATypedParameterDropsTheWireFormatSentence()
+    {
+        string spec = Document("""[ { "name": "date", "in": "query", "description": "The trading date. Value must be formatted 'yyyy-mm-dd'.", "schema": { "type": "string", "format": "date" } } ]""");
+
+        string group = Harness.Generate(spec, MapDocument())["ReferenceGroup.g.cs"];
+
+        Assert.Contains("LocalDate? date = null", group, StringComparison.Ordinal);
+        Assert.Contains("The trading date.", group, StringComparison.Ordinal);
+        Assert.DoesNotContain("Value must be", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStringParameterKeepsTheWireFormatSentence()
+    {
+        // Only a type that states the format earns the drop; a string passes the caller's text
+        // through, so the description's own constraint is all the caller has.
+        string spec = Document("""[ { "name": "code", "in": "query", "description": "The code. Value must be an integer.", "schema": { "type": "string" } } ]""");
+
+        string group = Harness.Generate(spec, MapDocument())["ReferenceGroup.g.cs"];
+
+        Assert.Contains("The code. Value must be an integer.", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFilterDropsTheWireFormatSentenceBeforeAddingItsOwn()
+    {
+        string spec = Document("""
+            [
+              { "name": "ex_dividend_date",     "in": "query", "description": "The ex-dividend date. Value must be formatted 'yyyy-mm-dd'.", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.gt",  "in": "query", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.gte", "in": "query", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.lt",  "in": "query", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.lte", "in": "query", "schema": { "type": "string", "format": "date" } }
+            ]
+            """);
+
+        string group = Harness.Generate(spec, MapDocument())["ReferenceGroup.g.cs"];
+
+        Assert.Contains("RangeFilter<LocalDate>? ex_dividend_date = null", group, StringComparison.Ordinal);
+        Assert.Contains("The ex-dividend date. Accepts an exact value or a range.", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ADateOrNanosecondsComparatorGroupBindsARangeFilter()
     {
         string spec = Document("""

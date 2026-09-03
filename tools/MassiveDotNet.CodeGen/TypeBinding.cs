@@ -22,6 +22,13 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
     public string QueryExpression(string identifier) =>
         WireConversion is null ? identifier : $"{identifier}?.{WireConversion}";
 
+    /// <summary>
+    /// Whether the type states the wire format on its own, so a description sentence restating it
+    /// is dropped (#35). Only a string, alone or as a filter's element, passes the caller's text
+    /// through and keeps the sentence.
+    /// </summary>
+    public bool StatesWireFormat => !CSharpType.Contains("string", StringComparison.Ordinal);
+
     /// <summary>Resolves the binding for a parameter, honouring a map-supplied override.</summary>
     /// <param name="mapType">The map row's <c>type</c>, or <see langword="null"/> to derive one.</param>
     /// <param name="schema">The parameter's schema.</param>

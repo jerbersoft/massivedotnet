@@ -23,8 +23,26 @@ internal static partial class Prose
         return string.Join(' ', stripped.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
+    /// <summary>
+    /// Drops the trailing sentence with which the description names a parameter's wire format,
+    /// restoring the period that sentence sometimes stands in for. Applied only where the .NET
+    /// type states the format itself, so the prose stops reading as if a string were passed (#35).
+    /// </summary>
+    /// <remarks>
+    /// Enumerated rather than general: the description uses exactly these five sentences, always
+    /// last, and twice runs the preceding sentence into them with no period. Anything else,
+    /// including a description that is only the sentence, is left alone.
+    /// </remarks>
+    public static string WithoutWireFormat(string description) =>
+        WireFormatSentence().Replace(description, ".");
+
     [GeneratedRegex("<[^>]+>")]
     private static partial Regex HtmlTag();
+
+    [GeneratedRegex(
+        @"(?<=\S)\.?\s+Value must be (?:formatted 'yyyy-mm-dd'|a floating point number|an integer"
+        + @"(?: timestamp in (?:nano)?seconds, formatted 'yyyy-mm-dd', or ISO 8601/RFC 3339 \(e\.g\. '[^']*'\))?)\.?$")]
+    private static partial Regex WireFormatSentence();
 
     [GeneratedRegex("`([^`]*)`")]
     private static partial Regex Backtick();
