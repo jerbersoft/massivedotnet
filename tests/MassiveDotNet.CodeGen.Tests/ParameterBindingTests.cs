@@ -127,6 +127,32 @@ public sealed class ParameterBindingTests
     }
 
     [Fact]
+    public void AnEnumMemberTheCoreEnumLacksIsRefused()
+    {
+        string spec = Document("""[ { "name": "order", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc", "random"] } } ]""");
+
+        string message = Harness.Refusal(spec, MapDocument("""{ "order": { "type": "SortOrder" } }"""));
+
+        Assert.Contains("Operation 'ListThings'", message, StringComparison.Ordinal);
+        Assert.Contains("parameter 'order' declares [random]", message, StringComparison.Ordinal);
+        Assert.Contains("SortOrder", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACoreEnumMayCoverMoreThanTheOperationDeclares()
+    {
+        // The indicators omit `second` from timespan and deliberately reuse AggregateTimespan
+        // (D-S7): the check runs one way, so a member the operation does not accept is the
+        // server's to reject, not generation's to refuse. This passed before the check existed
+        // and is here so the direction cannot be widened silently.
+        string spec = Document("""[ { "name": "timespan", "in": "query", "schema": { "type": "string", "enum": ["minute", "hour", "day"] } } ]""");
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument("""{ "timespan": { "type": "AggregateTimespan" } }"""));
+
+        Assert.Contains("AggregateTimespan? timespan = null", files["ReferenceGroup.g.cs"], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ADateOrNanosecondsComparatorGroupBindsARangeFilter()
     {
         string spec = Document("""
