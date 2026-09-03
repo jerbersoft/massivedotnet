@@ -400,7 +400,7 @@ tests/MassiveDotNet.CodeGen.Tests/                     oneOf unwrap and refusal;
 tests/MassiveDotNet.Rest.Tests/                        fixtures, rendering, deserialization, traversal; ContractTypeTests; CoverageBaseline 40
 tests/MassiveDotNet.IntegrationTests/                  one class per family; the D-R13 pins
 samples/MassiveDotNet.AotSmokeTest/Program.cs          market status body; tickers with a MarketType; a contract with a ContractType
-CLAUDE.md                                              D24, D25 (see Bookkeeping); Conventions
+CLAUDE.md                                              D24, D26 (see Bookkeeping); Conventions
 ```
 
 Plan B:
@@ -415,7 +415,7 @@ tests/MassiveDotNet.CodeGen.Tests/                     path requiredness; verbat
 tests/MassiveDotNet.Rest.Tests/                        fixtures, rendering, deserialization, traversal, download; CoverageBaseline 56
 tests/MassiveDotNet.IntegrationTests/                  one class per family; the D-R13 pins
 samples/MassiveDotNet.AotSmokeTest/Program.cs          financials with a data point dictionary; a download into a MemoryStream
-CLAUDE.md                                              D26 (see Bookkeeping); the generator constraint on path parameters
+CLAUDE.md                                              D25 (see Bookkeeping); the generator constraint on path parameters
 ```
 
 ## Testing
