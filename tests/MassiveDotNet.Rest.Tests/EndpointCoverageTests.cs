@@ -100,8 +100,8 @@ public sealed class EndpointCoverageTests
     /// Rule 2: a deprecated operation's entry points carry <see cref="ObsoleteAttribute"/> and an
     /// experimental one's carry <see cref="ExperimentalAttribute"/>, each exactly where the
     /// description says so. The signals are read here the way the generator reads them (D18):
-    /// <c>x-polygon-deprecation</c>, and a <c>vX</c> or <c>dev</c> route segment or
-    /// <c>x-polygon-experimental</c> (D22).
+    /// <c>x-polygon-deprecation</c>, and a <c>vX</c>-prefixed or <c>dev</c> route segment or
+    /// <c>x-polygon-experimental</c> (D22, D23).
     /// A spec sync that deprecates a mapped operation therefore fails this test until the code
     /// is regenerated, and a hand-written partial cannot mark a stable operation by mistake.
     /// </summary>
@@ -135,7 +135,7 @@ public sealed class EndpointCoverageTests
 
             bool deprecated = operation.TryGetProperty("x-polygon-deprecation", out _);
             bool experimental = operation.TryGetProperty("x-polygon-experimental", out _)
-                || path.Split('/').Any(segment => segment is "vX" or "dev");
+                || path.Split('/').Any(segment => segment.StartsWith("vX", StringComparison.Ordinal) || segment is "dev");
 
             // The Enumerate sibling exists only for paginated List methods; asking for it by name
             // and taking whichever entry points exist keeps this independent of pagination.
