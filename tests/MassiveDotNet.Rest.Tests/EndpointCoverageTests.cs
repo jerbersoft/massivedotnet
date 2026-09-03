@@ -14,7 +14,10 @@ public sealed class EndpointCoverageTests
 {
     /// <summary>
     /// The number of operations mapped so far. This may only ever increase: raise it as
-    /// endpoints are added, and the test then prevents anyone silently dropping one.
+    /// endpoints are added, and the test then prevents anyone silently dropping one. The one
+    /// sanctioned decrease is a description-side removal (D21): the map row, the generated
+    /// methods, and this constant go in the same commit, so the drop is visible in the diff
+    /// that explains it. A live 404 is never grounds for lowering it.
     /// </summary>
     private const int CoverageBaseline = 22;
 
