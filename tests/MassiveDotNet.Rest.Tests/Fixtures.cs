@@ -1303,4 +1303,140 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /v3/reference/tickers. It carries a cursor of its own.</summary>
+    public const string ReferenceTickers = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/v3/reference/tickers?cursor=YWN0aXZlPXRydWUmZGF0ZT0yMDIxLTA0LTI1JmxpbWl0PTEmb3JkZXI9YXNjJnBhZ2VfbWFya2VyPUElN0M5YWRjMjY0ZTgyM2E1ZjBiOGUyNDc5YmZiOGE1YmYwNDVkYzU0YjgwMDcyMWE2YmI1ZjBjMjQwMjU4MjFmNGZiJnNvcnQ9dGlja2Vy",
+          "request_id": "e70013d92930de90e089dc8fa098888e",
+          "results": [
+            {
+              "active": true,
+              "cik": "0001090872",
+              "composite_figi": "BBG000BWQYZ5",
+              "currency_name": "usd",
+              "last_updated_utc": "2021-04-25T00:00:00Z",
+              "locale": "us",
+              "market": "stocks",
+              "name": "Agilent Technologies Inc.",
+              "primary_exchange": "XNYS",
+              "share_class_figi": "BBG001SCTQY4",
+              "ticker": "A",
+              "type": "CS"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// A hand-written final page in the tickers envelope's shape, with no <c>next_url</c>, so a
+    /// traversal from <see cref="ReferenceTickers"/> ends after two requests.
+    /// </summary>
+    public const string ReferenceTickersLastPage = """
+        {
+          "count": 1,
+          "request_id": "e70013d92930de90e089dc8fa098888f",
+          "results": [
+            {
+              "active": true,
+              "cik": "0000006201",
+              "composite_figi": "BBG005P7Q881",
+              "currency_name": "usd",
+              "last_updated_utc": "2021-04-25T00:00:00Z",
+              "locale": "us",
+              "market": "stocks",
+              "name": "American Airlines Group Inc.",
+              "primary_exchange": "XNAS",
+              "share_class_figi": "BBG005P7Q907",
+              "ticker": "AAL",
+              "type": "CS"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/tickers/{ticker}.</summary>
+    public const string ReferenceTickerDetails = """
+        {
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": {
+            "active": true,
+            "address": {
+              "address1": "One Apple Park Way",
+              "city": "Cupertino",
+              "postal_code": "95014",
+              "state": "CA"
+            },
+            "branding": {
+              "icon_url": "https://api.massive.com/v1/reference/company-branding/d3d3LmFwcGxlLmNvbQ/images/2022-01-10_icon.png",
+              "logo_url": "https://api.massive.com/v1/reference/company-branding/d3d3LmFwcGxlLmNvbQ/images/2022-01-10_logo.svg"
+            },
+            "cik": "0000320193",
+            "composite_figi": "BBG000B9XRY4",
+            "currency_name": "usd",
+            "description": "Apple designs a wide variety of consumer electronic devices, including smartphones (iPhone), tablets (iPad), PCs (Mac), smartwatches (Apple Watch), AirPods, and TV boxes (Apple TV), among others. The iPhone makes up the majority of Apple's total revenue. In addition, Apple offers its customers a variety of services such as Apple Music, iCloud, Apple Care, Apple TV+, Apple Arcade, Apple Card, and Apple Pay, among others. Apple's products run internally developed software and semiconductors, and the firm is well known for its integration of hardware, software and services. Apple's products are distributed online as well as through company-owned stores and third-party retailers. The company generates roughly 40% of its revenue from the Americas, with the remainder earned internationally.",
+            "homepage_url": "https://www.apple.com",
+            "list_date": "1980-12-12",
+            "locale": "us",
+            "market": "stocks",
+            "market_cap": 2771126040150,
+            "name": "Apple Inc.",
+            "phone_number": "(408) 996-1010",
+            "primary_exchange": "XNAS",
+            "round_lot": 100,
+            "share_class_figi": "BBG001S5N8V8",
+            "share_class_shares_outstanding": 16406400000,
+            "sic_code": "3571",
+            "sic_description": "ELECTRONIC COMPUTERS",
+            "ticker": "AAPL",
+            "ticker_root": "AAPL",
+            "total_employees": 154000,
+            "type": "CS",
+            "weighted_shares_outstanding": 16334371000
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v3/reference/tickers/types?asset_class=stocks&amp;locale=us, captured from the live
+    /// service on 2026-09-03 because the description publishes only a CSV example for it
+    /// (D-R12). Reviewed: it carries no account identifier and no URL embeds a key.
+    /// </summary>
+    public const string ReferenceTickerTypes = """
+        {
+          "count": 24,
+          "request_id": "b226ee899a65f4be25300c7af02eed7d",
+          "results": [
+            { "asset_class": "stocks", "code": "CS", "description": "Common Stock", "locale": "us" },
+            { "asset_class": "stocks", "code": "PFD", "description": "Preferred Stock", "locale": "us" },
+            { "asset_class": "stocks", "code": "WARRANT", "description": "Warrant", "locale": "us" },
+            { "asset_class": "stocks", "code": "RIGHT", "description": "Rights", "locale": "us" },
+            { "asset_class": "stocks", "code": "BOND", "description": "Corporate Bond", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETF", "description": "Exchange Traded Fund", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETN", "description": "Exchange Traded Note", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETV", "description": "Exchange Traded Vehicle", "locale": "us" },
+            { "asset_class": "stocks", "code": "SP", "description": "Structured Product", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRC", "description": "American Depository Receipt Common", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRP", "description": "American Depository Receipt Preferred", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRW", "description": "American Depository Receipt Warrants", "locale": "us" },
+            { "asset_class": "stocks", "code": "ADRR", "description": "American Depository Receipt Rights", "locale": "us" },
+            { "asset_class": "stocks", "code": "FUND", "description": "Fund", "locale": "us" },
+            { "asset_class": "stocks", "code": "BASKET", "description": "Basket", "locale": "us" },
+            { "asset_class": "stocks", "code": "UNIT", "description": "Unit", "locale": "us" },
+            { "asset_class": "stocks", "code": "LT", "description": "Liquidating Trust", "locale": "us" },
+            { "asset_class": "stocks", "code": "OS", "description": "Ordinary Shares", "locale": "us" },
+            { "asset_class": "stocks", "code": "GDR", "description": "Global Depository Receipts", "locale": "us" },
+            { "asset_class": "stocks", "code": "OTHER", "description": "Other Security Type", "locale": "us" },
+            { "asset_class": "stocks", "code": "NYRS", "description": "New York Registry Shares", "locale": "us" },
+            { "asset_class": "stocks", "code": "AGEN", "description": "Agency Bond", "locale": "us" },
+            { "asset_class": "stocks", "code": "EQLK", "description": "Equity Linked Bond", "locale": "us" },
+            { "asset_class": "stocks", "code": "ETS", "description": "Single-security ETF", "locale": "us" }
+          ],
+          "status": "OK"
+        }
+        """;
 }

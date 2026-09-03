@@ -49,4 +49,7 @@ namespace MassiveDotNet.Rest.Serialization;
 [JsonSerializable(typeof(GetStocksV1SplitsResponse))]
 [JsonSerializable(typeof(GetStocksV1ExchangesResponse))]
 [JsonSerializable(typeof(GetStocksDevTradesTickerResponse))]
+[JsonSerializable(typeof(ListTickersResponse))]
+[JsonSerializable(typeof(GetTickerResponse))]
+[JsonSerializable(typeof(ListTickerTypesResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

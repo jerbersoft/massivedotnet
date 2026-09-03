@@ -466,3 +466,70 @@ internal sealed class GetStocksDevTradesTickerResponse : IPagedEnvelope<DevTrade
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /v3/reference/tickers.</summary>
+internal sealed class ListTickersResponse : IPagedEnvelope<TickerSummary>
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>If present, this value can be used to fetch the next page of data.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>
+    /// An array of tickers that match your query. Note: Although you can query by CUSIP, due to legal
+    /// reasons we do not return the CUSIP in the response.
+    /// </summary>
+    [JsonPropertyName("results")]
+    public TickerSummary[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/tickers/{ticker}.</summary>
+internal sealed class GetTickerResponse
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Ticker with details.</summary>
+    [JsonPropertyName("results")]
+    public TickerDetails? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v3/reference/tickers/types.</summary>
+internal sealed class ListTickerTypesResponse
+{
+    /// <summary>The total number of results for this request.</summary>
+    [JsonPropertyName("count")]
+    public int? Count { get; init; }
+
+    /// <summary>A request ID assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public TickerType[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

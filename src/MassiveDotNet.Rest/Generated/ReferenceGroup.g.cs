@@ -10,6 +10,7 @@
 // nullable context, so it is re-enabled explicitly here.
 #nullable enable
 
+using System.Net;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
 using MassiveDotNet.Rest.Serialization;
@@ -149,5 +150,297 @@ public readonly partial struct ReferenceGroup
             .ConfigureAwait(false);
 
         return response ?? [];
+    }
+
+    /// <summary>
+    /// Retrieves the tickers the platform supports across every asset class, with each one's name,
+    /// market, and identifiers, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListTickersAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes each
+    /// page rather than the traversal, so lowering it issues more requests rather than returning fewer
+    /// items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults to no
+    /// constraint. <paramref name="ticker"/> takes a plain symbol or a lexical range; <paramref
+    /// name="market"/> is a <see cref="MarketType"/>; <paramref name="type"/> takes a code from <see
+    /// cref="ListTickerTypesAsync"/>, whose set that operation owns. <paramref name="date"/> asks for
+    /// the tickers as they stood on a calendar date.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a ticker symbol. Defaults to empty string which queries all tickers. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="type">
+    /// Specify the type of the tickers. Find the types that we support via our [Ticker Types
+    /// API](https://massive.com/docs/rest/stocks/tickers/ticker-types). Defaults to empty string which
+    /// queries all types.
+    /// </param>
+    /// <param name="market">Filter by market type. By default all markets are included.</param>
+    /// <param name="exchange">
+    /// Specify the asset's primary exchange Market Identifier Code (MIC) according to [ISO
+    /// 10383](https://www.iso20022.org/market-identifier-codes). Defaults to empty string which queries
+    /// all exchanges.
+    /// </param>
+    /// <param name="cusip">
+    /// Specify the CUSIP code of the asset you want to search for. Find more information about CUSIP
+    /// codes [at their website](https://www.cusip.com/identifiers.html#/CUSIP). Defaults to empty
+    /// string which queries all CUSIPs. Note: Although you can query by CUSIP, due to legal reasons we
+    /// do not return the CUSIP in the response.
+    /// </param>
+    /// <param name="cik">
+    /// Specify the CIK of the asset you want to search for. Find more information about CIK codes [at
+    /// their website](https://www.sec.gov/edgar/searchedgar/cik.htm). Defaults to empty string which
+    /// queries all CIKs.
+    /// </param>
+    /// <param name="date">
+    /// Specify a point in time to retrieve tickers available on that date. Defaults to the most recent
+    /// available date.
+    /// </param>
+    /// <param name="search">Search for terms within the ticker and/or company name.</param>
+    /// <param name="active">Specify if the tickers returned should be actively traded on the queried date. Default is true.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 100 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<TickerSummary> EnumerateTickersAsync(
+        RangeFilter<string>? ticker = null,
+        string? type = null,
+        MarketType? market = null,
+        string? exchange = null,
+        string? cusip = null,
+        string? cik = null,
+        LocalDate? date = null,
+        string? search = null,
+        bool? active = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListTickersUri(ticker, type, market, exchange, cusip, cik, date, search, active, order, limit, sort);
+        return _transport.EnumerateAsync<ListTickersResponse, TickerSummary>(
+            requestUri, MassiveRestJsonContext.Default.ListTickersResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the tickers the platform supports across every asset class, with each one's name,
+    /// market, and identifiers.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateTickersAsync"/> to walk every page without
+    /// handling cursors yourself. Every filter is optional and defaults to no constraint. <paramref
+    /// name="ticker"/> takes a plain symbol or a lexical range; <paramref name="market"/> is a <see
+    /// cref="MarketType"/>; <paramref name="type"/> takes a code from <see
+    /// cref="ListTickerTypesAsync"/>, whose set that operation owns. <paramref name="date"/> asks for
+    /// the tickers as they stood on a calendar date.
+    /// </remarks>
+    /// <param name="ticker">
+    /// Specify a ticker symbol. Defaults to empty string which queries all tickers. Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="type">
+    /// Specify the type of the tickers. Find the types that we support via our [Ticker Types
+    /// API](https://massive.com/docs/rest/stocks/tickers/ticker-types). Defaults to empty string which
+    /// queries all types.
+    /// </param>
+    /// <param name="market">Filter by market type. By default all markets are included.</param>
+    /// <param name="exchange">
+    /// Specify the asset's primary exchange Market Identifier Code (MIC) according to [ISO
+    /// 10383](https://www.iso20022.org/market-identifier-codes). Defaults to empty string which queries
+    /// all exchanges.
+    /// </param>
+    /// <param name="cusip">
+    /// Specify the CUSIP code of the asset you want to search for. Find more information about CUSIP
+    /// codes [at their website](https://www.cusip.com/identifiers.html#/CUSIP). Defaults to empty
+    /// string which queries all CUSIPs. Note: Although you can query by CUSIP, due to legal reasons we
+    /// do not return the CUSIP in the response.
+    /// </param>
+    /// <param name="cik">
+    /// Specify the CIK of the asset you want to search for. Find more information about CIK codes [at
+    /// their website](https://www.sec.gov/edgar/searchedgar/cik.htm). Defaults to empty string which
+    /// queries all CIKs.
+    /// </param>
+    /// <param name="date">
+    /// Specify a point in time to retrieve tickers available on that date. Defaults to the most recent
+    /// available date.
+    /// </param>
+    /// <param name="search">Search for terms within the ticker and/or company name.</param>
+    /// <param name="active">Specify if the tickers returned should be actively traded on the queried date. Default is true.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 100 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<TickerSummary>> ListTickersAsync(
+        RangeFilter<string>? ticker = null,
+        string? type = null,
+        MarketType? market = null,
+        string? exchange = null,
+        string? cusip = null,
+        string? cik = null,
+        LocalDate? date = null,
+        string? search = null,
+        bool? active = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListTickersUri(ticker, type, market, exchange, cusip, cik, date, search, active, order, limit, sort);
+        return SendListTickersAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListTickersUri(
+        RangeFilter<string>? ticker,
+        string? type,
+        MarketType? market,
+        string? exchange,
+        string? cusip,
+        string? cik,
+        LocalDate? date,
+        string? search,
+        bool? active,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/tickers");
+
+        builder.AppendQuery("ticker", ticker);
+        builder.AppendQuery("type", type);
+        builder.AppendQuery("market", market?.ToWireValue());
+        builder.AppendQuery("exchange", exchange);
+        builder.AppendQuery("cusip", cusip);
+        builder.AppendQuery("cik", cik);
+        builder.AppendQuery("date", date?.ToWireValue());
+        builder.AppendQuery("search", search);
+        builder.AppendQuery("active", active);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<TickerSummary>> SendListTickersAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListTickersResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListTickersResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<TickerSummary>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the details of one ticker: its identity, the company's profile, address, and branding,
+    /// and its share counts.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="date"/> asks for the ticker as it stood on a calendar date; the default is the
+    /// most recent. A ticker the service does not know answers 404, which surfaces as a <see
+    /// cref="MassiveApiException"/>.
+    /// </remarks>
+    /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
+    /// <param name="date">
+    /// Specify a point in time to get information about the ticker available on that date. When
+    /// retrieving information from SEC filings, we compare this date with the period of report date on
+    /// the SEC filing. For example, consider an SEC filing submitted by AAPL on 2019-07-31, with a
+    /// period of report date ending on 2019-06-29. That means that the filing was submitted on
+    /// 2019-07-31, but the filing was created based on information from 2019-06-29. If you were to
+    /// query for AAPL details on 2019-06-29, the ticker details would include information from the SEC
+    /// filing. Defaults to the most recent available date.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<TickerDetails> GetTickerAsync(
+        string ticker,
+        LocalDate? date = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildGetTickerUri(ticker, date);
+        return SendGetTickerAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetTickerUri(
+        string ticker,
+        LocalDate? date)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/tickers/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("date", date?.ToWireValue());
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerDetails> SendGetTickerAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetTickerResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetTickerResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>Retrieves the ticker types the platform recognises, optionally for one asset class and locale.</summary>
+    /// <remarks>
+    /// The list is short and does not page. Its codes are what <see cref="ListTickersAsync"/> accepts
+    /// for its <c>type</c> parameter.
+    /// </remarks>
+    /// <param name="assetClass">Filter by asset class.</param>
+    /// <param name="locale">Filter by locale.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<TickerType[]> ListTickerTypesAsync(
+        MarketType? assetClass = null,
+        string? locale = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListTickerTypesUri(assetClass, locale);
+        return SendListTickerTypesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListTickerTypesUri(
+        MarketType? assetClass,
+        string? locale)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/tickers/types");
+
+        builder.AppendQuery("asset_class", assetClass?.ToWireValue());
+        builder.AppendQuery("locale", locale);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerType[]> SendListTickerTypesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListTickerTypesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListTickerTypesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
     }
 }

@@ -523,6 +523,99 @@
         "correction":            { "name": "CorrectionIndicator" },
         "tape":                  { "name": "Tape" }
       }
+    },
+
+    "TickerSummary": {
+      "summary": "One row of the ticker list: the symbol, its name, market, locale, and primary exchange, and the identifiers that tie it to other reference data.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4), and the model the constitution's own example names. <see cref=\"TickerDetails\"/> is the same identity with the company profile added; the two are separate models because the details carry twelve properties the list does not (decision D16). Both timestamps are RFC 3339 strings read by the <see cref=\"NodaTime.Instant\"/> converter.",
+      "schema": { "operationId": "ListTickers", "pointer": "results/items" },
+      "properties": {
+        "ticker":               { "name": "Ticker" },
+        "name":                 { "name": "Name" },
+        "market":               { "name": "Market" },
+        "locale":               { "name": "Locale" },
+        "primary_exchange":     { "name": "PrimaryExchange" },
+        "type":                 { "name": "Type" },
+        "active":               { "name": "IsActive" },
+        "currency_symbol":      { "name": "CurrencySymbol" },
+        "currency_name":        { "name": "CurrencyName" },
+        "base_currency_symbol": { "name": "BaseCurrencySymbol" },
+        "base_currency_name":   { "name": "BaseCurrencyName" },
+        "cik":                  { "name": "Cik" },
+        "composite_figi":       { "name": "CompositeFigi" },
+        "share_class_figi":     { "name": "ShareClassFigi" },
+        "last_updated_utc":     { "name": "LastUpdatedUtc" },
+        "delisted_utc":         { "name": "DelistedUtc" }
+      }
+    },
+
+    "TickerDetails": {
+      "summary": "Everything the platform knows about one ticker: its identity, the company's profile and address, its branding, and its share counts.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"ListDate\"/> is a calendar date the description types as a bare string; the map binds it to <see cref=\"NodaTime.LocalDate\"/> because the published example shows the ISO form (D-R9). The share counts and <see cref=\"TotalEmployees\"/> are doubles because the description declares them numbers; safety over ergonomics is the design goals' order.",
+      "schema": { "operationId": "GetTicker", "pointer": "results" },
+      "properties": {
+        "ticker":                         { "name": "Ticker" },
+        "name":                           { "name": "Name" },
+        "market":                         { "name": "Market" },
+        "locale":                         { "name": "Locale" },
+        "primary_exchange":               { "name": "PrimaryExchange" },
+        "type":                           { "name": "Type" },
+        "active":                         { "name": "IsActive" },
+        "currency_name":                  { "name": "CurrencyName" },
+        "cik":                            { "name": "Cik" },
+        "composite_figi":                 { "name": "CompositeFigi" },
+        "share_class_figi":               { "name": "ShareClassFigi" },
+        "market_cap":                     { "name": "MarketCap" },
+        "phone_number":                   { "name": "PhoneNumber" },
+        "address":                        { "name": "Address", "model": "CompanyAddress" },
+        "description":                    { "name": "Description" },
+        "sic_code":                       { "name": "SicCode" },
+        "sic_description":                { "name": "SicDescription" },
+        "ticker_root":                    { "name": "TickerRoot" },
+        "ticker_suffix":                  { "name": "TickerSuffix" },
+        "homepage_url":                   { "name": "HomepageUrl" },
+        "total_employees":                { "name": "TotalEmployees" },
+        "list_date":                      { "name": "ListDate", "type": "LocalDate?", "summary": "The date the ticker was first listed. The description types this a bare string; the published example carries an ISO calendar date (D-R9)." },
+        "branding":                       { "name": "Branding", "model": "Branding" },
+        "share_class_shares_outstanding": { "name": "ShareClassSharesOutstanding" },
+        "weighted_shares_outstanding":    { "name": "WeightedSharesOutstanding" },
+        "round_lot":                      { "name": "RoundLot" },
+        "delisted_utc":                   { "name": "DelistedUtc" }
+      }
+    },
+
+    "CompanyAddress": {
+      "summary": "A company's headquarters address, as the ticker details report it.",
+      "schema": { "operationId": "GetTicker", "pointer": "results/address" },
+      "properties": {
+        "address1":    { "name": "Address1" },
+        "address2":    { "name": "Address2" },
+        "city":        { "name": "City" },
+        "state":       { "name": "State" },
+        "postal_code": { "name": "PostalCode" }
+      }
+    },
+
+    "Branding": {
+      "summary": "The URLs of a company's logo and icon, as the ticker details report them.",
+      "remarks": "The URLs point at a branding route that requires the same API key as every other request; the SDK does not fetch them.",
+      "schema": { "operationId": "GetTicker", "pointer": "results/branding" },
+      "properties": {
+        "logo_url": { "name": "LogoUrl" },
+        "icon_url": { "name": "IconUrl" }
+      }
+    },
+
+    "TickerType": {
+      "summary": "One ticker type the platform recognises: its code, a description, and the asset class and locale it applies to.",
+      "remarks": "The codes are what the tickers list's <c>type</c> parameter accepts, which is why that parameter is a string rather than an enum (D-R6): this operation owns the set.",
+      "schema": { "operationId": "ListTickerTypes", "pointer": "results/items" },
+      "properties": {
+        "code":        { "name": "Code" },
+        "description": { "name": "Description" },
+        "asset_class": { "name": "AssetClass" },
+        "locale":      { "name": "Locale" }
+      }
     }
   },
 
@@ -856,6 +949,52 @@
         "sip_timestamp": { "name": "sipTimestamp", "type": "DateOrNanoseconds" },
         "limit":         { "name": "limit" },
         "sort":          { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListTickers",
+      "group": "Reference",
+      "method": "ListTickers",
+      "summary": "Retrieves the tickers the platform supports across every asset class, with each one's name, market, and identifiers.",
+      "remarks": "Every filter is optional and defaults to no constraint. <paramref name=\"ticker\"/> takes a plain symbol or a lexical range; <paramref name=\"market\"/> is a <see cref=\"MarketType\"/>; <paramref name=\"type\"/> takes a code from <see cref=\"ListTickerTypesAsync\"/>, whose set that operation owns. <paramref name=\"date\"/> asks for the tickers as they stood on a calendar date.",
+      "result": { "kind": "array", "model": "TickerSummary", "property": "results" },
+      "parameters": {
+        "ticker":   { "name": "ticker" },
+        "type":     { "name": "type" },
+        "market":   { "name": "market", "type": "MarketType" },
+        "exchange": { "name": "exchange" },
+        "cusip":    { "name": "cusip" },
+        "cik":      { "name": "cik" },
+        "date":     { "name": "date" },
+        "search":   { "name": "search" },
+        "active":   { "name": "active" },
+        "order":    { "name": "order", "type": "SortOrder" },
+        "limit":    { "name": "limit" },
+        "sort":     { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "GetTicker",
+      "group": "Reference",
+      "method": "GetTicker",
+      "summary": "Retrieves the details of one ticker: its identity, the company's profile, address, and branding, and its share counts.",
+      "remarks": "<paramref name=\"date\"/> asks for the ticker as it stood on a calendar date; the default is the most recent. A ticker the service does not know answers 404, which surfaces as a <see cref=\"MassiveApiException\"/>.",
+      "result": { "kind": "object", "model": "TickerDetails", "property": "results" },
+      "parameters": {
+        "ticker": { "name": "ticker" },
+        "date":   { "name": "date" }
+      }
+    },
+    {
+      "operationId": "ListTickerTypes",
+      "group": "Reference",
+      "method": "ListTickerTypes",
+      "summary": "Retrieves the ticker types the platform recognises, optionally for one asset class and locale.",
+      "remarks": "The list is short and does not page. Its codes are what <see cref=\"ListTickersAsync\"/> accepts for its <c>type</c> parameter.",
+      "result": { "kind": "array", "model": "TickerType", "property": "results" },
+      "parameters": {
+        "asset_class": { "name": "assetClass", "type": "MarketType" },
+        "locale":      { "name": "locale" }
       }
     }
   ]
