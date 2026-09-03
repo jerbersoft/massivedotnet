@@ -119,6 +119,33 @@ public sealed class ModelBindingTests
         """;
 
     [Fact]
+    public void PropertiesFollowTheMapsDeclarationOrder()
+    {
+        // The description stores properties alphabetically; the map's order keeps related fields
+        // together (OHLCV). Rows the map does not declare follow, in the description's order.
+        string spec = Document("""
+            { "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } } }
+            """);
+
+        string thing = Thing(Harness.Generate(spec, MapDocument("""{ "c": { "name": "Third" }, "a": { "name": "First" } }""")));
+
+        int c = thing.IndexOf("[JsonPropertyName(\"c\")]", StringComparison.Ordinal);
+        int a = thing.IndexOf("[JsonPropertyName(\"a\")]", StringComparison.Ordinal);
+        int b = thing.IndexOf("[JsonPropertyName(\"b\")]", StringComparison.Ordinal);
+        Assert.True(c >= 0 && c < a && a < b, $"expected c, a, b; found offsets {c}, {a}, {b}");
+    }
+
+    [Fact]
+    public void ADuplicatePropertyRowIsRefused()
+    {
+        string message = Harness.Refusal(
+            Document("""{ "type": "object", "properties": { "a": { "type": "string" } } }"""),
+            MapDocument("""{ "a": { "name": "One" }, "a": { "name": "Two" } }"""));
+
+        Assert.Contains("Model 'Thing' declares a row for 'a' more than once", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUnboundObjectPropertyNamesTheRowToAdd()
     {
         string message = Harness.Refusal(Document(Article("\"publisher\"")), MapDocument());

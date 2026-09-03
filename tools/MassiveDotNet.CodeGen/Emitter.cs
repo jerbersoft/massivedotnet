@@ -63,14 +63,14 @@ internal sealed class Emitter(Spec spec, Map map)
         JsonElement schema = Spec.Navigate(Spec.SuccessSchema(operation), model.SchemaPointer);
 
         // Order by the map's declaration so related fields stay together (OHLCV rather than
-        // the alphabetical order the OpenAPI document happens to store them in).
-        List<string> declared = [.. model.Properties.Keys];
+        // the alphabetical order the OpenAPI document happens to store them in). Undeclared
+        // properties follow in the description's order; OrderBy is stable.
         List<SpecProperty> properties = [.. Spec.Properties(schema)
-            .OrderBy(p => declared.IndexOf(p.Name) is var i and >= 0 ? i : int.MaxValue)];
+            .OrderBy(p => model.Properties.FindIndex(row => row.WireName == p.Name) is var i and >= 0 ? i : int.MaxValue)];
 
         List<(SpecProperty Property, string Name, string Type, string? Summary)> members = [.. properties.Select(property =>
         {
-            model.Properties.TryGetValue(property.Name, out MapProperty? mapped);
+            MapProperty? mapped = model.Property(property.Name);
 
             return (
                 property,
@@ -884,7 +884,7 @@ internal sealed class Emitter(Spec spec, Map map)
                 + "are objects with a model of their own.");
         }
 
-        if (!model.Properties.TryGetValue(items, out MapProperty? row) || row.Model is not { } itemModel)
+        if (model.Property(items) is not { Model: { } itemModel } row)
         {
             throw new InvalidOperationException(
                 $"Model '{model.Name}' (operation '{model.SchemaOperationId}'): \"items\" names '{items}', whose row does not "

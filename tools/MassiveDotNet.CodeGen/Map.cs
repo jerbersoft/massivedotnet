@@ -2,11 +2,16 @@ using System.Text.Json;
 
 namespace MassiveDotNet.CodeGen;
 
-/// <summary>A property row: a .NET name, and either a verbatim type or a model the schema binds to (D-N2).</summary>
-internal sealed record MapProperty(string? Name, string? Type, string? Model, string? Summary);
+/// <summary>A property row: the wire name it is keyed by, a .NET name, and either a verbatim type or a model the schema binds to (D-N2).</summary>
+internal sealed record MapProperty(string WireName, string? Name, string? Type, string? Model, string? Summary);
 
 /// <summary>A model row: the schema it is generated from, its properties, and, for the page object of a paginated singular result, the property that carries the page's items (D-S2).</summary>
 /// <param name="SchemaPointer">The path from the success schema root, or empty for the root itself, which a body payload binds to (D-S1).</param>
+/// <param name="Properties">
+/// The rows in declaration order, which the emitter follows so related fields stay together
+/// (OHLCV rather than the alphabetical order the description stores them in). A list rather than
+/// a dictionary so that order is the type's contract, not an implementation detail of one.
+/// </param>
 /// <param name="Items">The wire name of the array property whose elements <c>Enumerate</c> yields, or <see langword="null"/>.</param>
 internal sealed record MapModel(
     string Name,
@@ -15,8 +20,12 @@ internal sealed record MapModel(
     string? Remarks,
     string SchemaOperationId,
     string SchemaPointer,
-    Dictionary<string, MapProperty> Properties,
-    string? Items);
+    List<MapProperty> Properties,
+    string? Items)
+{
+    /// <summary>The row keyed by a wire name, or <see langword="null"/> when the map declares none.</summary>
+    public MapProperty? Property(string wireName) => Properties.Find(row => row.WireName == wireName);
+}
 
 internal sealed record MapParameter(string? Name, string? Type);
 
@@ -66,17 +75,27 @@ internal sealed class Map
         foreach (JsonProperty model in root.GetProperty("models").EnumerateObject())
         {
             JsonElement schema = model.Value.GetProperty("schema");
-            Dictionary<string, MapProperty> properties = new(StringComparer.Ordinal);
+            List<MapProperty> properties = [];
 
             if (model.Value.TryGetProperty("properties", out JsonElement declared))
             {
                 foreach (JsonProperty property in declared.EnumerateObject())
                 {
-                    properties[property.Name] = new MapProperty(
+                    // JSON permits a repeated key, and a dictionary would have kept the last row
+                    // without a word; two rows for one field is a merge someone forgot.
+                    if (properties.Exists(row => row.WireName == property.Name))
+                    {
+                        throw new InvalidOperationException(
+                            $"Model '{model.Name}' declares a row for '{property.Name}' more than once. "
+                            + "Rows are keyed by wire name; merge them into one.");
+                    }
+
+                    properties.Add(new MapProperty(
+                        property.Name,
                         String(property.Value, "name"),
                         String(property.Value, "type"),
                         String(property.Value, "model"),
-                        String(property.Value, "summary"));
+                        String(property.Value, "summary")));
                 }
             }
 

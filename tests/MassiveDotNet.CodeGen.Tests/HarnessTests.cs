@@ -49,7 +49,7 @@ public sealed class HarnessTests
             """,
             Harness.Endpoint("ListThings", "Thing")));
 
-        MapProperty row = map.Models[0].Properties["publisher"];
+        MapProperty row = map.Models[0].Property("publisher")!;
         Assert.Equal("Publisher", row.Model);
         Assert.Null(row.Type);
     }
