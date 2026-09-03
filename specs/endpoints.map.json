@@ -1215,6 +1215,56 @@
         "tertiary_category":  { "name": "TertiaryCategory" },
         "description":        { "name": "Description" }
       }
+    },
+
+    "FinancialReport": {
+      "summary": "One set of financial statements for a company and period, derived from an SEC filing: the company, the fiscal period, the dates, the source filing, and the four statements.",
+      "remarks": "Reference data, so a class (decision D4). The three period dates are bare strings whose prose claims a compact <c>YYYYMMDD</c> form, while both the published example and the live wire carry ISO calendar dates; the map follows the example and the wire, which agree against the prose, and binds <see cref=\"NodaTime.LocalDate\"/> (D-R9). This is the opposite reading from the SEC v1 filings, whose wire really is compact, so the two families differ on purpose. The published example omits the required <c>timeframe</c> and the optional <c>tickers</c>, both of which the live wire sends.",
+      "schema": { "operationId": "ListFinancials", "pointer": "results/items" },
+      "properties": {
+        "cik":                    { "name": "Cik" },
+        "company_name":           { "name": "CompanyName" },
+        "tickers":                { "name": "Tickers" },
+        "sic":                    { "name": "Sic" },
+        "fiscal_year":            { "name": "FiscalYear" },
+        "fiscal_period":          { "name": "FiscalPeriod" },
+        "timeframe":              { "name": "Timeframe" },
+        "start_date":             { "name": "StartDate", "type": "LocalDate?", "summary": "The first day of the period the statements cover. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "end_date":               { "name": "EndDate", "type": "LocalDate?", "summary": "The last day of the period the statements cover. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "filing_date":            { "name": "FilingDate", "type": "LocalDate?", "summary": "The date the source filing was made available, which is not necessarily the date its contents became public. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "acceptance_datetime":    { "name": "AcceptanceTimestamp", "summary": "When EDGAR accepted the source filing, as the wire sends it. The description says the compact Eastern-time form, <c>yyyyMMddHHmmss</c>; the live wire sent RFC 3339 on 2026-09-03. Kept a string so either form deserializes." },
+        "source_filing_url":      { "name": "SourceFilingUrl" },
+        "source_filing_file_url": { "name": "SourceFilingFileUrl" },
+        "financials":             { "name": "Financials", "model": "FinancialStatements" }
+      }
+    },
+
+    "FinancialStatements": {
+      "summary": "The four statements of a financial report, each a dictionary of data points keyed by the platform's field name.",
+      "remarks": "The description documents the balance sheet's shape under a property literally named <c>*</c> and leaves the other three free-form; all four are one dictionary type over <see cref=\"FinancialDataPoint\"/>, and a statement the report lacks is null (D-R11). The keys are the field names Massive documents for each statement, such as <c>assets</c> or <c>revenues</c>.",
+      "schema": { "operationId": "ListFinancials", "pointer": "results/items/financials" },
+      "properties": {
+        "balance_sheet":        { "name": "BalanceSheet", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The balance sheet: one data point per line item, keyed by the platform's field name, such as <c>assets</c> (D-R11)." },
+        "cash_flow_statement":  { "name": "CashFlowStatement", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The cash flow statement: one data point per line item, keyed by the platform's field name, such as <c>net_cash_flow</c> (D-R11)." },
+        "comprehensive_income": { "name": "ComprehensiveIncome", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The statement of comprehensive income: one data point per line item, keyed by the platform's field name, such as <c>comprehensive_income_loss</c> (D-R11)." },
+        "income_statement":     { "name": "IncomeStatement", "type": "Dictionary<string, FinancialDataPoint>?", "summary": "The income statement: one data point per line item, keyed by the platform's field name, such as <c>revenues</c> (D-R11)." }
+      }
+    },
+
+    "FinancialDataPoint": {
+      "summary": "One line item of a financial statement: its label, value, and unit, its place in the statement, and, when sources are requested, where it came from.",
+      "remarks": "Generated from the shape the description documents under the balance sheet's <c>*</c> property and used for every statement (D-R11). <see cref=\"Source\"/>, <see cref=\"Formula\"/>, <see cref=\"XPath\"/>, and <see cref=\"DerivedFrom\"/> arrive only when the request asked for sources.",
+      "schema": { "operationId": "ListFinancials", "pointer": "results/items/financials/balance_sheet/*" },
+      "properties": {
+        "label":        { "name": "Label" },
+        "value":        { "name": "Value" },
+        "unit":         { "name": "Unit" },
+        "order":        { "name": "Order" },
+        "source":       { "name": "Source" },
+        "derived_from": { "name": "DerivedFrom" },
+        "formula":      { "name": "Formula" },
+        "xpath":        { "name": "XPath" }
+      }
     }
   },
 
@@ -2039,6 +2089,28 @@
         "tertiary_category":  { "name": "tertiaryCategory" },
         "limit":              { "name": "limit" },
         "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "ListFinancials",
+      "group": "Reference",
+      "method": "ListFinancials",
+      "summary": "Retrieves financial statements derived from SEC filings, filtered by company, by filing and report dates, and by timeframe.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"timeframe\"/> is <c>annual</c>, <c>quarterly</c>, or <c>ttm</c>. <paramref name=\"includeSources\"/> asks for the <see cref=\"FinancialDataPoint.XPath\"/> and <see cref=\"FinancialDataPoint.Formula\"/> of every data point. <paramref name=\"companyNameSearch\"/> is a text search where <paramref name=\"companyName\"/> is an exact match; both render under the description's wire names.",
+      "result": { "kind": "array", "model": "FinancialReport", "property": "results" },
+      "parameters": {
+        "ticker":                { "name": "ticker" },
+        "cik":                   { "name": "cik" },
+        "company_name":          { "name": "companyName" },
+        "sic":                   { "name": "sic" },
+        "filing_date":           { "name": "filingDate" },
+        "period_of_report_date": { "name": "periodOfReportDate" },
+        "timeframe":             { "name": "timeframe" },
+        "include_sources":       { "name": "includeSources" },
+        "company_name.search":   { "name": "companyNameSearch" },
+        "order":                 { "name": "order", "type": "SortOrder" },
+        "limit":                 { "name": "limit" },
+        "sort":                  { "name": "sort" }
       }
     }
   ]

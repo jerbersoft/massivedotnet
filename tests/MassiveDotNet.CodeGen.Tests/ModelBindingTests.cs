@@ -443,4 +443,60 @@ public sealed class ModelBindingTests
         Assert.Contains("oneOf with 2 branches", message, StringComparison.Ordinal);
         Assert.Contains("D24", message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AVerbatimTypeOnAnObjectWithDeclaredPropertiesIsTakenAsWritten()
+    {
+        // The financials balance sheet declares one property literally named "*", the
+        // description's way of documenting a data point shape under any key. The row's type wins
+        // before the site is asked whether it needs a model, and the "*" pointer reaches the shape
+        // as an ordinary property name (D-R11). D-N6 spoke only of free-form objects.
+        string spec = Document("""
+            {
+              "type": "object",
+              "properties": {
+                "financials": {
+                  "type": "object",
+                  "properties": {
+                    "balance_sheet": {
+                      "type": "object",
+                      "properties": {
+                        "*": {
+                          "type": "object",
+                          "required": ["label", "value"],
+                          "properties": {
+                            "label": { "type": "string" },
+                            "value": { "type": "number" }
+                          }
+                        }
+                      }
+                    },
+                    "income_statement": { "type": "object" }
+                  }
+                }
+              }
+            }
+            """);
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument(
+            """{ "financials": { "name": "Financials", "model": "Statements" } }""",
+            """
+            "Statements": {
+              "schema": { "operationId": "ListThings", "pointer": "results/items/financials" },
+              "properties": {
+                "balance_sheet":    { "name": "BalanceSheet", "type": "Dictionary<string, Point>?" },
+                "income_statement": { "name": "IncomeStatement", "type": "Dictionary<string, Point>?" }
+              }
+            },
+            "Point": { "schema": { "operationId": "ListThings", "pointer": "results/items/financials/balance_sheet/*" } }
+            """));
+
+        string statements = files[Path.Combine("Models", "Statements.g.cs")];
+        Assert.Contains("public Dictionary<string, Point>? BalanceSheet { get; init; }", statements, StringComparison.Ordinal);
+        Assert.Contains("public Dictionary<string, Point>? IncomeStatement { get; init; }", statements, StringComparison.Ordinal);
+
+        string point = files[Path.Combine("Models", "Point.g.cs")];
+        Assert.Contains("public required string Label { get; init; }", point, StringComparison.Ordinal);
+        Assert.Contains("public double Value { get; init; }", point, StringComparison.Ordinal);
+    }
 }

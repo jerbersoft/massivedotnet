@@ -248,6 +248,9 @@ the capture date. Every other fixture is the published example, departing only a
 One further departure: the risk-factor taxonomy example spells `taxonomy` as the string `"1.0"`
 where the schema declares a required number and the live wire (2026-09-03) sends `1.0`; the
 fixture follows the schema and the wire, commented.
+The financials example omits `timeframe`, which the description marks required and the live wire
+sends, so the fixture supplies it: a required property that never arrives fails deserialization
+outright.
 
 ### D-R13 · The live tier pins what fixtures cannot, then touches everything once
 
