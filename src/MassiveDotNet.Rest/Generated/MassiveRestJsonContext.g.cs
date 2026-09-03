@@ -70,4 +70,6 @@ namespace MassiveDotNet.Rest.Serialization;
 [JsonSerializable(typeof(GetFilingResponse))]
 [JsonSerializable(typeof(ListFilingFilesResponse))]
 [JsonSerializable(typeof(FilingFile))]
+[JsonSerializable(typeof(GetStocksFilings10KVXSectionsResponse))]
+[JsonSerializable(typeof(GetStocksFilings10KVX0SectionsResponse))]
 internal sealed partial class MassiveRestJsonContext : JsonSerializerContext;

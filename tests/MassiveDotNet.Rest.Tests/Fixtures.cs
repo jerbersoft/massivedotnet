@@ -2063,4 +2063,38 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/filings/10-K/vX/sections. The <c>vX_0</c> revision
+    /// publishes the identical sample, so one fixture serves both (D26). It carries a cursor of
+    /// its own.
+    /// </summary>
+    public const string ReferenceTenKSections = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/stocks/filings/10-K/vX/sections?cursor=eyJsaW1pd...",
+          "request_id": "a3f8b2c1d4e5f6g7",
+          "results": [
+            {
+              "cik": "0000320193",
+              "filing_date": "2023-11-03",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-23-000106.txt",
+              "period_end": "2023-09-30",
+              "section": "risk_factors",
+              "text": "Item 1A. Risk Factors\n\nInvesting in our stock involves risk. In addition to the other information in this Annual Report on Form 10-K, the following risk factors should be carefully considered...",
+              "ticker": "AAPL"
+            },
+            {
+              "cik": "0000789019",
+              "filing_date": "2023-07-27",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/789019/0000950170-23-035122.txt",
+              "period_end": "2023-06-30",
+              "section": "risk_factors",
+              "text": "Item 1A. RISK FACTORS\n\nOur operations and financial results are subject to various risks and uncertainties...",
+              "ticker": "MSFT"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

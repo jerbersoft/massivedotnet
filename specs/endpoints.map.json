@@ -989,6 +989,21 @@
         "type":        { "name": "Type" },
         "source_url":  { "name": "SourceUrl" }
       }
+    },
+
+    "TenKSection": {
+      "summary": "One standardized section of a 10-K filing: the filer, the filing and period-end dates, the section identifier, and its text.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8). Generated from the <c>vX</c> revision of the route and shared with the <c>vX_0</c> revision, where decision D16 verifies the shape.",
+      "schema": { "operationId": "get_stocks_filings_10-K_vX_sections", "pointer": "results/items" },
+      "properties": {
+        "cik":         { "name": "Cik" },
+        "ticker":      { "name": "Ticker" },
+        "section":     { "name": "Section" },
+        "filing_date": { "name": "FilingDate" },
+        "period_end":  { "name": "PeriodEnd" },
+        "filing_url":  { "name": "FilingUrl" },
+        "text":        { "name": "Text" }
+      }
     }
   },
 
@@ -1635,6 +1650,40 @@
       "parameters": {
         "filing_id": { "name": "filingId" },
         "file_id":   { "name": "fileId" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_10-K_vX_sections",
+      "group": "Reference",
+      "method": "List10KSections",
+      "summary": "Retrieves standardized sections of 10-K filings, filtered by filer, section, filing date, and period end.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"section\"/> takes the identifiers the description names, <c>business</c> and <c>risk_factors</c>, singly or as a set. The date filters are bare strings in the description whose prose says <c>YYYY-MM-DD</c>, so they bind <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "TenKSection", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "section":     { "name": "section" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "period_end":  { "name": "periodEnd", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_10-K_vX_0_sections",
+      "group": "Reference",
+      "method": "List10KSectionsVx0",
+      "summary": "Retrieves standardized sections of 10-K filings from the vX_0 revision of the route, filtered by filer, section, filing date, and period end.",
+      "remarks": "The description declares this <c>vX_0</c> revision beside the <c>vX</c> one, and the service answered a plain-text 404 for it on 2026-09-03; it stays mapped as declared (decision D21) and carries its version segment in its name because the <c>vX</c> revision is the served one (decision D26). The segment marks it experimental (decision D23); opt in with <c>MASSIVE0001</c>. The parameters and the payload are those of the <c>vX</c> revision.",
+      "result": { "kind": "array", "model": "TenKSection", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "section":     { "name": "section" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "period_end":  { "name": "periodEnd", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
       }
     }
   ]
