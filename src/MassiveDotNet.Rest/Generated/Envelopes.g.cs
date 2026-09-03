@@ -914,3 +914,63 @@ internal sealed class GetStocksFilings8KVXTextResponse : IPagedEnvelope<EightKTe
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /stocks/filings/vX/13-F.</summary>
+internal sealed class GetStocksFilingsVX13FResponse : IPagedEnvelope<ThirteenFHolding>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public ThirteenFHolding[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/form-3.</summary>
+internal sealed class GetStocksFilingsVXForm3Response : IPagedEnvelope<Form3Filing>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public Form3Filing[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/form-4.</summary>
+internal sealed class GetStocksFilingsVXForm4Response : IPagedEnvelope<Form4Filing>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public Form4Filing[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}

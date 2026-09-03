@@ -1036,6 +1036,129 @@
         "filing_url":       { "name": "FilingUrl" },
         "items_text":       { "name": "ItemsText" }
       }
+    },
+
+    "ThirteenFHolding": {
+      "summary": "One holding reported on a 13-F filing: the filer, the security, the amount and value held, and the voting authority over it.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8). One filing reports many holdings, so the filing's own fields repeat on every row.",
+      "schema": { "operationId": "get_stocks_filings_vX_13-F", "pointer": "results/items" },
+      "properties": {
+        "accession_number":           { "name": "AccessionNumber" },
+        "filer_cik":                  { "name": "FilerCik" },
+        "form_type":                  { "name": "FormType" },
+        "filing_date":                { "name": "FilingDate" },
+        "period":                     { "name": "Period" },
+        "filing_url":                 { "name": "FilingUrl" },
+        "file_number":                { "name": "FileNumber" },
+        "film_number":                { "name": "FilmNumber" },
+        "issuer_name":                { "name": "IssuerName" },
+        "cusip":                      { "name": "Cusip" },
+        "title_of_class":             { "name": "TitleOfClass" },
+        "put_call":                   { "name": "PutCall" },
+        "market_value":               { "name": "MarketValue" },
+        "shares_or_principal_amount": { "name": "SharesOrPrincipalAmount" },
+        "shares_or_principal_type":   { "name": "SharesOrPrincipalType" },
+        "investment_discretion":      { "name": "InvestmentDiscretion" },
+        "other_managers":             { "name": "OtherManagers" },
+        "voting_authority_sole":      { "name": "VotingAuthoritySole" },
+        "voting_authority_shared":    { "name": "VotingAuthorityShared" },
+        "voting_authority_none":      { "name": "VotingAuthorityNone" }
+      }
+    },
+
+    "FilingFootnote": {
+      "summary": "A footnote on an ownership filing: its identifier, as the filing's fields cite it, and its text.",
+      "remarks": "Generated from the form 3 route and shared with form 4, where decision D16 verifies the shape. The description gives its two properties no prose, so the summaries here are the map's.",
+      "schema": { "operationId": "get_stocks_filings_vX_form-3", "pointer": "results/items/footnotes/items" },
+      "properties": {
+        "id":          { "name": "Id", "summary": "The footnote's identifier, such as <c>F1</c>, which the filing's fields cite." },
+        "description": { "name": "Description", "summary": "The footnote's text." }
+      }
+    },
+
+    "Form3Filing": {
+      "summary": "One initial statement of beneficial ownership, form 3: the issuer, the reporting owner and their relationship to it, and the security held.",
+      "remarks": "Reference data, so a class (decision D4). A trailing form number keeps its digits (D-R8). The description marks nothing required, and the published sample carries explicit nulls, so every property is nullable. The six flags take an <c>Is</c> prefix; <see cref=\"IsRule10b51Plan\"/> is the wire's <c>aff_10b5_one</c>.",
+      "schema": { "operationId": "get_stocks_filings_vX_form-3", "pointer": "results/items" },
+      "properties": {
+        "accession_number":            { "name": "AccessionNumber" },
+        "form_type":                   { "name": "FormType" },
+        "filing_date":                 { "name": "FilingDate" },
+        "filing_url":                  { "name": "FilingUrl" },
+        "period_of_report":            { "name": "PeriodOfReport" },
+        "date_of_original_submission": { "name": "DateOfOriginalSubmission" },
+        "issuer_cik":                  { "name": "IssuerCik" },
+        "issuer_name":                 { "name": "IssuerName" },
+        "tickers":                     { "name": "Tickers" },
+        "owner_cik":                   { "name": "OwnerCik" },
+        "owner_name":                  { "name": "OwnerName" },
+        "is_director":                 { "name": "IsDirector" },
+        "is_officer":                  { "name": "IsOfficer" },
+        "is_ten_percent_owner":        { "name": "IsTenPercentOwner" },
+        "is_other":                    { "name": "IsOther" },
+        "officer_title":               { "name": "OfficerTitle" },
+        "not_subject_to_section_16":   { "name": "IsNotSubjectToSection16" },
+        "aff_10b5_one":                { "name": "IsRule10b51Plan", "summary": "Whether the transaction was made under a Rule 10b5-1 trading plan; the wire's <c>aff_10b5_one</c>." },
+        "security_title":              { "name": "SecurityTitle" },
+        "security_type":               { "name": "SecurityType" },
+        "shares_owned":                { "name": "SharesOwned" },
+        "direct_or_indirect":          { "name": "DirectOrIndirect" },
+        "nature_of_ownership":         { "name": "NatureOfOwnership" },
+        "exercise_date":               { "name": "ExerciseDate" },
+        "exercise_price":              { "name": "ExercisePrice" },
+        "underlying_security_title":   { "name": "UnderlyingSecurityTitle" },
+        "underlying_security_shares":  { "name": "UnderlyingSecurityShares" },
+        "footnotes":                   { "name": "Footnotes", "model": "FilingFootnote" },
+        "remarks":                     { "name": "Remarks" }
+      }
+    },
+
+    "Form4Filing": {
+      "summary": "One statement of changes in beneficial ownership, form 4: the issuer, the reporting owner, the security, and the transaction reported.",
+      "remarks": "Reference data, so a class (decision D4). A trailing form number keeps its digits (D-R8). The description marks nothing required, so every property is nullable; a holding row rather than a transaction row leaves the transaction fields null. The seven flags take an <c>Is</c> prefix; <see cref=\"IsRule10b51Plan\"/> is the wire's <c>aff_10b5_one</c>.",
+      "schema": { "operationId": "get_stocks_filings_vX_form-4", "pointer": "results/items" },
+      "properties": {
+        "accession_number":                   { "name": "AccessionNumber" },
+        "form_type":                          { "name": "FormType" },
+        "filing_date":                        { "name": "FilingDate" },
+        "filing_url":                         { "name": "FilingUrl" },
+        "period_of_report":                   { "name": "PeriodOfReport" },
+        "date_of_original_submission":        { "name": "DateOfOriginalSubmission" },
+        "issuer_cik":                         { "name": "IssuerCik" },
+        "issuer_name":                        { "name": "IssuerName" },
+        "tickers":                            { "name": "Tickers" },
+        "owner_cik":                          { "name": "OwnerCik" },
+        "owner_name":                         { "name": "OwnerName" },
+        "is_director":                        { "name": "IsDirector" },
+        "is_officer":                         { "name": "IsOfficer" },
+        "is_ten_percent_owner":               { "name": "IsTenPercentOwner" },
+        "is_other":                           { "name": "IsOther" },
+        "officer_title":                      { "name": "OfficerTitle" },
+        "not_subject_to_section_16":          { "name": "IsNotSubjectToSection16" },
+        "aff_10b5_one":                       { "name": "IsRule10b51Plan", "summary": "Whether the transaction was made under a Rule 10b5-1 trading plan; the wire's <c>aff_10b5_one</c>." },
+        "record_type":                        { "name": "RecordType" },
+        "security_title":                     { "name": "SecurityTitle" },
+        "security_type":                      { "name": "SecurityType" },
+        "transaction_date":                   { "name": "TransactionDate" },
+        "deemed_execution_date":              { "name": "DeemedExecutionDate" },
+        "transaction_code":                   { "name": "TransactionCode" },
+        "transaction_timeliness":             { "name": "TransactionTimeliness" },
+        "transaction_acquired_disposed":      { "name": "TransactionAcquiredDisposed" },
+        "transaction_shares":                 { "name": "TransactionShares" },
+        "transaction_price_per_share":        { "name": "TransactionPricePerShare" },
+        "transaction_value":                  { "name": "TransactionValue" },
+        "shares_owned_following_transaction": { "name": "SharesOwnedFollowingTransaction" },
+        "direct_or_indirect":                 { "name": "DirectOrIndirect" },
+        "nature_of_ownership":                { "name": "NatureOfOwnership" },
+        "equity_swap_involved":               { "name": "IsEquitySwapInvolved" },
+        "exercise_date":                      { "name": "ExerciseDate" },
+        "exercise_price":                     { "name": "ExercisePrice" },
+        "expiration_date":                    { "name": "ExpirationDate" },
+        "underlying_security_title":          { "name": "UnderlyingSecurityTitle" },
+        "underlying_security_shares":         { "name": "UnderlyingSecurityShares" },
+        "footnotes":                          { "name": "Footnotes", "model": "FilingFootnote" },
+        "remarks":                            { "name": "Remarks" }
+      }
     }
   },
 
@@ -1748,6 +1871,55 @@
         "filing_date": { "name": "filingDate", "type": "LocalDate" },
         "limit":       { "name": "limit" },
         "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_13-F",
+      "group": "Reference",
+      "method": "List13FHoldings",
+      "summary": "Retrieves the holdings reported on 13-F filings, filtered by the filing institution and the filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filerCik\"/> is the institution's CIK, singly or as a set. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "ThirteenFHolding", "property": "results" },
+      "parameters": {
+        "filer_cik":   { "name": "filerCik" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_form-3",
+      "group": "Reference",
+      "method": "ListForm3Filings",
+      "summary": "Retrieves initial statements of beneficial ownership, form 3, filtered by issuer, reporting owner, ticker, form type, and filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"tickers\"/> filters an array field: pass a plain value for rows that contain it, or an <see cref=\"ArrayFilter\"/> factory for any or all of several. <paramref name=\"formType\"/> is <c>3</c> or <c>3/A</c>. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "Form3Filing", "property": "results" },
+      "parameters": {
+        "issuer_cik":  { "name": "issuerCik" },
+        "owner_cik":   { "name": "ownerCik" },
+        "tickers":     { "name": "tickers" },
+        "form_type":   { "name": "formType" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_form-4",
+      "group": "Reference",
+      "method": "ListForm4Filings",
+      "summary": "Retrieves statements of changes in beneficial ownership, form 4, filtered by issuer, reporting owner, ticker, form type, filing date, and transaction code.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"tickers\"/> filters an array field: pass a plain value for rows that contain it, or an <see cref=\"ArrayFilter\"/> factory for any or all of several. <paramref name=\"formType\"/> is <c>4</c> or <c>4/A</c>; <paramref name=\"transactionCode\"/> is the SEC's one-letter code, such as <c>P</c> for a purchase or <c>S</c> for a sale. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "Form4Filing", "property": "results" },
+      "parameters": {
+        "issuer_cik":       { "name": "issuerCik" },
+        "owner_cik":        { "name": "ownerCik" },
+        "tickers":          { "name": "tickers" },
+        "form_type":        { "name": "formType" },
+        "filing_date":      { "name": "filingDate", "type": "LocalDate" },
+        "transaction_code": { "name": "transactionCode" },
+        "limit":            { "name": "limit" },
+        "sort":             { "name": "sort" }
       }
     }
   ]

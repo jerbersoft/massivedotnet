@@ -2165,4 +2165,175 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/13-F. It carries a cursor of its own and a null <c>put_call</c>.</summary>
+    public const string ReferenceThirteenFHoldings = """
+        {
+          "next_url": "https://api.massive.com/stocks/filings/vX/13-F?cursor=eyJsaW1pd...",
+          "request_id": "a3f8b2c1d4e5f6g7",
+          "results": [
+            {
+              "accession_number": "0000950123-24-011775",
+              "cusip": "023135106",
+              "file_number": "028-04545",
+              "filer_cik": "0001067983",
+              "filing_date": "2024-11-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1067983/0000950123-24-011775.txt",
+              "film_number": "241461756",
+              "form_type": "13F-HR",
+              "investment_discretion": "DFND",
+              "issuer_name": "AMAZON COM INC",
+              "market_value": 1439212920,
+              "other_managers": [
+                "Buffett Warren E"
+              ],
+              "period": "2024-09-30",
+              "put_call": null,
+              "shares_or_principal_amount": 7724000,
+              "shares_or_principal_type": "SH",
+              "title_of_class": "COM",
+              "voting_authority_none": 0,
+              "voting_authority_shared": 0,
+              "voting_authority_sole": 7724000
+            },
+            {
+              "accession_number": "0000950123-24-011775",
+              "cusip": "025816109",
+              "file_number": "028-04545",
+              "filer_cik": "0001067983",
+              "filing_date": "2024-11-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1067983/0000950123-24-011775.txt",
+              "film_number": "241461756",
+              "form_type": "13F-HR",
+              "investment_discretion": "DFND",
+              "issuer_name": "AMERICAN EXPRESS CO",
+              "market_value": 311864270,
+              "other_managers": [
+                "Buffett Warren E"
+              ],
+              "period": "2024-09-30",
+              "put_call": null,
+              "shares_or_principal_amount": 1149942,
+              "shares_or_principal_type": "SH",
+              "title_of_class": "COM",
+              "voting_authority_none": 0,
+              "voting_authority_shared": 0,
+              "voting_authority_sole": 1149942
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/form-3. It carries a cursor of its own and several explicit nulls.</summary>
+    public const string ReferenceForm3Filings = """
+        {
+          "count": 1,
+          "next_url": "https://api.massive.com/stocks/filings/vX/form-3?cursor=eyJsaW1pd...",
+          "request_id": "047c7035a86042b1925118e5f68d81b0",
+          "results": [
+            {
+              "accession_number": "0001628280-26-022046",
+              "aff_10b5_one": null,
+              "date_of_original_submission": null,
+              "direct_or_indirect": "D",
+              "exercise_date": null,
+              "exercise_price": null,
+              "filing_date": "2026-03-30",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1903508/0001628280-26-022046.txt",
+              "footnotes": [
+                {
+                  "description": "The options granted on May 17, 2022 vested 100% on the third anniversary of the grant date.",
+                  "id": "F1"
+                },
+                {
+                  "description": "The exercise price of the options granted on May 17, 2022 was GPB 8.85, or approximately $11.80 based on a GBP to USD exchange rate as of March 27, 2026 of 1.3336.",
+                  "id": "F2"
+                }
+              ],
+              "form_type": "3",
+              "is_director": false,
+              "is_officer": true,
+              "is_other": false,
+              "is_ten_percent_owner": false,
+              "issuer_cik": "0001903508",
+              "issuer_name": "Public Policy Holding Company, Inc.",
+              "nature_of_ownership": null,
+              "not_subject_to_section_16": null,
+              "officer_title": "Chief Administrative Officer",
+              "owner_cik": "0002125791",
+              "owner_name": "Mazzanti Matthew Ross",
+              "period_of_report": "2026-03-20",
+              "remarks": null,
+              "security_title": "Options",
+              "security_type": "derivative",
+              "shares_owned": null,
+              "tickers": [
+                "PPHC"
+              ],
+              "underlying_security_shares": 9000,
+              "underlying_security_title": "Common Stock, $0.001 par value"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/form-4. It carries a cursor of its own.</summary>
+    public const string ReferenceForm4Filings = """
+        {
+          "next_url": "https://api.massive.com/stocks/filings/vX/form-4?cursor=eyJsaW1pd...",
+          "request_id": "047c7035a86042b1925118e5f68d81b0",
+          "results": [
+            {
+              "accession_number": "0002123147-26-000002",
+              "aff_10b5_one": false,
+              "date_of_original_submission": null,
+              "deemed_execution_date": "2026-03-27",
+              "direct_or_indirect": "D",
+              "equity_swap_involved": false,
+              "exercise_date": "2026-03-27",
+              "exercise_price": 88.167,
+              "expiration_date": "2026-03-27",
+              "filing_date": "2026-03-30",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/1469395/0002123147-26-000002.txt",
+              "footnotes": [
+                {
+                  "description": "These shares were acquired at a price of 4955 argentine pesos per share. For reporting purposes, the exercise price has been converted to US dollars based on the exchange rate reported by Banco de la Nacion Argentina for the date of the acquisition, which was 1405 argentine pesos per US dollar. Then multiplied by 25, the Par value or rate of common shares to one ADR.",
+                  "id": "F1"
+                }
+              ],
+              "form_type": "4",
+              "is_director": false,
+              "is_officer": true,
+              "is_other": false,
+              "is_ten_percent_owner": false,
+              "issuer_cik": "0001469395",
+              "issuer_name": "Pampa Energy Inc.",
+              "not_subject_to_section_16": false,
+              "officer_title": "Chief Financial Officer",
+              "owner_cik": "0002123147",
+              "owner_name": "Zuberbuhler Adolfo Fernando",
+              "period_of_report": "2026-03-27",
+              "record_type": "transaction",
+              "security_title": "Common Stock, $25 Par Value",
+              "security_type": "derivative",
+              "shares_owned_following_transaction": 2759,
+              "tickers": [
+                "PAM"
+              ],
+              "transaction_acquired_disposed": "A",
+              "transaction_code": "A",
+              "transaction_date": "2026-03-27",
+              "transaction_price_per_share": 88.167,
+              "transaction_shares": 12923,
+              "transaction_timeliness": "O",
+              "transaction_value": 1139382.141,
+              "underlying_security_shares": 12923,
+              "underlying_security_title": "PAMP"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }
