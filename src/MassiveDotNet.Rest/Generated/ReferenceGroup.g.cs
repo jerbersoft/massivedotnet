@@ -10,6 +10,7 @@
 // nullable context, so it is re-enabled explicitly here.
 #nullable enable
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
@@ -439,6 +440,113 @@ public readonly partial struct ReferenceGroup
     {
         ListTickerTypesResponse? response = await _transport
             .GetAsync(requestUri, MassiveRestJsonContext.Default.ListTickerTypesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
+
+    /// <summary>
+    /// Retrieves the identifier history of one asset: its current name and the ticker changes that led
+    /// to it.
+    /// </summary>
+    /// <remarks>
+    /// The route's <c>vX</c> segment marks it experimental (decision D18); opt in with
+    /// <c>MASSIVE0001</c>. <paramref name="id"/> is a ticker, a CUSIP, or a composite FIGI. <paramref
+    /// name="types"/> is a comma-separated list of event types, of which the description names only
+    /// <c>ticker_change</c>. The event rows' <see cref="TickerEvent.EventType"/> reads as absent on
+    /// today's wire (D-R10).
+    /// </remarks>
+    /// <param name="id">
+    /// Identifier of an asset, which can be a Ticker, CUSIP, or Composite FIGI. Specify a
+    /// case-sensitive ticker symbol (e.g. AAPL for Apple Inc). When provided a ticker, events for the
+    /// entity currently represented by that ticker are returned. To find events for entities previously
+    /// associated with a ticker, obtain the relevant identifier using the [Ticker Details
+    /// Endpoint](https://massive.com/docs/rest/stocks/tickers/ticker-overview).
+    /// </param>
+    /// <param name="types">
+    /// A comma-separated list of the types of event to include. Currently ticker_change is the only
+    /// supported event_type. Leave blank to return all supported event_types.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> object from the response.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<TickerEvents> GetTickerEventsAsync(
+        string id,
+        string? types = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        string requestUri = BuildGetTickerEventsUri(id, types);
+        return SendGetTickerEventsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetTickerEventsUri(
+        string id,
+        string? types)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/vX/reference/tickers/");
+        builder.AppendPathSegment(id);
+        builder.AppendPathLiteral("/events");
+
+        builder.AppendQuery("types", types);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<TickerEvents> SendGetTickerEventsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetEventsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetEventsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A 200 without its payload is a success the caller cannot use, so it is reported the
+        // same way as a body that fails to deserialize rather than as null on every call (D17).
+        return response?.Results
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no 'results' payload.",
+                response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the tickers of companies related to the one given, as judged by news coverage and
+    /// return correlation.
+    /// </summary>
+    /// <remarks>
+    /// The list does not page. Only the ticker of each related company is reported; <see
+    /// cref="GetTickerAsync"/> fetches the rest.
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol to search.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<RelatedCompany[]> ListRelatedCompaniesAsync(
+        string ticker,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListRelatedCompaniesUri(ticker);
+        return SendListRelatedCompaniesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListRelatedCompaniesUri(
+        string ticker)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/related-companies/");
+        builder.AppendPathSegment(ticker);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<RelatedCompany[]> SendListRelatedCompaniesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetRelatedCompaniesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetRelatedCompaniesResponse, cancellationToken)
             .ConfigureAwait(false);
 
         return response?.Results ?? [];

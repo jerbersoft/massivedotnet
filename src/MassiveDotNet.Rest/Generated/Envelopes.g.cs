@@ -533,3 +533,39 @@ internal sealed class ListTickerTypesResponse
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /vX/reference/tickers/{id}/events.</summary>
+internal sealed class GetEventsResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Contains the requested event data for the specified ticker.</summary>
+    [JsonPropertyName("results")]
+    public TickerEvents? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /v1/related-companies/{ticker}.</summary>
+internal sealed class GetRelatedCompaniesResponse
+{
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>An array of results containing the requested data.</summary>
+    [JsonPropertyName("results")]
+    public RelatedCompany[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>The ticker being queried.</summary>
+    [JsonPropertyName("ticker")]
+    public string? Ticker { get; init; }
+}

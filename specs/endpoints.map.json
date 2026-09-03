@@ -616,6 +616,43 @@
         "asset_class": { "name": "AssetClass" },
         "locale":      { "name": "Locale" }
       }
+    },
+
+    "TickerEvents": {
+      "summary": "The history of one asset's identifiers: its current name and the events, such as ticker changes, that led to it.",
+      "remarks": "A singular result (decision D17). Its items are declared behind a one-branch <c>oneOf</c>, which the generator reads as the branch (decision D24).",
+      "schema": { "operationId": "GetEvents", "pointer": "results" },
+      "properties": {
+        "name":   { "name": "Name" },
+        "events": { "name": "Events", "model": "TickerEvent" }
+      }
+    },
+
+    "TickerEvent": {
+      "summary": "One event in an asset's history: the date it took place and, for a ticker change, the symbol it changed to.",
+      "remarks": "The description declares a required <c>event_type</c>; the published example and the live wire both spell it <c>type</c>, so <see cref=\"EventType\"/> is typed nullable and reads as absent until the description or the service moves (D-R10). Nothing here is renamed: the map cannot rename a wire key.",
+      "schema": { "operationId": "GetEvents", "pointer": "results/events/items" },
+      "properties": {
+        "date":          { "name": "Date" },
+        "event_type":    { "name": "EventType", "type": "string?", "summary": "The type of the event. The description requires this key, but the wire spells it <c>type</c>, so it is null in practice (D-R10); <see cref=\"TickerChange\"/> being set is the working discriminator." },
+        "ticker_change": { "name": "TickerChange", "model": "TickerChange" }
+      }
+    },
+
+    "TickerChange": {
+      "summary": "The symbol an asset took on in a ticker change event.",
+      "schema": { "operationId": "GetEvents", "pointer": "results/events/items/ticker_change" },
+      "properties": {
+        "ticker": { "name": "Ticker" }
+      }
+    },
+
+    "RelatedCompany": {
+      "summary": "A company related to the one queried, by news and returns; only its ticker is reported.",
+      "schema": { "operationId": "GetRelatedCompanies", "pointer": "results/items" },
+      "properties": {
+        "ticker": { "name": "Ticker" }
+      }
     }
   },
 
@@ -996,6 +1033,26 @@
         "asset_class": { "name": "assetClass", "type": "MarketType" },
         "locale":      { "name": "locale" }
       }
+    },
+    {
+      "operationId": "GetEvents",
+      "group": "Reference",
+      "method": "GetTickerEvents",
+      "summary": "Retrieves the identifier history of one asset: its current name and the ticker changes that led to it.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. <paramref name=\"id\"/> is a ticker, a CUSIP, or a composite FIGI. <paramref name=\"types\"/> is a comma-separated list of event types, of which the description names only <c>ticker_change</c>. The event rows' <see cref=\"TickerEvent.EventType\"/> reads as absent on today's wire (D-R10).",
+      "result": { "kind": "object", "model": "TickerEvents", "property": "results" },
+      "parameters": {
+        "id":    { "name": "id" },
+        "types": { "name": "types" }
+      }
+    },
+    {
+      "operationId": "GetRelatedCompanies",
+      "group": "Reference",
+      "method": "ListRelatedCompanies",
+      "summary": "Retrieves the tickers of companies related to the one given, as judged by news coverage and return correlation.",
+      "remarks": "The list does not page. Only the ticker of each related company is reported; <see cref=\"GetTickerAsync\"/> fetches the rest.",
+      "result": { "kind": "array", "model": "RelatedCompany", "property": "results" }
     }
   ]
 }

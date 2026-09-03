@@ -1439,4 +1439,61 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>
+    /// The documented sample for GET /vX/reference/tickers/{id}/events. Each event spells its
+    /// discriminator <c>type</c>, where the schema declares a required <c>event_type</c>; the
+    /// live wire agrees with the sample, so the map types that property nullable and the SDK
+    /// reads it as absent (D-R10). The fixture is the sample verbatim.
+    /// </summary>
+    public const string ReferenceTickerEvents = """
+        {
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": {
+            "events": [
+              {
+                "date": "2022-06-09",
+                "ticker_change": {
+                  "ticker": "META"
+                },
+                "type": "ticker_change"
+              },
+              {
+                "date": "2012-05-18",
+                "ticker_change": {
+                  "ticker": "FB"
+                },
+                "type": "ticker_change"
+              }
+            ],
+            "name": "Meta Platforms, Inc. Class A Common Stock"
+          },
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/related-companies/{ticker}. The envelope's
+    /// <c>stock_symbol</c> is not in the schema, which declares <c>ticker</c> there instead, and
+    /// is ignored.
+    /// </summary>
+    public const string ReferenceRelatedCompanies = """
+        {
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": [
+            { "ticker": "MSFT" },
+            { "ticker": "GOOGL" },
+            { "ticker": "AMZN" },
+            { "ticker": "FB" },
+            { "ticker": "TSLA" },
+            { "ticker": "NVDA" },
+            { "ticker": "INTC" },
+            { "ticker": "ADBE" },
+            { "ticker": "NFLX" },
+            { "ticker": "PYPL" }
+          ],
+          "status": "OK",
+          "stock_symbol": "AAPL"
+        }
+        """;
 }
