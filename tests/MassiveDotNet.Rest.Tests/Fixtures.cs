@@ -2336,4 +2336,105 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/index. It carries a cursor of its own.</summary>
+    public const string ReferenceFilingIndex = """
+        {
+          "next_url": "https://api.massive.com/stocks/filings/vX/index?cursor=eyJsaW1pd...",
+          "request_id": "1daccfd9794e482e96d104dee6ed432b",
+          "results": [
+            {
+              "accession_number": "0000320193-25-000079",
+              "cik": "0000320193",
+              "filing_date": "2025-10-31",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000079.txt",
+              "form_type": "10-K",
+              "issuer_name": "Apple Inc.",
+              "ticker": "AAPL"
+            },
+            {
+              "accession_number": "0000950170-25-010491",
+              "cik": "0000789019",
+              "filing_date": "2025-01-29",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/789019/0000950170-25-010491.txt",
+              "form_type": "10-Q",
+              "issuer_name": "MICROSOFT CORP",
+              "ticker": "MSFT"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/vX/risk-factors. It carries no cursor.</summary>
+    public const string ReferenceRiskFactors = """
+        {
+          "request_id": "c7856101f86c20d855b0ea1c5a6d6efa",
+          "results": [
+            {
+              "cik": "0001005101",
+              "filing_date": "2025-09-19",
+              "primary_category": "financial_and_market",
+              "secondary_category": "credit_and_liquidity",
+              "supporting_text": "In addition to the net proceeds we received from our recent equity and debt financings, we may need to raise additional equity or debt financing to continue the development and marketing of our Fintech app, to fund ongoing operations, invest in acquisitions, and for working capital purposes. Our inability to raise such additional financing may limit our ability to continue the development of our Fintech app.",
+              "tertiary_category": "access_to_capital_and_financing",
+              "ticker": "MGLD"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/taxonomies/vX/disclosures. It carries no cursor.</summary>
+    public const string ReferenceDisclosureTaxonomy = """
+        {
+          "request_id": "a1b2c3d4e5f6a7b8c9d0e1f2",
+          "results": [
+            {
+              "description": "New CEO appointment with background, employment terms, and compensation.",
+              "primary_category": "leadership_and_governance",
+              "secondary_category": "executive_leadership",
+              "taxonomy": "1.0",
+              "tertiary_category": "ceo_appointment"
+            },
+            {
+              "description": "Quarterly financial results including revenue, net income, EPS, and key operating metrics with management commentary.",
+              "primary_category": "financial_results",
+              "secondary_category": "earnings_and_performance",
+              "taxonomy": "1.0",
+              "tertiary_category": "quarterly_earnings"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// The documented sample for GET /stocks/taxonomies/vX/risk-factors, with one departure from
+    /// the published text: <c>"taxonomy": "1.0"</c> becomes the number <c>1.0</c>. The schema
+    /// declares a required number, and the live wire sent one on 2026-09-03; the example's string
+    /// would fail on the type the schema and the wire agree on (D-R12).
+    /// </summary>
+    public const string ReferenceRiskFactorTaxonomy = """
+        {
+          "request_id": "daac836f71724420b66011d55d88b30b",
+          "results": [
+            {
+              "description": "Risk from inadequate performance management systems, unclear accountability structures, or ineffective measurement and incentive systems that could affect employee performance, goal achievement, and organizational effectiveness.",
+              "primary_category": "Governance & Stakeholder",
+              "secondary_category": "Organizational & Management",
+              "taxonomy": 1.0,
+              "tertiary_category": "Performance management and accountability"
+            },
+            {
+              "description": "Risk from requirements to monitor, document, and report on compliance with privacy and data protection regulations including risks from compliance program effectiveness, record-keeping requirements, and breach notification obligations.",
+              "primary_category": "Regulatory & Compliance",
+              "secondary_category": "Data & Privacy",
+              "taxonomy": 1.0,
+              "tertiary_category": "Compliance monitoring and reporting"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }

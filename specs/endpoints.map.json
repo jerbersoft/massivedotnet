@@ -1159,6 +1159,62 @@
         "footnotes":                          { "name": "Footnotes", "model": "FilingFootnote" },
         "remarks":                            { "name": "Remarks" }
       }
+    },
+
+    "FilingIndexEntry": {
+      "summary": "One entry in the SEC filing index: the filer, the form type, the filing date, and where the filing lives.",
+      "remarks": "Reference data, so a class (decision D4). Named for its place in the index rather than <c>Filing</c>, which is the fuller SEC v1 row.",
+      "schema": { "operationId": "get_stocks_filings_vX_index", "pointer": "results/items" },
+      "properties": {
+        "accession_number": { "name": "AccessionNumber" },
+        "cik":              { "name": "Cik" },
+        "ticker":           { "name": "Ticker" },
+        "issuer_name":      { "name": "IssuerName" },
+        "form_type":        { "name": "FormType" },
+        "filing_date":      { "name": "FilingDate" },
+        "filing_url":       { "name": "FilingUrl" }
+      }
+    },
+
+    "RiskFactor": {
+      "summary": "One classified risk factor from a filing: the filer, the filing date, the three-level category, and the text that supports the classification.",
+      "remarks": "Reference data, so a class (decision D4). <see cref=\"FilingDate\"/> is a bare string in the description and an ISO calendar date on the wire, hence <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9). The categories come from the taxonomy the risk-factor taxonomy route serves.",
+      "schema": { "operationId": "get_stocks_filings_vX_risk-factors", "pointer": "results/items" },
+      "properties": {
+        "cik":                { "name": "Cik" },
+        "ticker":             { "name": "Ticker" },
+        "filing_date":        { "name": "FilingDate", "type": "LocalDate?", "summary": "The date the filing was submitted to the SEC. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "supporting_text":    { "name": "SupportingText" }
+      }
+    },
+
+    "DisclosureTaxonomyEntry": {
+      "summary": "One category in the disclosure taxonomy: its three levels, the taxonomy version that defines it, and a description.",
+      "remarks": "Reference data, so a class (decision D4). The version is a string here where the risk-factor taxonomy declares a number; each model follows its own route.",
+      "schema": { "operationId": "get_stocks_taxonomies_vX_disclosures", "pointer": "results/items" },
+      "properties": {
+        "taxonomy":           { "name": "Taxonomy" },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "description":        { "name": "Description" }
+      }
+    },
+
+    "RiskFactorTaxonomyEntry": {
+      "summary": "One category in the risk-factor taxonomy: its three levels, the taxonomy version that defines it, and a description.",
+      "remarks": "Reference data, so a class (decision D4). The version is a number here where the disclosure taxonomy declares a string; each model follows its own route. The published example spells it as a string; the schema and the live wire carry the number.",
+      "schema": { "operationId": "get_stocks_taxonomies_vX_risk-factors", "pointer": "results/items" },
+      "properties": {
+        "taxonomy":           { "name": "Taxonomy" },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "description":        { "name": "Description" }
+      }
     }
   },
 
@@ -1920,6 +1976,69 @@
         "transaction_code": { "name": "transactionCode" },
         "limit":            { "name": "limit" },
         "sort":             { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_index",
+      "group": "Reference",
+      "method": "ListFilingIndex",
+      "summary": "Retrieves the index of SEC filings, filtered by filer, form type, and filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "FilingIndexEntry", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "form_type":   { "name": "formType" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_vX_risk-factors",
+      "group": "Reference",
+      "method": "ListRiskFactors",
+      "summary": "Retrieves classified risk factors from filings, filtered by filing date and filer.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9); it carries the full comparator set, so a set of dates is accepted too.",
+      "result": { "kind": "array", "model": "RiskFactor", "property": "results" },
+      "parameters": {
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
+        "ticker":      { "name": "ticker" },
+        "cik":         { "name": "cik" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_taxonomies_vX_disclosures",
+      "group": "Reference",
+      "method": "ListDisclosureTaxonomy",
+      "summary": "Retrieves the disclosure taxonomy: the categories 8-K disclosures are classified into, filtered by version and by level.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"taxonomy\"/> is the version, a string such as <c>1.0</c> on this route.",
+      "result": { "kind": "array", "model": "DisclosureTaxonomyEntry", "property": "results" },
+      "parameters": {
+        "taxonomy":           { "name": "taxonomy" },
+        "primary_category":   { "name": "primaryCategory" },
+        "secondary_category": { "name": "secondaryCategory" },
+        "tertiary_category":  { "name": "tertiaryCategory" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_taxonomies_vX_risk-factors",
+      "group": "Reference",
+      "method": "ListRiskFactorTaxonomy",
+      "summary": "Retrieves the risk-factor taxonomy: the categories risk factors are classified into, filtered by version and by level.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"taxonomy\"/> is the version, a number on this route where the disclosure taxonomy takes a string.",
+      "result": { "kind": "array", "model": "RiskFactorTaxonomyEntry", "property": "results" },
+      "parameters": {
+        "taxonomy":           { "name": "taxonomy" },
+        "primary_category":   { "name": "primaryCategory" },
+        "secondary_category": { "name": "secondaryCategory" },
+        "tertiary_category":  { "name": "tertiaryCategory" },
+        "limit":              { "name": "limit" },
+        "sort":               { "name": "sort" }
       }
     }
   ]

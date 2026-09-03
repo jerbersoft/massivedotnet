@@ -974,3 +974,83 @@ internal sealed class GetStocksFilingsVXForm4Response : IPagedEnvelope<Form4Fili
     [JsonPropertyName("status")]
     public string? Status { get; init; }
 }
+
+/// <summary>The response envelope returned by /stocks/filings/vX/index.</summary>
+internal sealed class GetStocksFilingsVXIndexResponse : IPagedEnvelope<FilingIndexEntry>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public FilingIndexEntry[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/filings/vX/risk-factors.</summary>
+internal sealed class GetStocksFilingsVXRiskFactorsResponse : IPagedEnvelope<RiskFactor>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public RiskFactor[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/taxonomies/vX/disclosures.</summary>
+internal sealed class GetStocksTaxonomiesVXDisclosuresResponse : IPagedEnvelope<DisclosureTaxonomyEntry>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public DisclosureTaxonomyEntry[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
+
+/// <summary>The response envelope returned by /stocks/taxonomies/vX/risk-factors.</summary>
+internal sealed class GetStocksTaxonomiesVXRiskFactorsResponse : IPagedEnvelope<RiskFactorTaxonomyEntry>
+{
+    /// <summary>If present, this value can be used to fetch the next page.</summary>
+    [JsonPropertyName("next_url")]
+    public string? NextUrl { get; init; }
+
+    /// <summary>A request id assigned by the server.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>The results for this request.</summary>
+    [JsonPropertyName("results")]
+    public RiskFactorTaxonomyEntry[]? Results { get; init; }
+
+    /// <summary>The status of this request's response.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+}
