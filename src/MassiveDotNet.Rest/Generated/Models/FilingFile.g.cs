@@ -20,6 +20,9 @@ namespace MassiveDotNet.Rest.Models;
 /// cref="ReferenceGroup.GetFilingFileAsync"/>, where decision D16 verifies the shape; that route
 /// serves the file itself rather than this object, so <see
 /// cref="ReferenceGroup.DownloadFilingFileAsync"/> is the method that retrieves one (decision D25).
+/// The item schema's own <c>required</c> list names a <c>file</c> property the schema never
+/// declares, and omits <c>filename</c>, which it does; the generator follows the declared property
+/// over the required list, so <see cref="Filename"/> binds optional rather than required.
 /// </remarks>
 public sealed partial record FilingFile
 {

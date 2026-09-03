@@ -75,4 +75,20 @@ public sealed class DownloadTests
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() => transport.DownloadAsync(FileUri, destination, Ct));
     }
+
+    [Fact]
+    public async Task RefusesANonWritableDestinationBeforeSendingAnyRequest()
+    {
+        StubHandler handler = new(Html);
+        using MassiveHttpTransport transport = Create(handler);
+        using MemoryStream destination = new([], writable: false);
+
+        ArgumentException exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            transport.DownloadAsync(FileUri, destination, Ct));
+
+        Assert.Equal("destination", exception.ParamName);
+        // The whole point of checking up front: a caller's quota is not spent on a request whose
+        // response has nowhere to go.
+        Assert.Equal(0, handler.RequestCount);
+    }
 }

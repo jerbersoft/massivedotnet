@@ -145,12 +145,18 @@ public sealed class MassiveHttpTransport : IDisposable
     /// The content type is not inspected: the caller asked for the bytes, and the one route that
     /// needs this, the SEC filing file, names each file's type and size in its listing (decision
     /// D25). The body streams from the network into <paramref name="destination"/> with no
-    /// intermediate buffer, as every other response does.
+    /// intermediate buffer, as every other response does. A failure partway through the copy --
+    /// the connection drops, or <paramref name="destination"/> itself errors -- leaves the
+    /// destination holding a partial body; nothing rewinds or truncates it, and the underlying
+    /// exception propagates to the caller unchanged.
     /// </remarks>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="requestUri"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// </exception>
-    /// <exception cref="ArgumentException"><paramref name="requestUri"/> is empty or whitespace.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="requestUri"/> is empty or whitespace, or <paramref name="destination"/> is
+    /// not writable.
+    /// </exception>
     /// <exception cref="ObjectDisposedException">This transport has been disposed.</exception>
     /// <exception cref="MassiveRateLimitExceededException">The server responded with HTTP 429.</exception>
     /// <exception cref="MassiveApiException">The server responded with any other error status.</exception>
@@ -158,6 +164,14 @@ public sealed class MassiveHttpTransport : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestUri);
         ArgumentNullException.ThrowIfNull(destination);
+
+        // Checked before the request is sent, alongside the other argument guards: a caller's
+        // quota should not be spent on a request whose response has nowhere to go.
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException("The destination stream is not writable.", nameof(destination));
+        }
+
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);

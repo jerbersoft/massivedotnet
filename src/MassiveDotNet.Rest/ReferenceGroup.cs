@@ -33,7 +33,11 @@ public readonly partial struct ReferenceGroup
     /// which is what this method is for (decision D25). The bytes are copied as sent, whatever
     /// their type: <see cref="ListFilingFilesAsync"/> names each file's type and size, so the
     /// caller knows what it asked for. The URI comes from the same generated builder the declared
-    /// method uses, so the two cannot drift apart.
+    /// method uses, so the two cannot drift apart. No content type is inspected, so if the service
+    /// ever stops drifting and starts serving the declared JSON object at this route, this method
+    /// copies that object's own bytes to <paramref name="destination"/> without error; <see
+    /// cref="GetFilingFileAsync"/> is what pins the drift and starts succeeding, rather than
+    /// throwing, on that day, but this method carries no equivalent signal.
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="filingId"/> or <paramref name="fileId"/> is empty or whitespace.</exception>
     /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>

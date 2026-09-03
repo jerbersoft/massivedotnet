@@ -35,7 +35,11 @@ public sealed class ReferenceFinancialsLiveTests : LiveApiTest
         // wire sent RFC 3339 here where the SEC v1 filings send the compact form, which is why
         // the property is a string on both (D-R9).
         Assert.Contains("AAPL", report.Tickers ?? []);
-        Assert.NotNull(report.AcceptanceTimestamp);
+        // Pins the RFC 3339 shape the map row's dated observation records -- seconds precision,
+        // "Z" offset, e.g. "2025-10-31T10:01:26Z" -- the same way the SEC v1 sibling pins its
+        // compact form at ReferenceSecFilingsLiveTests.cs:96. Falsifiable on purpose: this flips
+        // the day the service sends the compact form here instead.
+        Assert.Equal(20, report.AcceptanceTimestamp?.Length);
 
         FinancialStatements statements = report.Financials;
         Assert.NotNull(statements.BalanceSheet);
