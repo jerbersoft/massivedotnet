@@ -1004,6 +1004,38 @@
         "filing_url":  { "name": "FilingUrl" },
         "text":        { "name": "Text" }
       }
+    },
+
+    "EightKDisclosure": {
+      "summary": "One classified disclosure from an 8-K filing: the filer, the filing date, the three-level category, and the text that supports the classification.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8). <see cref=\"FilingDate\"/> is a bare string in the description and an ISO calendar date on the wire, hence <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9). The categories come from the taxonomy the disclosure taxonomy route serves.",
+      "schema": { "operationId": "get_stocks_filings_8-K_vX_disclosures", "pointer": "results/items" },
+      "properties": {
+        "accession_number":   { "name": "AccessionNumber" },
+        "cik":                { "name": "Cik" },
+        "tickers":            { "name": "Tickers" },
+        "filing_date":        { "name": "FilingDate", "type": "LocalDate?", "summary": "The date the filing was submitted to the SEC. The description types this a bare string; the wire carries an ISO calendar date (D-R9)." },
+        "filing_url":         { "name": "FilingUrl" },
+        "primary_category":   { "name": "PrimaryCategory" },
+        "secondary_category": { "name": "SecondaryCategory" },
+        "tertiary_category":  { "name": "TertiaryCategory" },
+        "supporting_text":    { "name": "SupportingText" }
+      }
+    },
+
+    "EightKText": {
+      "summary": "The item text of one 8-K filing: the filer, the form type, the filing date, and the text of the items it reports.",
+      "remarks": "Reference data, so a class (decision D4). Named with the form number spelled out because a C# identifier cannot start with a digit (D-R8).",
+      "schema": { "operationId": "get_stocks_filings_8-K_vX_text", "pointer": "results/items" },
+      "properties": {
+        "accession_number": { "name": "AccessionNumber" },
+        "cik":              { "name": "Cik" },
+        "ticker":           { "name": "Ticker" },
+        "form_type":        { "name": "FormType" },
+        "filing_date":      { "name": "FilingDate" },
+        "filing_url":       { "name": "FilingUrl" },
+        "items_text":       { "name": "ItemsText" }
+      }
     }
   },
 
@@ -1682,6 +1714,38 @@
         "section":     { "name": "section" },
         "filing_date": { "name": "filingDate", "type": "LocalDate" },
         "period_end":  { "name": "periodEnd", "type": "LocalDate" },
+        "limit":       { "name": "limit" },
+        "sort":        { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_8-K_vX_disclosures",
+      "group": "Reference",
+      "method": "List8KDisclosures",
+      "summary": "Retrieves classified disclosures from 8-K filings, filtered by filer, ticker, filing date, and the most specific category.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"tickers\"/> filters an array field: pass a plain value for rows that contain it, or an <see cref=\"ArrayFilter\"/> factory for any or all of several. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9). <paramref name=\"tertiaryCategory\"/> is an exact match against the disclosure taxonomy.",
+      "result": { "kind": "array", "model": "EightKDisclosure", "property": "results" },
+      "parameters": {
+        "cik":               { "name": "cik" },
+        "tickers":           { "name": "tickers" },
+        "filing_date":       { "name": "filingDate", "type": "LocalDate" },
+        "tertiary_category": { "name": "tertiaryCategory" },
+        "limit":             { "name": "limit" },
+        "sort":              { "name": "sort" }
+      }
+    },
+    {
+      "operationId": "get_stocks_filings_8-K_vX_text",
+      "group": "Reference",
+      "method": "List8KText",
+      "summary": "Retrieves the item text of 8-K filings, filtered by filer, form type, and filing date.",
+      "remarks": "The route's <c>vX</c> segment marks it experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint. <paramref name=\"filingDate\"/> is a bare string in the description whose prose says <c>YYYY-MM-DD</c>, so it binds <see cref=\"NodaTime.LocalDate\"/> from the map (D-R9).",
+      "result": { "kind": "array", "model": "EightKText", "property": "results" },
+      "parameters": {
+        "cik":         { "name": "cik" },
+        "ticker":      { "name": "ticker" },
+        "form_type":   { "name": "formType" },
+        "filing_date": { "name": "filingDate", "type": "LocalDate" },
         "limit":       { "name": "limit" },
         "sort":        { "name": "sort" }
       }

@@ -2097,4 +2097,72 @@ internal static class Fixtures
           "status": "OK"
         }
         """;
+
+    /// <summary>The documented sample for GET /stocks/filings/8-K/vX/disclosures. It carries a cursor of its own.</summary>
+    public const string ReferenceEightKDisclosures = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/stocks/filings/8-K/vX/disclosures?cursor=eyJsaW1pd...",
+          "request_id": "b4e7c2a1f3d8e9g0",
+          "results": [
+            {
+              "accession_number": "0000320193-25-000010",
+              "cik": "0000320193",
+              "filing_date": "2025-01-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000010.txt",
+              "primary_category": "financial_results",
+              "secondary_category": "earnings_announcement",
+              "supporting_text": "On January 14, 2025, Apple Inc. announced financial results for the fiscal quarter ended December 28, 2024.",
+              "tertiary_category": "quarterly_results",
+              "tickers": [
+                "AAPL"
+              ]
+            },
+            {
+              "accession_number": "0000004962-25-000002",
+              "cik": "0000004962",
+              "filing_date": "2025-01-15",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/4962/0000004962-25-000002.txt",
+              "primary_category": "regulatory_compliance",
+              "secondary_category": "regulation_fd",
+              "supporting_text": "American Express Company is hereby furnishing below delinquency and write-off statistics for its U.S. Consumer and Small Business portfolios.",
+              "tertiary_category": "financial_data_disclosure",
+              "tickers": [
+                "AXP"
+              ]
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /stocks/filings/8-K/vX/text. It carries a cursor of its own.</summary>
+    public const string ReferenceEightKText = """
+        {
+          "count": 2,
+          "next_url": "https://api.massive.com/stocks/filings/8-K/vX/text?cursor=eyJsaW1pd...",
+          "request_id": "a3f8b2c1d4e5f6g7",
+          "results": [
+            {
+              "accession_number": "0000004962-25-000002",
+              "cik": "0000004962",
+              "filing_date": "2025-01-15",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/4962/0000004962-25-000002.txt",
+              "form_type": "8-K",
+              "items_text": "Item 7.01\tRegulation FD Disclosure\n\nAmerican Express Company is hereby furnishing below delinquency and write-off statistics...",
+              "ticker": "AXP"
+            },
+            {
+              "accession_number": "0000320193-25-000010",
+              "cik": "0000320193",
+              "filing_date": "2025-01-14",
+              "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000010.txt",
+              "form_type": "8-K",
+              "items_text": "Item 2.02\tResults of Operations and Financial Condition\n\nOn January 14, 2025, Apple Inc. announced financial results...",
+              "ticker": "AAPL"
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }
