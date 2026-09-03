@@ -169,12 +169,13 @@ internal sealed class Spec
 
     /// <summary>
     /// Whether Massive publishes an operation as experimental: its route carries a <c>vX</c>
-    /// segment, or it declares <c>x-polygon-experimental</c>. Both are read because the
-    /// extension appears on only two of the fourteen <c>vX</c> routes.
+    /// segment, or a <c>dev</c> segment where a released route carries its version, or it
+    /// declares <c>x-polygon-experimental</c>. All three are read because the extension appears
+    /// on only two of the fourteen <c>vX</c> routes and on no <c>dev</c> route at all (D18, D22).
     /// </summary>
     public static bool IsExperimental(SpecOperation operation) =>
         operation.Operation.TryGetProperty("x-polygon-experimental", out _)
-        || operation.Path.Split('/').Contains("vX");
+        || operation.Path.Split('/').Any(segment => segment is "vX" or "dev");
 
     /// <summary>The deprecation an operation declares, or <see langword="null"/> for a live one.</summary>
     public static SpecDeprecation? Deprecation(SpecOperation operation)
