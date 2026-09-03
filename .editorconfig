@@ -1,0 +1,48 @@
+# The style analyzers already ran before this file existed: Directory.Build.props sets
+# EnforceCodeStyleInBuild. What was missing is severity. Without an .editorconfig every IDE rule
+# sits at its default, which is a suggestion, so none of them could fail a build no matter what
+# TreatWarningsAsErrors said — and an unused using reached master that way (#43).
+#
+# Two jobs below, deliberately kept apart:
+#
+#   1. Record the style this codebase already uses, so the Roslyn defaults stop disagreeing with it.
+#      These lines set preferences, not severities. They change no gate; they stop an editor showing
+#      570 suggestions that all amount to "this repository is not written the way the default
+#      expects". Both values were measured against the tree rather than chosen by taste.
+#
+#   2. Raise to warning the rules that catch a defect rather than express a preference. With
+#      TreatWarningsAsErrors on, that short list is the build gate, so it earns its entries: each
+#      one had zero violations at the moment it was added, which makes the floor a commitment about
+#      future code rather than a record of a cleanup.
+
+root = true
+
+[*.cs]
+
+# --------------------------------------------------------------------------------- house style
+
+# Every file in the repository is file-scoped, generated and hand-written alike. The default
+# preference is block-scoped, which is where 304 of those 570 suggestions came from.
+csharp_style_namespace_declarations = file_scoped
+
+# An expression body where the member fits on one line, a block where it does not. Measured:
+# when_on_single_line disagrees with 80 members, true disagrees with 86, and the difference is
+# genuine mixed usage rather than a default mismatch — so these stay suggestions.
+csharp_style_expression_bodied_methods = when_on_single_line
+csharp_style_expression_bodied_constructors = when_on_single_line
+csharp_style_expression_bodied_operators = when_on_single_line
+csharp_style_expression_bodied_local_functions = when_on_single_line
+
+# ------------------------------------------------------------------------------------ the gate
+
+# IDE0004 (redundant cast) is deliberately absent, having been considered and rejected. Its only
+# three sites are casts like (double?)0.25 in the RequestUriBuilder tests, which pin overload
+# resolution against the filter overloads that convert implicitly from T (D15), and which sit beside
+# a (double?)null that needs its cast to compile at all. Removing them mechanically would make those
+# tests read worse and bind more loosely, so the rule that demands it does not belong in the gate.
+#
+# BuildGateTests asserts this list, so an entry cannot quietly leave it.
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0035.severity = warning
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning

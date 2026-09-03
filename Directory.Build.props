@@ -8,6 +8,13 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- Roslyn refuses to run IDE0005 without a documentation file, so while src was the only tree
+         that set this, the rule could not reach anywhere else — which is where the unused using in
+         #43 escaped. Setting it here covers every project. The documentation warnings it also
+         switches on are relaxed outside src, in the props file for each tree rather than
+         per-project (rule 9's carve-out). src keeps its own copy for a different reason: a shipped
+         package carries its XML docs. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <InvariantGlobalization>true</InvariantGlobalization>

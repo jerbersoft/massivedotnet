@@ -1,0 +1,15 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup Label="Documentation">
+    <!-- The root turns on the documentation file so IDE0005 can run here (#43). Rule 10's
+         obligation is scoped to the public members of the shipped libraries, so the warnings that
+         arrive with that file are relaxed for this tree: a missing summary on a test class or on a
+         build-time generator helper tells a reader nothing, and CS1591 alone accounts for 946 of
+         them. The relaxation lives here, in one file a reviewer can find, rather than in each
+         csproj — which is the form rule 9 forbids. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -24,8 +24,8 @@ and does not belong in this section.
 | 6 | The generator is deterministic: same inputs produce byte-identical output. | CI idempotency check |
 | 7 | `MassiveDotNet` (core) references **no** external package other than NodaTime (rule 12). Every other project stays dependency-free unless listed here. | CI assertion on the restore graph |
 | 8 | `Microsoft.Extensions.*` appears only in `MassiveDotNet.Extensions.DependencyInjection`. | CI assertion on the restore graph |
-| 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project. | CI build |
-| 10 | Every public member carries XML documentation. | `GenerateDocumentationFile` + warnings-as-errors (CS1591) |
+| 9 | Builds are warning-free. `TreatWarningsAsErrors` is on and is not to be relaxed per-project, with one carve-out: the documentation warnings CS1591 and CS1573 are suppressed outside `src`, in `tests/` and `tools/Directory.Build.props`, because rule 10 is scoped to the shipped libraries. The style rules that can fail a build are the floor named in `.editorconfig`; the rest are suggestions on purpose. | CI build; `BuildGateTests` asserts the floor and the carve-out's placement |
+| 10 | Every public member of a shipped library carries XML documentation. | `GenerateDocumentationFile`, set repo-wide because IDE0005 needs it, plus warnings-as-errors on CS1591 — which only `src` leaves unsuppressed |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
 | 13 | **CI runs entirely offline.** No live API key is ever placed in CI, and no test that calls the service executes there. Integration tests against the live API are committed and run locally; CI excludes them by category but still compiles them, so public API drift breaks the build. | CI holds no credential secret, asserts no workflow references one, and asserts the exclusion actually selected no live test |
 | 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
@@ -380,6 +380,13 @@ skip would read as green.
   `Dictionary`. Deserialize from the response stream; never buffer a body into a string first.
 - **Comments**: explain *why*, not *what*. The generator's output is read by humans in review, so
   emitted comments are held to the same standard as hand-written ones.
+- **Style**: `.editorconfig` does two separate jobs and the distinction matters. It records the
+  house style — file-scoped namespaces, expression bodies where a member fits on one line — as
+  *preferences*, which change no gate and exist so an editor stops disagreeing with the tree. It
+  separately raises four rules to warnings, and those are the gate: IDE0005, IDE0035, IDE0051,
+  IDE0052. Add to that floor only a rule that catches a defect rather than expresses taste, and
+  only when it is already at zero violations, so turning it on is a promise about future code and
+  not a cleanup someone has to review. Everything else stays a suggestion deliberately.
 - **Tests**: prefer driving the real public API through a stubbed `HttpMessageHandler` over testing
   internals. See [Testing](#testing) for where fixtures come from and why the suite runs offline.
 - **Commits**: do not commit or push unless asked.
