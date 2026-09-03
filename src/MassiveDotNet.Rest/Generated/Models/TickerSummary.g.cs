@@ -20,11 +20,12 @@ namespace MassiveDotNet.Rest.Models;
 /// identifiers that tie it to other reference data.
 /// </summary>
 /// <remarks>
-/// Reference data, so a class rather than a struct (decision D4), and the model the constitution's
-/// own example names. <see cref="TickerDetails"/> is the same identity with the company profile
-/// added; the two are separate models because the details carry twelve properties the list does not
-/// (decision D16). Both timestamps are RFC 3339 strings read by the <see cref="NodaTime.Instant"/>
-/// converter.
+/// Reference data, so a class rather than a struct (decision D4), following D4's own reference-type
+/// example but named <c>TickerSummary</c> rather than <c>Ticker</c> because C# forbids a member
+/// named after its enclosing type (CS0542), and <c>Ticker</c> is the SDK-wide property name for the
+/// wire field. <see cref="TickerDetails"/> is the same identity with the company profile added; the
+/// two are separate models because the details carry twelve properties the list does not (decision
+/// D16). Both timestamps are RFC 3339 strings read by the <see cref="NodaTime.Instant"/> converter.
 /// </remarks>
 public sealed partial record TickerSummary
 {
@@ -51,10 +52,7 @@ public sealed partial record TickerSummary
     [JsonPropertyName("primary_exchange")]
     public string? PrimaryExchange { get; init; }
 
-    /// <summary>
-    /// The type of the asset. Find the types that we support via our [Ticker Types
-    /// API](https://massive.com/docs/rest/stocks/tickers/ticker-types).
-    /// </summary>
+    /// <summary>The ticker type code; <c>ListTickerTypesAsync</c> lists the codes.</summary>
     [JsonPropertyName("type")]
     public string? Type { get; init; }
 

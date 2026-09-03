@@ -51,10 +51,7 @@ public sealed partial record TickerDetails
     [JsonPropertyName("primary_exchange")]
     public string? PrimaryExchange { get; init; }
 
-    /// <summary>
-    /// The type of the asset. Find the types that we support via our [Ticker Types
-    /// API](https://massive.com/docs/rest/stocks/tickers/ticker-types).
-    /// </summary>
+    /// <summary>The ticker type code; <c>ListTickerTypesAsync</c> lists the codes.</summary>
     [JsonPropertyName("type")]
     public string? Type { get; init; }
 

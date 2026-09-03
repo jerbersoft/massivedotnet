@@ -761,8 +761,9 @@ public readonly partial struct ReferenceGroup
     /// each page rather than the traversal, so lowering it issues more requests rather than returning
     /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
     /// to no constraint. Pass a plain value for equality or a <see cref="RangeFilter"/> factory for a
-    /// range. The date filters are bare strings in the description and take <see
-    /// cref="NodaTime.LocalDate"/> here because that is what the route accepts (D-R9). <see
+    /// range. The date filters carry <c>format: date</c> in the description and bind <see
+    /// cref="NodaTime.LocalDate"/> on their own, while the response's date properties are bare strings
+    /// the map retypes to <see cref="NodaTime.LocalDate"/> (D-R9). <see
     /// cref="StocksGroup.ListDividendsAsync"/> is the newer stocks route with a wider row; this one is
     /// kept because the description declares it.
     /// </remarks>
@@ -818,8 +819,9 @@ public readonly partial struct ReferenceGroup
     /// Returns the first page only. Use <see cref="EnumerateDividendsAsync"/> to walk every page
     /// without handling cursors yourself. Every filter is optional and defaults to no constraint. Pass
     /// a plain value for equality or a <see cref="RangeFilter"/> factory for a range. The date filters
-    /// are bare strings in the description and take <see cref="NodaTime.LocalDate"/> here because that
-    /// is what the route accepts (D-R9). <see cref="StocksGroup.ListDividendsAsync"/> is the newer
+    /// carry <c>format: date</c> in the description and bind <see cref="NodaTime.LocalDate"/> on their
+    /// own, while the response's date properties are bare strings the map retypes to <see
+    /// cref="NodaTime.LocalDate"/> (D-R9). <see cref="StocksGroup.ListDividendsAsync"/> is the newer
     /// stocks route with a wider row; this one is kept because the description declares it.
     /// </remarks>
     /// <param name="ticker">

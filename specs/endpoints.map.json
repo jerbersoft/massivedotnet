@@ -527,7 +527,7 @@
 
     "TickerSummary": {
       "summary": "One row of the ticker list: the symbol, its name, market, locale, and primary exchange, and the identifiers that tie it to other reference data.",
-      "remarks": "Reference data, so a class rather than a struct (decision D4), and the model the constitution's own example names. <see cref=\"TickerDetails\"/> is the same identity with the company profile added; the two are separate models because the details carry twelve properties the list does not (decision D16). Both timestamps are RFC 3339 strings read by the <see cref=\"NodaTime.Instant\"/> converter.",
+      "remarks": "Reference data, so a class rather than a struct (decision D4), following D4's own reference-type example but named <c>TickerSummary</c> rather than <c>Ticker</c> because C# forbids a member named after its enclosing type (CS0542), and <c>Ticker</c> is the SDK-wide property name for the wire field. <see cref=\"TickerDetails\"/> is the same identity with the company profile added; the two are separate models because the details carry twelve properties the list does not (decision D16). Both timestamps are RFC 3339 strings read by the <see cref=\"NodaTime.Instant\"/> converter.",
       "schema": { "operationId": "ListTickers", "pointer": "results/items" },
       "properties": {
         "ticker":               { "name": "Ticker" },
@@ -535,7 +535,7 @@
         "market":               { "name": "Market" },
         "locale":               { "name": "Locale" },
         "primary_exchange":     { "name": "PrimaryExchange" },
-        "type":                 { "name": "Type" },
+        "type":                 { "name": "Type", "summary": "The ticker type code; <c>ListTickerTypesAsync</c> lists the codes." },
         "active":               { "name": "IsActive" },
         "currency_symbol":      { "name": "CurrencySymbol" },
         "currency_name":        { "name": "CurrencyName" },
@@ -559,7 +559,7 @@
         "market":                         { "name": "Market" },
         "locale":                         { "name": "Locale" },
         "primary_exchange":               { "name": "PrimaryExchange" },
-        "type":                           { "name": "Type" },
+        "type":                           { "name": "Type", "summary": "The ticker type code; <c>ListTickerTypesAsync</c> lists the codes." },
         "active":                         { "name": "IsActive" },
         "currency_name":                  { "name": "CurrencyName" },
         "cik":                            { "name": "Cik" },
@@ -601,8 +601,8 @@
       "remarks": "The URLs point at a branding route that requires the same API key as every other request; the SDK does not fetch them.",
       "schema": { "operationId": "GetTicker", "pointer": "results/branding" },
       "properties": {
-        "logo_url": { "name": "LogoUrl" },
-        "icon_url": { "name": "IconUrl" }
+        "logo_url": { "name": "LogoUrl", "summary": "A link to this ticker's company's logo. Note that you must provide an API key when accessing this URL." },
+        "icon_url": { "name": "IconUrl", "summary": "A link to this ticker's company's icon. Icon's are generally smaller, square images that represent the company at a glance. Note that you must provide an API key when accessing this URL." }
       }
     },
 
@@ -1379,7 +1379,7 @@
       "group": "Reference",
       "method": "ListDividends",
       "summary": "Retrieves cash dividends from the v3 reference route, filtered by ticker, by any of the four dates that govern a dividend, by amount, and by type.",
-      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality or a <see cref=\"RangeFilter\"/> factory for a range. The date filters are bare strings in the description and take <see cref=\"NodaTime.LocalDate\"/> here because that is what the route accepts (D-R9). <see cref=\"StocksGroup.ListDividendsAsync\"/> is the newer stocks route with a wider row; this one is kept because the description declares it.",
+      "remarks": "Every filter is optional and defaults to no constraint. Pass a plain value for equality or a <see cref=\"RangeFilter\"/> factory for a range. The date filters carry <c>format: date</c> in the description and bind <see cref=\"NodaTime.LocalDate\"/> on their own, while the response's date properties are bare strings the map retypes to <see cref=\"NodaTime.LocalDate\"/> (D-R9). <see cref=\"StocksGroup.ListDividendsAsync\"/> is the newer stocks route with a wider row; this one is kept because the description declares it.",
       "result": { "kind": "array", "model": "ReferenceDividend", "property": "results" },
       "parameters": {
         "ticker":           { "name": "ticker" },
