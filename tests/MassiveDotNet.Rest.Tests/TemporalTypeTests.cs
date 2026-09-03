@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace MassiveDotNet.Rest.Tests;
@@ -34,13 +35,32 @@ public sealed partial class TemporalTypeTests
 
     // ---------------------------------------------------------------- layer 1: compiled surface
 
+    /// <summary>
+    /// Every library the repository ships. <see cref="EveryShippedLibraryIsInspected"/> keeps this
+    /// list from going stale when a fourth package arrives, since an assembly nobody names here is
+    /// one this layer silently never looks at.
+    /// </summary>
+    private static readonly Assembly[] ShippedAssemblies =
+    [
+        typeof(MassiveClientOptions).Assembly,
+        typeof(MassiveRestClient).Assembly,
+        typeof(MassiveServiceCollectionExtensions).Assembly,
+    ];
+
+    [Fact]
+    public void EveryShippedLibraryIsInspected()
+    {
+        string[] projects = Directory.GetDirectories(Path.Combine(RepositoryRoot, "src"));
+
+        Assert.Equal(projects.Length, ShippedAssemblies.Length);
+    }
+
     [Fact]
     public void PublicApiUsesNodaTimeForAllTemporalTypes()
     {
-        Assembly[] shipped = [typeof(MassiveClientOptions).Assembly, typeof(MassiveRestClient).Assembly];
         List<string> violations = [];
 
-        foreach (Assembly assembly in shipped)
+        foreach (Assembly assembly in ShippedAssemblies)
         {
             foreach (Type type in assembly.GetExportedTypes())
             {

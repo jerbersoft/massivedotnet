@@ -50,9 +50,10 @@ history. Query-string auth is still available through `MassiveAuthenticationSche
 
 `samples/MassiveDotNet.Quickstart` is a runnable version of the walkthrough below. Every snippet in
 [The shape of the API](#the-shape-of-the-api) is lifted from it, so the build is what keeps them
-honest — a signature change that would silently rot this page breaks that project instead. (The
-`IHttpClientFactory` registration further down is the exception: it needs
-`Microsoft.Extensions.*`, which core deliberately does not reference.)
+honest — a signature change that would silently rot this page breaks that project instead. The
+`AddMassive` registrations under [Dependency injection](#dependency-injection) call the same API
+that `samples/MassiveDotNet.HostSample` and `samples/MassiveDotNet.WebSample` compile; the
+resilience line there is illustrative, since it needs a package neither sample references.
 
 ```bash
 export MASSIVE_API_KEY=...
@@ -248,19 +249,50 @@ using MassiveRestClient client = new(new MassiveClientOptions
 });
 ```
 
-### With `IHttpClientFactory`
+### Dependency injection
+
+`MassiveDotNet.Extensions.DependencyInjection` wires the client through `IHttpClientFactory`. It is
+a separate package so core stays dependency-free — it is the only project allowed to reference
+`Microsoft.Extensions.*`, and CI asserts that.
+
+```csharp
+builder.Services.AddMassive(options =>
+{
+    options.ApiKey = builder.Configuration["Massive:ApiKey"];
+    options.UserAgent = "my-app/1.0";
+});
+```
+
+`MassiveRestClient` then arrives by injection like any other service. It and `MassiveHttpTransport`
+are registered as **singletons**, matching the lifetime the client documents for itself.
+
+`AddMassive` returns the `IHttpClientBuilder` for the underlying named client, so resilience,
+logging, or any other handler goes on the same pipeline:
+
+```csharp
+builder.Services.AddMassive(apiKey)
+       .AddStandardResilienceHandler();   // Microsoft.Extensions.Http.Resilience
+```
+
+There is deliberately **no** overload that binds an `IConfiguration` section. `Timeout` is a
+NodaTime `Duration`, which the configuration binder cannot convert — a bound section compiles,
+publishes AOT clean, raises nothing at runtime, and silently keeps the default. Reading the values
+yourself costs a line and fails visibly instead.
+
+Registering twice layers another options delegate without attaching the key twice, and the
+`Authorization` header's value is redacted in the factory's logs no matter how you configure
+logging — the SDK put the key there, so it is the SDK's job to keep it out of your log sink.
+
+Both samples in `samples/` register the SDK this way: `MassiveDotNet.HostSample` on the Generic
+Host, `MassiveDotNet.WebSample` on a minimal API. Both publish Native AOT with zero warnings in CI.
+
+### Without dependency injection
 
 Hand the transport an `HttpClient` you own and it will not manage that client's lifetime. Add
 `MassiveAuthenticationHandler` so every request — including pages fetched while following a cursor
 — carries the key. Both types live in `MassiveDotNet.Http`:
 
 ```csharp
-services.AddHttpClient("massive", http => http.BaseAddress = MassiveEndpoints.Production)
-        .AddHttpMessageHandler(() => new MassiveAuthenticationHandler(
-            apiKey,
-            MassiveAuthenticationScheme.BearerToken));
-
-// then, where you need a client:
 HttpClient http = factory.CreateClient("massive");
 MassiveHttpTransport transport = new(http);
 MassiveRestClient client = new(transport);
@@ -269,13 +301,8 @@ MassiveRestClient client = new(transport);
 `BaseAddress` is required on that `HttpClient`: pagination checks a cursor's origin against it
 before sending your key, and throws if it is unset.
 
-Register the transport and the client as singletons. The transport does not own a caller-supplied
-`HttpClient`, so disposing it leaves the factory's client — and its pooled connections — alone.
-
-A first-class `services.AddMassive(...)` registration will ship in a separate
-`MassiveDotNet.Extensions.DependencyInjection` package — [#6](https://github.com/jerbersoft/massivedotnet/issues/6) —
-kept out of core so the dependency-free AOT story holds. Until then, the registration above is the
-supported path.
+The transport does not own a caller-supplied `HttpClient`, so disposing it leaves the factory's
+client — and its pooled connections — alone.
 
 ## Coverage
 

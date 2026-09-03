@@ -23,6 +23,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      TemporalTypeTests reflects over every shipped assembly, and the DI package is the third.
+      Rule 8 confines Microsoft.Extensions.* to that package within src/, which this test project
+      is not; CI greps src/ for exactly that reason.
+    -->
+    <ProjectReference Include="../../src/MassiveDotNet.Extensions.DependencyInjection/MassiveDotNet.Extensions.DependencyInjection.csproj" />
     <ProjectReference Include="../../src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
   </ItemGroup>
 

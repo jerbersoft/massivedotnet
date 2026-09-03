@@ -65,6 +65,8 @@ reversing one of these, the "why" column is the argument you need to defeat.
 | D24 | A `oneOf` with exactly one branch reads as that branch, in `Spec.Shape` and `Spec.Collect`; a `oneOf` of scalars stays a scalar; a `oneOf` with more than one branch of which any is an object fails generation. | The description uses the one-branch form once, on the ticker events items, and the generator read it as an array of strings, which would have failed on every real response: the silent wrong binding D16 exists to prevent. A scalar union stays a scalar because the news parameters declare one and go through the same classifier. An object union has no honest model binding, so it is refused rather than guessed; none exists today. |
 | D26 | When the description declares two revisions of one route, the served, documented revision takes the plain method name and the other carries its version segment: `ListIposAsync` for `/vX/reference/ipos` beside `ListIposV1Async`, `List10KSectionsAsync` for the `vX` sections route beside `List10KSectionsVx0Async`. The rename lands in the D21 removal commit when Massive retires a revision. | Naming is the map's job, so this is not a second stability source: both revisions ship and both are marked from the path (D18). Giving the plain name to the versioned route because the description promotes it was rejected: `ListIposAsync` would 404 today, and the cost at the transition, one breaking rename noted in the changelog, is the same either way. D25 is reserved for the SEC filings plan. |
 | D25 | A route that serves a document where the description declares JSON ships **as declared**, and a hand-written download sits beside it: `GetFilingFileAsync` returns the declared `FilingFile` and throws on the HTML the service sends, while `DownloadFilingFileAsync` copies the bytes to a caller's stream through the same generated URI builder. `MassiveHttpTransport.DownloadAsync` inspects no content type. | The SEC filing file route declares a metadata object and serves `text/html` with either `Accept` header, observed 2026-09-03. A map-level `kind: document` would have the map overriding the description on a live observation, which is the second stability source D18 and D21 forbid, so the generated method stays as declared and its pinned live test flips the day either side moves. The download is hand-written because nothing in the description says it exists. Returning a `Stream` was rejected because it ties the response's lifetime to a value the caller may forget to dispose, and returning a `string` is wrong for the graphics and PDFs a filing carries. The content type is not inspected because the caller asked for the bytes and the files listing already names each file's type, name, and size. |
+| D27 | `AddMassive` takes an API key or an `Action<MassiveClientOptions>`, and **no** `IConfiguration` overload. A consumer reads the values themselves: `options.ApiKey = configuration["Massive:ApiKey"]`. | `MassiveClientOptions.Timeout` is a NodaTime `Duration`, which the configuration binder cannot convert. Probed on 2026-09-03: a section declaring `"Timeout": "00:00:30"` bound clean, published Native AOT with zero warnings, raised nothing at runtime, and left the 100-second default in place. That is the silent wrong binding D16 exists to forbid, arriving on the configuration side — and worse than D16's case, because the type is right and only the value is missing, so nothing downstream can notice. Shipping the overload with a hand-written `Timeout` special case was rejected: it fixes the one property the SDK owns today and quietly breaks on the next non-BCL type added to the options. The indexer costs a consumer one line, uses no reflection, and fails visibly when the key is absent. |
+| D28 | The transport and the client register as **singletons** over one `HttpClient` resolved from `IHttpClientFactory`, not through the typed-client pattern `AddHttpClient<MassiveRestClient>`. The primary handler carries `PooledConnectionLifetime`, and no handler lifetime is configured. | A typed client registers **transient**, and `MassiveRestClient` implements `IDisposable`, so the container tracks one undisposed instance per resolution in the root scope for the process lifetime — a leak that grows with traffic. It also contradicts the type's own documented contract, that it is long-lived and shared. Holding one `HttpClient` forgoes the factory's handler rotation, which is the acknowledged cost; rotation is not what keeps DNS fresh, `PooledConnectionLifetime` is, and core's non-DI transport already relies on exactly that, so both paths now age connections the same way. Neither wrapper owns what it is handed, so nothing here disposes the factory's client. |
 
 ---
 
@@ -77,6 +79,9 @@ specs/endpoints.map.json    Curated map: what the spec does NOT say (asset class
 tools/MassiveDotNet.CodeGen Build-time generator. Never shipped, never a consumer dependency.
 src/MassiveDotNet           Core: options, transport, auth, exceptions, enums, pooled URI building.
 src/MassiveDotNet.Rest      REST client. Generated/ is machine-owned; everything else is hand-written.
+src/MassiveDotNet.Extensions.DependencyInjection
+                            AddMassive: IHttpClientFactory wiring, options validation, and the
+                            only project permitted to reference Microsoft.Extensions.* (rule 8).
 tests/                      Unit tests, the endpoint-coverage contract tests, and the generator's diagnostic tests.
 samples/MassiveDotNet.AotSmokeTest
                             Publishes Native AOT in CI to prove rules 3 and 4.
@@ -204,6 +209,8 @@ Every place the SDK touches a BCL temporal signature. Extend this table when a n
 | `SocketsHttpHandler.PooledConnectionLifetime` | produce | `Duration.FromMinutes(2).ToTimeSpan()` | `MassiveHttpTransport` ctor |
 | `RetryConditionHeaderValue.Delta` | consume | pattern match, then `Duration.FromTimeSpan` | `MassiveHttpTransport.CreateExceptionAsync` |
 | `RetryConditionHeaderValue(TimeSpan)` | produce | `retryAfter.ToTimeSpan()` | `StubHandler` (tests) |
+| `HttpClient.Timeout` | produce | `options.Timeout.ToTimeSpan()` | `AddMassive`'s `ConfigureHttpClient` |
+| `SocketsHttpHandler.PooledConnectionLifetime` | produce | `Duration.FromMinutes(2).ToTimeSpan()` | `AddMassive`'s primary handler |
 
 Anticipated, for work not yet written:
 
@@ -246,6 +253,7 @@ for convenience.
 |------|---------|------------|-------------|
 | Offline | `MassiveDotNet.Rest.Tests` | yes | no |
 | Offline | `MassiveDotNet.CodeGen.Tests` | yes | no |
+| Offline | `MassiveDotNet.Extensions.DependencyInjection.Tests` | yes | no |
 | Live | `MassiveDotNet.IntegrationTests` | **no** — compiled only | yes |
 
 ```bash
