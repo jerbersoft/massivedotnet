@@ -14,9 +14,12 @@ public sealed class EndpointCoverageTests
 {
     /// <summary>
     /// The number of operations mapped so far. This may only ever increase: raise it as
-    /// endpoints are added, and the test then prevents anyone silently dropping one.
+    /// endpoints are added, and the test then prevents anyone silently dropping one. The one
+    /// sanctioned decrease is a description-side removal (D21): the map row, the generated
+    /// methods, and this constant go in the same commit, so the drop is visible in the diff
+    /// that explains it. A live 404 is never grounds for lowering it.
     /// </summary>
-    private const int CoverageBaseline = 22;
+    private const int CoverageBaseline = 23;
 
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
@@ -97,7 +100,8 @@ public sealed class EndpointCoverageTests
     /// Rule 2: a deprecated operation's entry points carry <see cref="ObsoleteAttribute"/> and an
     /// experimental one's carry <see cref="ExperimentalAttribute"/>, each exactly where the
     /// description says so. The signals are read here the way the generator reads them (D18):
-    /// <c>x-polygon-deprecation</c>, and a <c>vX</c> route segment or <c>x-polygon-experimental</c>.
+    /// <c>x-polygon-deprecation</c>, and a <c>vX</c> or <c>dev</c> route segment or
+    /// <c>x-polygon-experimental</c> (D22).
     /// A spec sync that deprecates a mapped operation therefore fails this test until the code
     /// is regenerated, and a hand-written partial cannot mark a stable operation by mistake.
     /// </summary>
@@ -131,7 +135,7 @@ public sealed class EndpointCoverageTests
 
             bool deprecated = operation.TryGetProperty("x-polygon-deprecation", out _);
             bool experimental = operation.TryGetProperty("x-polygon-experimental", out _)
-                || path.Split('/').Contains("vX");
+                || path.Split('/').Any(segment => segment is "vX" or "dev");
 
             // The Enumerate sibling exists only for paginated List methods; asking for it by name
             // and taking whichever entry points exist keeps this independent of pagination.

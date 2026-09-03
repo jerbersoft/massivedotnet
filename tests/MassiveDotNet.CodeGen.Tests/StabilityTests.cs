@@ -3,8 +3,8 @@ using Xunit;
 namespace MassiveDotNet.CodeGen.Tests;
 
 /// <summary>
-/// Rule 2: deprecated operations ship marked <c>[Obsolete]</c> and <c>vX</c> operations ship
-/// marked <c>[Experimental]</c>. Both signals are read from the description, never from the map
+/// Rule 2: deprecated operations ship marked <c>[Obsolete]</c> and <c>vX</c> or <c>dev</c>
+/// operations ship marked <c>[Experimental]</c>. Both signals are read from the description, never from the map
 /// (D18), so these tests drive the generator with the extensions and paths the description uses.
 /// </summary>
 public sealed class StabilityTests
@@ -114,6 +114,24 @@ public sealed class StabilityTests
             Extensions: """
                 "x-polygon-experimental": {}
                 """));
+
+        string map = Harness.MapDocument(
+            """
+            "Thing": { "schema": { "operationId": "ListThings", "pointer": "results/items" } }
+            """,
+            Harness.Endpoint("ListThings", "Thing"));
+
+        string group = Harness.Generate(spec, map)["ReferenceGroup.g.cs"];
+
+        Assert.Contains("    [Experimental(\"MASSIVE0001\", Message = ", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADevPathIsMarkedExperimental()
+    {
+        // Massive's in-development routes carry a dev segment where a released one carries a
+        // version; it is read the same way as vX, from the path and never from the map (D22).
+        string spec = Harness.Document(new Operation("ListThings", "/stocks/dev/things", Thing));
 
         string map = Harness.MapDocument(
             """

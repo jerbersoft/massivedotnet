@@ -8,8 +8,8 @@ namespace MassiveDotNet.IntegrationTests;
 /// <summary>
 /// The tick endpoints against the real service: a traversal across a real page boundary on the
 /// v3 trades envelope, the nanosecond bound that <see cref="DateOrNanoseconds"/> exists for (D20),
-/// one call each for quotes and the last quote, and a pin on the retirement of the deprecated v2
-/// pair (D-G8).
+/// one call each for quotes and the last quote, and pins on the retired v2 pair and the unserved
+/// dev route (D21, D22).
 /// </summary>
 public sealed class StocksTicksLiveTests : LiveApiTest
 {
@@ -107,13 +107,28 @@ public sealed class StocksTicksLiveTests : LiveApiTest
     }
 
     [Fact]
+    public async Task TheDevTradesRouteAnswersNotFound()
+    {
+        // The description declares GET /stocks/dev/trades/{ticker} and its dev segment marks it
+        // experimental (D22), but the service answered a plain-text 404 for it, not an API error
+        // envelope (observed 2026-09-03). D21 keeps it mapped as the description declares it;
+        // this pin flips the day the route is served, at which point it becomes a shape
+        // assertion and the hand-written fixture gets replaced by a capture.
+        MassiveApiException exception = await Assert.ThrowsAsync<MassiveApiException>(() =>
+            Client.Stocks.ListDevTradesAsync("AAPL", limit: 2, cancellationToken: Ct));
+
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+    }
+
+    [Fact]
     public async Task TheRetiredHistoricTradesRouteAnswersNotFound()
     {
         // Massive retired the v2 historic trades route server-side (observed 2026-09-02; the
-        // error body points callers at the v3 trades feed). Rule 2 keeps the SDK shipping this
-        // operation as [Obsolete], naming ListTradesAsync as the replacement, so nothing is
-        // silently dropped. This test exists so the day the route answers again, someone upgrades
-        // it back to a shape assertion instead of leaving a skip that would read as green.
+        // error body points callers at the v3 trades feed). The description still declares it,
+        // so D21 keeps the SDK shipping this operation as [Obsolete], naming ListTradesAsync as
+        // the replacement, until the nightly sync drops the route. This test exists so the day
+        // the route answers again, someone upgrades it back to a shape assertion instead of
+        // leaving a skip that would read as green.
         MassiveApiException exception = await Assert.ThrowsAsync<MassiveApiException>(() =>
             Client.Stocks.ListHistoricTradesAsync("AAPL", Session, limit: 2, cancellationToken: Ct));
 
@@ -124,7 +139,7 @@ public sealed class StocksTicksLiveTests : LiveApiTest
     public async Task TheRetiredHistoricQuotesRouteAnswersNotFound()
     {
         // Same retirement as the trades route, on the v2 historic quotes route (observed
-        // 2026-09-02); the SDK keeps ListHistoricQuotesAsync mapped and [Obsolete] under rule 2,
+        // 2026-09-02); the SDK keeps ListHistoricQuotesAsync mapped and [Obsolete] under D21,
         // naming ListQuotesAsync as the replacement.
         MassiveApiException exception = await Assert.ThrowsAsync<MassiveApiException>(() =>
             Client.Stocks.ListHistoricQuotesAsync("AAPL", Session, limit: 2, cancellationToken: Ct));

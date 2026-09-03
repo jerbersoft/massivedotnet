@@ -501,6 +501,28 @@
         "participant_id": { "name": "ParticipantId" },
         "url":            { "name": "Url" }
       }
+    },
+    "DevTrade": {
+      "kind": "struct",
+      "summary": "One trade from the in-development stocks trades feed: the v3 shape with the ticker on every row and an integer size with a separate fraction in place of the decimal string.",
+      "remarks": "A tick-level type, so a struct (decision D4). Timestamps are stored as nanosecond <see cref=\"long\"/> values and exposed as <see cref=\"NodaTime.Instant\"/> only when read (decision D5). The route is experimental (decision D22), so this shape may change with it; the description requires <see cref=\"SizeFraction\"/> and calls it the fractional size without naming a unit.",
+      "schema": { "operationId": "get_stocks_dev_trades_ticker", "pointer": "results/items" },
+      "properties": {
+        "id":                    { "name": "TradeId" },
+        "ticker":                { "name": "Ticker" },
+        "sip_timestamp":         { "name": "SipTimestampNanoseconds" },
+        "participant_timestamp": { "name": "ParticipantTimestampNanoseconds" },
+        "trf_timestamp":         { "name": "TrfTimestampNanoseconds" },
+        "sequence_number":       { "name": "SequenceNumber" },
+        "price":                 { "name": "Price" },
+        "size":                  { "name": "Size" },
+        "size_fraction":         { "name": "SizeFraction" },
+        "exchange":              { "name": "ExchangeId" },
+        "trf_id":                { "name": "TrfId" },
+        "conditions":            { "name": "Conditions" },
+        "correction":            { "name": "CorrectionIndicator" },
+        "tape":                  { "name": "Tape" }
+      }
     }
   },
 
@@ -820,6 +842,20 @@
       "result": { "kind": "array", "model": "StockExchange", "property": "results" },
       "parameters": {
         "limit": { "name": "limit" }
+      }
+    },
+    {
+      "operationId": "get_stocks_dev_trades_ticker",
+      "group": "Stocks",
+      "method": "ListDevTrades",
+      "summary": "Retrieves tick-level trades for a stock from the in-development trades feed, filtered by SIP timestamp.",
+      "remarks": "The route's <c>dev</c> segment marks it experimental (decision D22), and the service answered 404 for it when this was mapped; opt in with <c>MASSIVE0001</c> knowing the shape may change with the route. Its rows are <see cref=\"DevTrade\"/>, not <see cref=\"Trade\"/>: the ticker rides on every row and the size is an integer with a separate fraction. <paramref name=\"sipTimestamp\"/> takes a calendar date for a whole session or an <see cref=\"NodaTime.Instant\"/> for a moment within one, rendered as Unix nanoseconds (decision D20).",
+      "result": { "kind": "array", "model": "DevTrade", "property": "results" },
+      "parameters": {
+        "ticker":        { "name": "ticker" },
+        "sip_timestamp": { "name": "sipTimestamp", "type": "DateOrNanoseconds" },
+        "limit":         { "name": "limit" },
+        "sort":          { "name": "sort" }
       }
     }
   ]

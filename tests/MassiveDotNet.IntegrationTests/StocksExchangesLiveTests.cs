@@ -14,7 +14,7 @@ public sealed class StocksExchangesLiveTests : LiveApiTest
     {
         // The OpenAPI description declares GET /stocks/v1/exchanges, so rule 1 keeps it mapped
         // and reachable even though the live service returns a plain-text 404 for it (observed
-        // 2026-09-02). The same data is served at /v3/reference/exchanges?asset_class=stocks,
+        // 2026-09-02), and D21 keeps it that way until the description drops the route. The same data is served at /v3/reference/exchanges?asset_class=stocks,
         // which belongs to the Reference group -- a different operation, not a substitute mapping
         // for this one. This test pins the drift so it flips the day the service serves the
         // described route, or the description drops it.

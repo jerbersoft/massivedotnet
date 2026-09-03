@@ -21,7 +21,7 @@
       ships them marked Obsolete, and a test has to call them to prove that. The suppression is
       scoped to this project; nothing is ever suppressed inside generated code (D18).
     -->
-    <NoWarn>$(NoWarn);MASSIVE0002</NoWarn>
+    <NoWarn>$(NoWarn);MASSIVE0002;MASSIVE0001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
