@@ -551,4 +551,202 @@ public readonly partial struct ReferenceGroup
 
         return response?.Results ?? [];
     }
+
+    /// <summary>
+    /// Retrieves the current trading status of the markets: overall, per exchange, for the currency
+    /// markets, and for each index group.
+    /// </summary>
+    /// <remarks>
+    /// The body is the payload, with no envelope, so the response carries no request id (decision D17).
+    /// Pair with <see cref="ListMarketHolidaysAsync"/> for what is coming rather than what is now.
+    /// </remarks>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The response body, deserialized as one object.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status, or with a success that carried no payload.</exception>
+    public Task<MarketStatus> GetMarketStatusAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildGetMarketStatusUri();
+        return SendGetMarketStatusAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildGetMarketStatusUri()
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v1/marketstatus/now");
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MarketStatus> SendGetMarketStatusAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        MarketStatus? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.MarketStatus, cancellationToken)
+            .ConfigureAwait(false);
+
+        // An empty body is a success the caller cannot use, reported the same way as a body that
+        // fails to deserialize (D17). There is no envelope here, so no request id can be reported.
+        return response
+            ?? throw new MassiveApiException(
+                HttpStatusCode.OK,
+                $"The response from '{requestUri}' carried no payload.");
+    }
+
+    /// <summary>
+    /// Retrieves the trade and quote condition codes, with each one's SIP mappings and its effect on
+    /// aggregates, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListConditionsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. Every filter is optional and defaults
+    /// to no constraint. <paramref name="assetClass"/> is a <see cref="MarketType"/>; the description
+    /// declares four of its members here and the server rejects the rest. <paramref name="dataType"/>
+    /// is <c>trade</c>, <c>bbo</c>, or <c>nbbo</c>; <paramref name="sip"/> is <c>CTA</c>, <c>UTP</c>,
+    /// or <c>OPRA</c>.
+    /// </remarks>
+    /// <param name="assetClass">Filter for conditions within a given asset class.</param>
+    /// <param name="dataType">Filter by data type.</param>
+    /// <param name="id">Filter for conditions with a given ID.</param>
+    /// <param name="sip">Filter by SIP. If the condition contains a mapping for that SIP, the condition will be returned.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public IAsyncEnumerable<Condition> EnumerateConditionsAsync(
+        MarketType? assetClass = null,
+        string? dataType = null,
+        int? id = null,
+        string? sip = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListConditionsUri(assetClass, dataType, id, sip, order, limit, sort);
+        return _transport.EnumerateAsync<ListConditionsResponse, Condition>(
+            requestUri, MassiveRestJsonContext.Default.ListConditionsResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the trade and quote condition codes, with each one's SIP mappings and its effect on
+    /// aggregates.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateConditionsAsync"/> to walk every page
+    /// without handling cursors yourself. Every filter is optional and defaults to no constraint.
+    /// <paramref name="assetClass"/> is a <see cref="MarketType"/>; the description declares four of
+    /// its members here and the server rejects the rest. <paramref name="dataType"/> is <c>trade</c>,
+    /// <c>bbo</c>, or <c>nbbo</c>; <paramref name="sip"/> is <c>CTA</c>, <c>UTP</c>, or <c>OPRA</c>.
+    /// </remarks>
+    /// <param name="assetClass">Filter for conditions within a given asset class.</param>
+    /// <param name="dataType">Filter by data type.</param>
+    /// <param name="id">Filter for conditions with a given ID.</param>
+    /// <param name="sip">Filter by SIP. If the condition contains a mapping for that SIP, the condition will be returned.</param>
+    /// <param name="order">Order results based on the sort field.</param>
+    /// <param name="limit">Limit the number of results returned, default is 10 and max is 1000.</param>
+    /// <param name="sort">Sort field used for ordering.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<MassivePage<Condition>> ListConditionsAsync(
+        MarketType? assetClass = null,
+        string? dataType = null,
+        int? id = null,
+        string? sip = null,
+        SortOrder? order = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListConditionsUri(assetClass, dataType, id, sip, order, limit, sort);
+        return SendListConditionsAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListConditionsUri(
+        MarketType? assetClass,
+        string? dataType,
+        int? id,
+        string? sip,
+        SortOrder? order,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/conditions");
+
+        builder.AppendQuery("asset_class", assetClass?.ToWireValue());
+        builder.AppendQuery("data_type", dataType);
+        builder.AppendQuery("id", id);
+        builder.AppendQuery("sip", sip);
+        builder.AppendQuery("order", order?.ToWireValue());
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<Condition>> SendListConditionsAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListConditionsResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListConditionsResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<Condition>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves the exchanges, trade reporting facilities, and SIPs the platform knows, optionally for
+    /// one asset class and locale.
+    /// </summary>
+    /// <remarks>
+    /// The list does not page. <paramref name="assetClass"/> is a <see cref="MarketType"/>; the
+    /// description declares five of its members here and the server rejects the rest.
+    /// </remarks>
+    /// <param name="assetClass">Filter by asset class.</param>
+    /// <param name="locale">Filter by locale.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The <c>results</c> array from the response, empty when the server returned none.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    public Task<Exchange[]> ListExchangesAsync(
+        MarketType? assetClass = null,
+        string? locale = null,
+        CancellationToken cancellationToken = default)
+    {
+        string requestUri = BuildListExchangesUri(assetClass, locale);
+        return SendListExchangesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListExchangesUri(
+        MarketType? assetClass,
+        string? locale)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/v3/reference/exchanges");
+
+        builder.AppendQuery("asset_class", assetClass?.ToWireValue());
+        builder.AppendQuery("locale", locale);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<Exchange[]> SendListExchangesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        ListExchangesResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListExchangesResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response?.Results ?? [];
+    }
 }

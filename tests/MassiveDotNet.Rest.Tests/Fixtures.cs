@@ -1496,4 +1496,105 @@ internal static class Fixtures
           "stock_symbol": "AAPL"
         }
         """;
+
+    /// <summary>
+    /// The documented sample for GET /v1/marketstatus/now: the body is the payload, with no
+    /// envelope (decision D17). The sample omits <c>indicesGroups</c>, which the live service
+    /// sends; the model leaves it null here.
+    /// </summary>
+    public const string ReferenceMarketStatus = """
+        {
+          "afterHours": true,
+          "currencies": {
+            "crypto": "open",
+            "fx": "open"
+          },
+          "earlyHours": false,
+          "exchanges": {
+            "nasdaq": "extended-hours",
+            "nyse": "extended-hours",
+            "otc": "closed"
+          },
+          "market": "extended-hours",
+          "serverTime": "2020-11-10T17:37:37-05:00"
+        }
+        """;
+
+    /// <summary>The documented sample for GET /v3/reference/conditions.</summary>
+    public const string ReferenceConditions = """
+        {
+          "count": 1,
+          "request_id": "31d59dda-80e5-4721-8496-d0d32a654afe",
+          "results": [
+            {
+              "asset_class": "stocks",
+              "data_types": [
+                "trade"
+              ],
+              "id": 2,
+              "name": "Average Price Trade",
+              "sip_mapping": {
+                "CTA": "B",
+                "UTP": "W"
+              },
+              "type": "condition",
+              "update_rules": {
+                "consolidated": {
+                  "updates_high_low": false,
+                  "updates_open_close": false,
+                  "updates_volume": true
+                },
+                "market_center": {
+                  "updates_high_low": false,
+                  "updates_open_close": false,
+                  "updates_volume": true
+                }
+              }
+            }
+          ],
+          "status": "OK"
+        }
+        """;
+
+    /// <summary>
+    /// GET /v3/reference/exchanges?asset_class=stocks&amp;locale=us, captured from the live
+    /// service on 2026-09-03 because the description publishes only a CSV example for it
+    /// (D-R12). Reviewed: it carries no account identifier and no URL embeds a key.
+    /// </summary>
+    public const string ReferenceExchanges = """
+        {
+          "count": 27,
+          "request_id": "33edc6f450e0bb88f54bb3e1329f10e7",
+          "results": [
+            { "acronym": "AMEX", "asset_class": "stocks", "id": 1, "locale": "us", "mic": "XASE", "name": "NYSE American, LLC", "operating_mic": "XNYS", "participant_id": "A", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-american" },
+            { "asset_class": "stocks", "id": 2, "locale": "us", "mic": "XBOS", "name": "Nasdaq Texas, Inc.", "operating_mic": "XNAS", "participant_id": "B", "type": "exchange", "url": "https://www.nasdaq.com/solutions/nasdaq-bx-stock-market" },
+            { "acronym": "NSX", "asset_class": "stocks", "id": 3, "locale": "us", "mic": "XCIS", "name": "NYSE National, Inc.", "operating_mic": "XNYS", "participant_id": "C", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-national" },
+            { "asset_class": "stocks", "id": 4, "locale": "us", "mic": "XADF", "name": "FINRA Alternative Display Facility", "operating_mic": "FINR", "participant_id": "D", "type": "TRF", "url": "https://www.finra.org" },
+            { "asset_class": "stocks", "id": 5, "locale": "us", "name": "Unlisted Trading Privileges", "operating_mic": "XNAS", "participant_id": "E", "type": "SIP", "url": "https://www.utpplan.com" },
+            { "asset_class": "stocks", "id": 6, "locale": "us", "mic": "XISE", "name": "International Securities Exchange, LLC - Stocks", "operating_mic": "XNAS", "participant_id": "I", "type": "TRF", "url": "https://nasdaq.com/solutions/nasdaq-ise" },
+            { "asset_class": "stocks", "id": 7, "locale": "us", "mic": "EDGA", "name": "Cboe EDGA", "operating_mic": "XCBO", "participant_id": "J", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 8, "locale": "us", "mic": "EDGX", "name": "Cboe EDGX", "operating_mic": "XCBO", "participant_id": "K", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 9, "locale": "us", "mic": "XCHI", "name": "NYSE Texas, Inc.", "operating_mic": "XNYS", "participant_id": "M", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-texas" },
+            { "asset_class": "stocks", "id": 10, "locale": "us", "mic": "XNYS", "name": "New York Stock Exchange", "operating_mic": "XNYS", "participant_id": "N", "type": "exchange", "url": "https://www.nyse.com" },
+            { "asset_class": "stocks", "id": 11, "locale": "us", "mic": "ARCX", "name": "NYSE Arca, Inc.", "operating_mic": "XNYS", "participant_id": "P", "type": "exchange", "url": "https://www.nyse.com/markets/nyse-arca" },
+            { "asset_class": "stocks", "id": 12, "locale": "us", "mic": "XNAS", "name": "Nasdaq", "operating_mic": "XNAS", "participant_id": "T", "type": "exchange", "url": "https://www.nasdaq.com" },
+            { "asset_class": "stocks", "id": 13, "locale": "us", "name": "Consolidated Tape Association", "operating_mic": "XNYS", "participant_id": "S", "type": "SIP", "url": "https://www.nyse.com/data/cta" },
+            { "asset_class": "stocks", "id": 14, "locale": "us", "mic": "LTSE", "name": "Long-Term Stock Exchange", "operating_mic": "LTSE", "participant_id": "L", "type": "exchange", "url": "https://www.ltse.com" },
+            { "asset_class": "stocks", "id": 15, "locale": "us", "mic": "IEXG", "name": "Investors Exchange", "operating_mic": "IEXG", "participant_id": "V", "type": "exchange", "url": "https://www.iextrading.com" },
+            { "asset_class": "stocks", "id": 16, "locale": "us", "mic": "CBSX", "name": "Cboe Stock Exchange", "operating_mic": "XCBO", "participant_id": "W", "type": "TRF", "url": "https://www.cboe.com" },
+            { "asset_class": "stocks", "id": 17, "locale": "us", "mic": "XPHL", "name": "Nasdaq Philadelphia Exchange LLC", "operating_mic": "XNAS", "participant_id": "X", "type": "exchange", "url": "https://www.nasdaq.com/solutions/nasdaq-phlx" },
+            { "asset_class": "stocks", "id": 18, "locale": "us", "mic": "BATY", "name": "Cboe BYX", "operating_mic": "XCBO", "participant_id": "Y", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 19, "locale": "us", "mic": "BATS", "name": "Cboe BZX", "operating_mic": "XCBO", "participant_id": "Z", "type": "exchange", "url": "https://www.cboe.com/us/equities" },
+            { "asset_class": "stocks", "id": 20, "locale": "us", "mic": "EPRL", "name": "MIAX Pearl", "operating_mic": "MIHI", "participant_id": "H", "type": "exchange", "url": "https://www.miaxoptions.com/alerts/pearl-equities" },
+            { "asset_class": "stocks", "id": 21, "locale": "us", "mic": "MEMX", "name": "Members Exchange", "operating_mic": "MEMX", "participant_id": "U", "type": "exchange", "url": "https://www.memx.com" },
+            { "acronym": "24X", "asset_class": "stocks", "id": 22, "locale": "us", "mic": "24EQ", "name": "24X National Exchange LLC", "operating_mic": "24EQ", "participant_id": "G", "type": "exchange", "url": "https://24exchange.com/" },
+            { "acronym": "TXSE", "asset_class": "stocks", "id": 23, "locale": "us", "mic": "TXSE", "name": "Texas Stock Exchange LLC", "operating_mic": "TXSE", "participant_id": "F", "type": "exchange", "url": "https://txse.com/" },
+            { "asset_class": "stocks", "id": 62, "locale": "us", "mic": "OOTC", "name": "OTC Equity Security", "operating_mic": "FINR", "type": "ORF", "url": "https://www.finra.org/filing-reporting/over-the-counter-reporting-facility-orf" },
+            { "asset_class": "stocks", "id": 201, "locale": "us", "mic": "FINY", "name": "FINRA NYSE TRF", "operating_mic": "FINR", "type": "TRF", "url": "https://www.finra.org" },
+            { "asset_class": "stocks", "id": 202, "locale": "us", "mic": "FINN", "name": "FINRA Nasdaq TRF Carteret", "operating_mic": "FINR", "type": "TRF", "url": "https://www.finra.org" },
+            { "asset_class": "stocks", "id": 203, "locale": "us", "mic": "FINC", "name": "FINRA Nasdaq TRF Chicago", "operating_mic": "FINR", "type": "TRF", "url": "https://www.finra.org" }
+          ],
+          "status": "OK"
+        }
+        """;
 }
