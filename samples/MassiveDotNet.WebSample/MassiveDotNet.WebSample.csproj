@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MassiveDotNet.WebSample</RootNamespace>
+    <IsPackable>false</IsPackable>
+
+    <!-- Published Native AOT in CI, not run there: proving the DI package publishes clean inside a
+         web host is the point, and starting a server in a workflow step is not. -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MassiveDotNet.Extensions.DependencyInjection/MassiveDotNet.Extensions.DependencyInjection.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -137,19 +137,40 @@ jobs:
       # Constitution rules 3 and 4. The sample project sets
       # JsonSerializerIsReflectionEnabledByDefault=false, so any reflection fallback fails here.
       # TrimmerSingleWarn=false reports every warning rather than collapsing them per assembly.
+      # Each sample is published separately rather than in one loop with a shared log, so a
+      # warning from the DI package's dependencies cannot be mistaken for one from core.
       - name: Publish
         run: |
-          dotnet publish samples/MassiveDotNet.AotSmokeTest \
-            -r linux-x64 -c Release 2>&1 | tee aot.log
+          for sample in AotSmokeTest HostSample WebSample; do
+            dotnet publish "samples/MassiveDotNet.$sample" \
+              -r linux-x64 -c Release 2>&1 | tee "aot-$sample.log"
 
-          # Match MSBuild's warning format specifically: a bare /warning/ would also
-          # match the "0 Warning(s)" summary line and fail every clean build.
-          if grep -qE ': (warning|error) (IL|AOT|Trim)?[0-9]{4}' aot.log; then
-            echo "::error::Native AOT publish produced trim or AOT warnings."
-            grep -E ': (warning|error) ' aot.log
-            exit 1
-          fi
+            # Match MSBuild's warning format specifically: a bare /warning/ would also
+            # match the "0 Warning(s)" summary line and fail every clean build.
+            if grep -qE ': (warning|error) (IL|AOT|Trim)?[0-9]{4}' "aot-$sample.log"; then
+              echo "::error::Native AOT publish of $sample produced trim or AOT warnings."
+              grep -E ': (warning|error) ' "aot-$sample.log"
+              exit 1
+            fi
+          done
 
-      # Publishing clean is necessary but not sufficient: run it and check it works.
+      # Publishing clean is necessary but not sufficient: run it and check it works. The web
+      # sample is published only — starting a server here would prove nothing the console
+      # sample's registration does not already prove, and would need tearing down.
       - name: Run
         run: ./samples/MassiveDotNet.AotSmokeTest/bin/Release/net10.0/linux-x64/publish/MassiveDotNet.AotSmokeTest
+
+      # No API key exists in CI (rule 13), so the host sample exits 1 with its own message rather
+      # than calling the service. That still exercises host build, DI registration, and resolution
+      # under AOT, which is where a reflection fallback would surface.
+      - name: Run the host sample without a key
+        run: |
+          set +e
+          output=$(./samples/MassiveDotNet.HostSample/bin/Release/net10.0/linux-x64/publish/MassiveDotNet.HostSample 2>&1)
+          status=$?
+          set -e
+          echo "$output"
+          if [ "$status" -ne 1 ] || ! echo "$output" | grep -q 'MASSIVE_API_KEY'; then
+            echo "::error::The host sample did not report its missing key cleanly (exit $status)."
+            exit 1
+          fi

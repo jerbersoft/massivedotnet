@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MassiveDotNet.Extensions.DependencyInjection</RootNamespace>
+    <PackageId>MassiveDotNet.Extensions.DependencyInjection</PackageId>
+    <Description>Dependency injection and IHttpClientFactory integration for the MassiveDotNet SDK, for ASP.NET Core, the Generic Host, and any app with a service collection.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Constitution rule 8: this is the only project permitted to reference Microsoft.Extensions.*,
+      which is why the DI story lives in its own package rather than in core. CI asserts it by
+      grepping every csproj under src/.
+    -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
+  </ItemGroup>
+
+</Project>
