@@ -10,6 +10,7 @@
 // nullable context, so it is re-enabled explicitly here.
 #nullable enable
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
@@ -1919,6 +1920,133 @@ public readonly partial struct StocksGroup
         // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
         // reports the same thing rather than promising a page that is never fetched.
         return new MassivePage<StockExchange>(
+            response?.Results,
+            !string.IsNullOrWhiteSpace(response?.NextUrl),
+            response?.RequestId);
+    }
+
+    /// <summary>
+    /// Retrieves tick-level trades for a stock from the in-development trades feed, filtered by SIP
+    /// timestamp, enumerating every page as a single lazy sequence.
+    /// </summary>
+    /// <remarks>
+    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
+    /// cref="ListDevTradesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
+    /// each page rather than the traversal, so lowering it issues more requests rather than returning
+    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>dev</c> segment marks
+    /// it experimental (decision D22), and the service answered 404 for it when this was mapped; opt in
+    /// with <c>MASSIVE0001</c> knowing the shape may change with the route. Its rows are <see
+    /// cref="DevTrade"/>, not <see cref="Trade"/>: the ticker rides on every row and the size is an
+    /// integer with a separate fraction. <paramref name="sipTimestamp"/> takes a calendar date for a
+    /// whole session or an <see cref="NodaTime.Instant"/> for a moment within one, rendered as Unix
+    /// nanoseconds (decision D20).
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol.</param>
+    /// <param name="sipTimestamp">
+    /// The nanosecond accuracy SIP Unix Timestamp. This is the timestamp of when the SIP received this
+    /// trade from the exchange which produced it. Value must be an integer timestamp in nanoseconds,
+    /// formatted 'yyyy-mm-dd', or ISO 8601/RFC 3339 (e.g. '2024-05-28T20:27:41Z'). Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'sip_timestamp' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the traversal.</param>
+    /// <returns>Every <c>results</c> item across every page.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public IAsyncEnumerable<DevTrade> EnumerateDevTradesAsync(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? sipTimestamp = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListDevTradesUri(ticker, sipTimestamp, limit, sort);
+        return _transport.EnumerateAsync<GetStocksDevTradesTickerResponse, DevTrade>(
+            requestUri, MassiveRestJsonContext.Default.GetStocksDevTradesTickerResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves tick-level trades for a stock from the in-development trades feed, filtered by SIP
+    /// timestamp.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first page only. Use <see cref="EnumerateDevTradesAsync"/> to walk every page
+    /// without handling cursors yourself. The route's <c>dev</c> segment marks it experimental
+    /// (decision D22), and the service answered 404 for it when this was mapped; opt in with
+    /// <c>MASSIVE0001</c> knowing the shape may change with the route. Its rows are <see
+    /// cref="DevTrade"/>, not <see cref="Trade"/>: the ticker rides on every row and the size is an
+    /// integer with a separate fraction. <paramref name="sipTimestamp"/> takes a calendar date for a
+    /// whole session or an <see cref="NodaTime.Instant"/> for a moment within one, rendered as Unix
+    /// nanoseconds (decision D20).
+    /// </remarks>
+    /// <param name="ticker">The ticker symbol.</param>
+    /// <param name="sipTimestamp">
+    /// The nanosecond accuracy SIP Unix Timestamp. This is the timestamp of when the SIP received this
+    /// trade from the exchange which produced it. Value must be an integer timestamp in nanoseconds,
+    /// formatted 'yyyy-mm-dd', or ISO 8601/RFC 3339 (e.g. '2024-05-28T20:27:41Z'). Accepts an exact
+    /// value or a range.
+    /// </param>
+    /// <param name="limit">
+    /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
+    /// allowed limit is '50000'.
+    /// </param>
+    /// <param name="sort">
+    /// A comma separated list of sort columns. For each column, append '.asc' or '.desc' to specify the
+    /// sort direction. The sort column defaults to 'sip_timestamp' if not specified. The sort order
+    /// defaults to 'desc' if not specified.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
+    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
+    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
+    public Task<MassivePage<DevTrade>> ListDevTradesAsync(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? sipTimestamp = null,
+        int? limit = null,
+        string? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        string requestUri = BuildListDevTradesUri(ticker, sipTimestamp, limit, sort);
+        return SendListDevTradesAsync(requestUri, cancellationToken);
+    }
+
+    private static string BuildListDevTradesUri(
+        string ticker,
+        RangeFilter<DateOrNanoseconds>? sipTimestamp,
+        int? limit,
+        string? sort)
+    {
+        RequestUriBuilder builder = new(stackalloc char[256]);
+
+        builder.AppendPathLiteral("/stocks/dev/trades/");
+        builder.AppendPathSegment(ticker);
+
+        builder.AppendQuery("sip_timestamp", sipTimestamp);
+        builder.AppendQuery("limit", limit);
+        builder.AppendQuery("sort", sort);
+
+        return builder.ToUriString();
+    }
+
+    private async Task<MassivePage<DevTrade>> SendListDevTradesAsync(string requestUri, CancellationToken cancellationToken)
+    {
+        GetStocksDevTradesTickerResponse? response = await _transport
+            .GetAsync(requestUri, MassiveRestJsonContext.Default.GetStocksDevTradesTickerResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
+        // reports the same thing rather than promising a page that is never fetched.
+        return new MassivePage<DevTrade>(
             response?.Results,
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);

@@ -8,8 +8,8 @@ namespace MassiveDotNet.IntegrationTests;
 /// <summary>
 /// The tick endpoints against the real service: a traversal across a real page boundary on the
 /// v3 trades envelope, the nanosecond bound that <see cref="DateOrNanoseconds"/> exists for (D20),
-/// one call each for quotes and the last quote, and a pin on the retirement of the deprecated v2
-/// pair (D21).
+/// one call each for quotes and the last quote, and pins on the retired v2 pair and the unserved
+/// dev route (D21, D22).
 /// </summary>
 public sealed class StocksTicksLiveTests : LiveApiTest
 {
@@ -104,6 +104,20 @@ public sealed class StocksTicksLiveTests : LiveApiTest
 
         Assert.Equal("AAPL", quote.Ticker);
         Assert.True(quote.SipTimestamp > Instant.FromUtc(2024, 1, 1, 0, 0), "The last quote should be recent.");
+    }
+
+    [Fact]
+    public async Task TheDevTradesRouteAnswersNotFound()
+    {
+        // The description declares GET /stocks/dev/trades/{ticker} and its dev segment marks it
+        // experimental (D22), but the service answered a plain-text 404 for it, not an API error
+        // envelope (observed 2026-09-03). D21 keeps it mapped as the description declares it;
+        // this pin flips the day the route is served, at which point it becomes a shape
+        // assertion and the hand-written fixture gets replaced by a capture.
+        MassiveApiException exception = await Assert.ThrowsAsync<MassiveApiException>(() =>
+            Client.Stocks.ListDevTradesAsync("AAPL", limit: 2, cancellationToken: Ct));
+
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
     }
 
     [Fact]

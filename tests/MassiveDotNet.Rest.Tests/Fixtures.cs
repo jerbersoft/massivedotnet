@@ -1256,4 +1256,51 @@ internal static class Fixtures
           "error": "Unknown API Key"
         }
         """;
+
+    /// <summary>
+    /// A hand-written page in the shape the description gives GET /stocks/dev/trades/{ticker}.
+    /// The service answered a plain-text 404 for the route when this was written (D22), so
+    /// there is no published sample and nothing to capture; the values mirror the v3 trades
+    /// sample where the fields coincide. <c>size_fraction</c> is required and described only as
+    /// the fractional size, with no unit, so its values here are placeholders that prove only
+    /// that a 64-bit integer round-trips.
+    /// </summary>
+    public const string StocksDevTrades = """
+        {
+          "next_url": "https://api.massive.com/stocks/dev/trades/AAPL?cursor=YXA9MTA2NCZhcz0mbGltaXQ9Mg",
+          "request_id": "3f1c9e2b7a5d4c6e8b0a1f2d3c4e5b6a",
+          "results": [
+            {
+              "conditions": [12, 41],
+              "exchange": 11,
+              "id": "1",
+              "participant_timestamp": 1517562000015577000,
+              "price": 171.55,
+              "sequence_number": 1063,
+              "sip_timestamp": 1517562000016036600,
+              "size": 100,
+              "size_fraction": 0,
+              "tape": 3,
+              "ticker": "AAPL"
+            },
+            {
+              "conditions": [12, 37],
+              "correction": 0,
+              "exchange": 4,
+              "id": "2",
+              "participant_timestamp": 1517562000015578000,
+              "price": 171.56,
+              "sequence_number": 1064,
+              "sip_timestamp": 1517562000016038100,
+              "size": 1,
+              "size_fraction": 250000000,
+              "tape": 3,
+              "ticker": "AAPL",
+              "trf_id": 202,
+              "trf_timestamp": 1517562000015000000
+            }
+          ],
+          "status": "OK"
+        }
+        """;
 }
