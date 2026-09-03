@@ -8,7 +8,7 @@ namespace MassiveDotNet.Http;
 
 /// <summary>
 /// Issues authenticated requests against the Massive platform API and deserializes responses
-/// using source-generated metadata.
+/// using source-generated metadata, or copies a document body to a caller's stream.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -131,6 +131,46 @@ public sealed class MassiveHttpTransport : IDisposable
                 $"The response body from '{requestUri}' could not be deserialized as {typeof(T).Name}.",
                 innerException: ex);
         }
+    }
+
+    /// <summary>
+    /// Issues a GET request and copies the response body to <paramref name="destination"/>
+    /// unchanged, for a route that serves a document rather than JSON.
+    /// </summary>
+    /// <param name="requestUri">The request URI, relative to the configured base address.</param>
+    /// <param name="destination">The stream the body is written to. The caller keeps ownership of it.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>A task that completes once the whole body has been written.</returns>
+    /// <remarks>
+    /// The content type is not inspected: the caller asked for the bytes, and the one route that
+    /// needs this, the SEC filing file, names each file's type and size in its listing (decision
+    /// D25). The body streams from the network into <paramref name="destination"/> with no
+    /// intermediate buffer, as every other response does.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="requestUri"/> or <paramref name="destination"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="requestUri"/> is empty or whitespace.</exception>
+    /// <exception cref="ObjectDisposedException">This transport has been disposed.</exception>
+    /// <exception cref="MassiveRateLimitExceededException">The server responded with HTTP 429.</exception>
+    /// <exception cref="MassiveApiException">The server responded with any other error status.</exception>
+    public async Task DownloadAsync(string requestUri, Stream destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestUri);
+        ArgumentNullException.ThrowIfNull(destination);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        using HttpResponseMessage response = await _httpClient
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+
+        await response.Content.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
