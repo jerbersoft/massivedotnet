@@ -127,6 +127,75 @@ public sealed class ParameterBindingTests
     }
 
     [Fact]
+    public void AnEnumMemberTheCoreEnumLacksIsRefused()
+    {
+        string spec = Document("""[ { "name": "order", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc", "random"] } } ]""");
+
+        string message = Harness.Refusal(spec, MapDocument("""{ "order": { "type": "SortOrder" } }"""));
+
+        Assert.Contains("Operation 'ListThings'", message, StringComparison.Ordinal);
+        Assert.Contains("parameter 'order' declares [random]", message, StringComparison.Ordinal);
+        Assert.Contains("SortOrder", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACoreEnumMayCoverMoreThanTheOperationDeclares()
+    {
+        // The indicators omit `second` from timespan and deliberately reuse AggregateTimespan
+        // (D-S7): the check runs one way, so a member the operation does not accept is the
+        // server's to reject, not generation's to refuse. This passed before the check existed
+        // and is here so the direction cannot be widened silently.
+        string spec = Document("""[ { "name": "timespan", "in": "query", "schema": { "type": "string", "enum": ["minute", "hour", "day"] } } ]""");
+
+        Dictionary<string, string> files = Harness.Generate(spec, MapDocument("""{ "timespan": { "type": "AggregateTimespan" } }"""));
+
+        Assert.Contains("AggregateTimespan? timespan = null", files["ReferenceGroup.g.cs"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATypedParameterDropsTheWireFormatSentence()
+    {
+        string spec = Document("""[ { "name": "date", "in": "query", "description": "The trading date. Value must be formatted 'yyyy-mm-dd'.", "schema": { "type": "string", "format": "date" } } ]""");
+
+        string group = Harness.Generate(spec, MapDocument())["ReferenceGroup.g.cs"];
+
+        Assert.Contains("LocalDate? date = null", group, StringComparison.Ordinal);
+        Assert.Contains("The trading date.", group, StringComparison.Ordinal);
+        Assert.DoesNotContain("Value must be", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStringParameterKeepsTheWireFormatSentence()
+    {
+        // Only a type that states the format earns the drop; a string passes the caller's text
+        // through, so the description's own constraint is all the caller has.
+        string spec = Document("""[ { "name": "code", "in": "query", "description": "The code. Value must be an integer.", "schema": { "type": "string" } } ]""");
+
+        string group = Harness.Generate(spec, MapDocument())["ReferenceGroup.g.cs"];
+
+        Assert.Contains("The code. Value must be an integer.", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFilterDropsTheWireFormatSentenceBeforeAddingItsOwn()
+    {
+        string spec = Document("""
+            [
+              { "name": "ex_dividend_date",     "in": "query", "description": "The ex-dividend date. Value must be formatted 'yyyy-mm-dd'.", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.gt",  "in": "query", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.gte", "in": "query", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.lt",  "in": "query", "schema": { "type": "string", "format": "date" } },
+              { "name": "ex_dividend_date.lte", "in": "query", "schema": { "type": "string", "format": "date" } }
+            ]
+            """);
+
+        string group = Harness.Generate(spec, MapDocument())["ReferenceGroup.g.cs"];
+
+        Assert.Contains("RangeFilter<LocalDate>? ex_dividend_date = null", group, StringComparison.Ordinal);
+        Assert.Contains("The ex-dividend date. Accepts an exact value or a range.", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ADateOrNanosecondsComparatorGroupBindsARangeFilter()
     {
         string spec = Document("""

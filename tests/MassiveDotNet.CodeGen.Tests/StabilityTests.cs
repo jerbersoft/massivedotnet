@@ -145,6 +145,24 @@ public sealed class StabilityTests
     }
 
     [Fact]
+    public void AVersionedExperimentalPathIsMarkedExperimental()
+    {
+        // The description carries /stocks/filings/10-K/vX_0/sections beside its vX sibling: a
+        // revision of an unreleased route, read as experimental by its prefix (D23).
+        string spec = Harness.Document(new Operation("ListThings", "/stocks/filings/10-K/vX_0/sections", Thing));
+
+        string map = Harness.MapDocument(
+            """
+            "Thing": { "schema": { "operationId": "ListThings", "pointer": "results/items" } }
+            """,
+            Harness.Endpoint("ListThings", "Thing"));
+
+        string group = Harness.Generate(spec, map)["ReferenceGroup.g.cs"];
+
+        Assert.Contains("    [Experimental(\"MASSIVE0001\", Message = ", group, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BothEntryPointsOfAPaginatedOperationCarryTheAttribute()
     {
         const string paged = """

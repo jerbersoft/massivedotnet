@@ -22,6 +22,13 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
     public string QueryExpression(string identifier) =>
         WireConversion is null ? identifier : $"{identifier}?.{WireConversion}";
 
+    /// <summary>
+    /// Whether the type states the wire format on its own, so a description sentence restating it
+    /// is dropped (#35). Only a string, alone or as a filter's element, passes the caller's text
+    /// through and keeps the sentence.
+    /// </summary>
+    public bool StatesWireFormat => !CSharpType.Contains("string", StringComparison.Ordinal);
+
     /// <summary>Resolves the binding for a parameter, honouring a map-supplied override.</summary>
     /// <param name="mapType">The map row's <c>type</c>, or <see langword="null"/> to derive one.</param>
     /// <param name="schema">The parameter's schema.</param>
@@ -42,12 +49,16 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
                 + "Set \"type\" on its row in specs/endpoints.map.json to one of these, suffixed [].");
         }
 
+        if (CoreEnums.TryGetValue(type, out string[]? wireValues))
+        {
+            VerifyEnumCoverage(type, wireValues, schema, operationId, parameterName);
+
+            // Enum wire values are fixed literals, so they need no percent-escaping.
+            return new TypeBinding(type, "AppendPathLiteral", "ToWireValue()");
+        }
+
         return type switch
         {
-            // Enum wire values are fixed literals, so they need no percent-escaping.
-            "AggregateTimespan" or "SortOrder" or "MarketType" or "SeriesType" or "SnapshotDirection" =>
-                new TypeBinding(type, "AppendPathLiteral", "ToWireValue()"),
-
             "DateOrTimestamp" or "DateOrNanoseconds" =>
                 new TypeBinding(type, "AppendPathSegment", "ToString()"),
 
@@ -63,6 +74,55 @@ internal sealed record TypeBinding(string CSharpType, string PathAppendMethod, s
             _ =>
                 new TypeBinding(type, "AppendPathSegment", null),
         };
+    }
+
+    /// <summary>
+    /// The core enums a map row may name, each with the wire values its <c>ToWireValue</c>
+    /// renders. Built from the enums themselves so the generator holds no second copy of their
+    /// members: adding a member to core is enough for the check below to accept it.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> CoreEnums = new(StringComparer.Ordinal)
+    {
+        [nameof(AggregateTimespan)] = WireValues<AggregateTimespan>(value => value.ToWireValue()),
+        [nameof(SortOrder)] = WireValues<SortOrder>(value => value.ToWireValue()),
+        [nameof(MarketType)] = WireValues<MarketType>(value => value.ToWireValue()),
+        [nameof(SeriesType)] = WireValues<SeriesType>(value => value.ToWireValue()),
+        [nameof(SnapshotDirection)] = WireValues<SnapshotDirection>(value => value.ToWireValue()),
+    };
+
+    private static string[] WireValues<T>(Func<T, string> wire)
+        where T : struct, Enum =>
+        [.. Enum.GetValues<T>().Select(wire)];
+
+    /// <summary>
+    /// Refuses a core enum that lacks a member the parameter's schema declares, so a value the
+    /// description adds cannot silently become unreachable (#37).
+    /// </summary>
+    /// <remarks>
+    /// The check runs one way. A member the enum has but this operation omits is accepted: the
+    /// indicators omit <c>second</c> from <c>timespan</c> and deliberately reuse
+    /// <c>AggregateTimespan</c> (D-S7), and a value the service does not accept there is the
+    /// server's to reject with a 400, the same posture as an entitlement (D9). A parameter that
+    /// declares no <c>enum</c> has nothing to compare and passes.
+    /// </remarks>
+    private static void VerifyEnumCoverage(string type, string[] wireValues, JsonElement schema, string operationId, string parameterName)
+    {
+        if (schema.ValueKind != JsonValueKind.Object || !schema.TryGetProperty("enum", out JsonElement declared))
+        {
+            return;
+        }
+
+        List<string> missing = [.. declared.EnumerateArray()
+            .Select(member => member.ValueKind == JsonValueKind.String ? member.GetString()! : member.GetRawText())
+            .Where(member => !wireValues.Contains(member, StringComparer.Ordinal))];
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Operation '{operationId}': parameter '{parameterName}' declares [{string.Join(", ", missing)}], which "
+                + $"{type} has no wire value for. Add the member to {type} and its ToWireValue arm in MassiveEnumValues, "
+                + "or bind the row to string in specs/endpoints.map.json.");
+        }
     }
 
     /// <summary>

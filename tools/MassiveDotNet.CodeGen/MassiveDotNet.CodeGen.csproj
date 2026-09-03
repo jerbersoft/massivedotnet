@@ -12,4 +12,13 @@
     <InternalsVisibleTo Include="MassiveDotNet.CodeGen.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      The core enums a map row may name are checked against the members the description declares,
+      and their wire values come from the enums themselves rather than a second copy here (#37).
+      Generated code lands in .Rest, so this reference forms no cycle.
+    -->
+    <ProjectReference Include="../../src/MassiveDotNet/MassiveDotNet.csproj" />
+  </ItemGroup>
+
 </Project>

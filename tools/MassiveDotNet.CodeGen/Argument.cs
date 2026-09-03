@@ -65,9 +65,11 @@ internal sealed record Argument(
                 + "any_of-only group may lack a plain form; this needs a design, not a guess.");
         }
 
+        TypeBinding binding = TypeBinding.ResolveFilter(group, mapped?.Type, slot.Parameter.Schema, operationId);
+
         // The variants' own descriptions are boilerplate ("Range by ticker."), so the base field's
         // prose carries the meaning and one generated sentence names the accepted forms.
-        string? prose = Prose.Clean(slot.Parameter.Description);
+        string? prose = Describe(slot.Parameter, binding);
         string sentence = group.DocSentence(operationId);
         string description = prose is null ? sentence : $"{prose.TrimEnd().TrimEnd('.')}. {sentence}";
 
@@ -77,15 +79,31 @@ internal sealed record Argument(
             Required: false,
             In: "query",
             description,
-            TypeBinding.ResolveFilter(group, mapped?.Type, slot.Parameter.Schema, operationId),
+            binding,
             QueryCallSuffix: group.HasExactForm ? "" : ", hasExactForm: false");
     }
 
-    public static Argument Create(SpecParameter parameter, MapParameter? mapped, string operationId) => new(
-        parameter.Name,
-        mapped?.Name ?? parameter.Name,
-        parameter.Required,
-        parameter.In,
-        Prose.Clean(parameter.Description),
-        TypeBinding.Resolve(mapped?.Type, parameter.Schema, operationId, parameter.Name));
+    public static Argument Create(SpecParameter parameter, MapParameter? mapped, string operationId)
+    {
+        TypeBinding binding = TypeBinding.Resolve(mapped?.Type, parameter.Schema, operationId, parameter.Name);
+
+        return new Argument(
+            parameter.Name,
+            mapped?.Name ?? parameter.Name,
+            parameter.Required,
+            parameter.In,
+            Describe(parameter, binding),
+            binding);
+    }
+
+    /// <summary>
+    /// The parameter's prose, minus the wire-format sentence where the bound type already states
+    /// it (#35).
+    /// </summary>
+    private static string? Describe(SpecParameter parameter, TypeBinding binding)
+    {
+        string? prose = Prose.Clean(parameter.Description);
+
+        return prose is not null && binding.StatesWireFormat ? Prose.WithoutWireFormat(prose) : prose;
+    }
 }

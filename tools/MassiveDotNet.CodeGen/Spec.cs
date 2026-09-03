@@ -168,14 +168,15 @@ internal sealed class Spec
         ("get" + path.Replace('/', '_').Replace('{', '_').Replace('}', '_')).ToLowerInvariant().TrimEnd('_');
 
     /// <summary>
-    /// Whether Massive publishes an operation as experimental: its route carries a <c>vX</c>
-    /// segment, or a <c>dev</c> segment where a released route carries its version, or it
-    /// declares <c>x-polygon-experimental</c>. All three are read because the extension appears
-    /// on only two of the fourteen <c>vX</c> routes and on no <c>dev</c> route at all (D18, D22).
+    /// Whether Massive publishes an operation as experimental: its route carries a segment that
+    /// starts with <c>vX</c> (<c>vX_0</c> is a numbered revision of one), or a <c>dev</c> segment
+    /// where a released route carries its version, or it declares <c>x-polygon-experimental</c>.
+    /// All three are read because the extension appears on only two of the fourteen <c>vX</c>
+    /// routes and on no <c>dev</c> route at all (D18, D22, D23).
     /// </summary>
     public static bool IsExperimental(SpecOperation operation) =>
         operation.Operation.TryGetProperty("x-polygon-experimental", out _)
-        || operation.Path.Split('/').Any(segment => segment is "vX" or "dev");
+        || operation.Path.Split('/').Any(segment => segment.StartsWith("vX", StringComparison.Ordinal) || segment is "dev");
 
     /// <summary>The deprecation an operation declares, or <see langword="null"/> for a live one.</summary>
     public static SpecDeprecation? Deprecation(SpecOperation operation)

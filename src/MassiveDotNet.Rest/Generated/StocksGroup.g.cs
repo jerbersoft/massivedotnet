@@ -188,16 +188,15 @@ public readonly partial struct StocksGroup
     /// values.
     /// </param>
     /// <param name="exDividendDate">
-    /// Date when the stock begins trading without the dividend value Value must be formatted
-    /// 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// Date when the stock begins trading without the dividend value. Accepts an exact value or a
+    /// range.
     /// </param>
     /// <param name="frequency">
     /// How many times per year this dividend is expected to occur. A value of 0 means the distribution
     /// is non-recurring or irregular (e.g., special, supplemental, or a one-off dividend). Other
     /// possible values include 1 (annual), 2 (semi-annual), 3 (trimester), 4 (quarterly), 12 (monthly),
     /// 24 (bi-monthly), 52 (weekly), 104 (bi-weekly), and 365 (daily) depending on the issuer's
-    /// declared or inferred payout cadence. Value must be an integer. Accepts an exact value or a
-    /// range.
+    /// declared or inferred payout cadence. Accepts an exact value or a range.
     /// </param>
     /// <param name="distributionType">
     /// Classification describing the nature of this dividend's recurrence pattern: recurring (paid on a
@@ -246,16 +245,15 @@ public readonly partial struct StocksGroup
     /// values.
     /// </param>
     /// <param name="exDividendDate">
-    /// Date when the stock begins trading without the dividend value Value must be formatted
-    /// 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// Date when the stock begins trading without the dividend value. Accepts an exact value or a
+    /// range.
     /// </param>
     /// <param name="frequency">
     /// How many times per year this dividend is expected to occur. A value of 0 means the distribution
     /// is non-recurring or irregular (e.g., special, supplemental, or a one-off dividend). Other
     /// possible values include 1 (annual), 2 (semi-annual), 3 (trimester), 4 (quarterly), 12 (monthly),
     /// 24 (bi-monthly), 52 (weekly), 104 (bi-weekly), and 365 (daily) depending on the issuer's
-    /// declared or inferred payout cadence. Value must be an integer. Accepts an exact value or a
-    /// range.
+    /// declared or inferred payout cadence. Accepts an exact value or a range.
     /// </param>
     /// <param name="distributionType">
     /// Classification describing the nature of this dividend's recurrence pattern: recurring (paid on a
@@ -1733,7 +1731,7 @@ public readonly partial struct StocksGroup
     /// Date when the stock split takes effect. The adjustment is applied overnight. On the prior
     /// trading day, the post-market session is the last session that shows pre-split prices. On the
     /// execution date, all trading is already adjusted for the split. This includes the pre-market
-    /// session. Value must be formatted 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// session. Accepts an exact value or a range.
     /// </param>
     /// <param name="adjustmentType">
     /// Classification of the share-change event. Possible values include: forward_split (share count
@@ -1784,7 +1782,7 @@ public readonly partial struct StocksGroup
     /// Date when the stock split takes effect. The adjustment is applied overnight. On the prior
     /// trading day, the post-market session is the last session that shows pre-split prices. On the
     /// execution date, all trading is already adjusted for the split. This includes the pre-market
-    /// session. Value must be formatted 'yyyy-mm-dd'. Accepts an exact value or a range.
+    /// session. Accepts an exact value or a range.
     /// </param>
     /// <param name="adjustmentType">
     /// Classification of the share-change event. Possible values include: forward_split (share count
@@ -1944,9 +1942,7 @@ public readonly partial struct StocksGroup
     /// <param name="ticker">The ticker symbol.</param>
     /// <param name="sipTimestamp">
     /// The nanosecond accuracy SIP Unix Timestamp. This is the timestamp of when the SIP received this
-    /// trade from the exchange which produced it. Value must be an integer timestamp in nanoseconds,
-    /// formatted 'yyyy-mm-dd', or ISO 8601/RFC 3339 (e.g. '2024-05-28T20:27:41Z'). Accepts an exact
-    /// value or a range.
+    /// trade from the exchange which produced it. Accepts an exact value or a range.
     /// </param>
     /// <param name="limit">
     /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
@@ -1991,9 +1987,7 @@ public readonly partial struct StocksGroup
     /// <param name="ticker">The ticker symbol.</param>
     /// <param name="sipTimestamp">
     /// The nanosecond accuracy SIP Unix Timestamp. This is the timestamp of when the SIP received this
-    /// trade from the exchange which produced it. Value must be an integer timestamp in nanoseconds,
-    /// formatted 'yyyy-mm-dd', or ISO 8601/RFC 3339 (e.g. '2024-05-28T20:27:41Z'). Accepts an exact
-    /// value or a range.
+    /// trade from the exchange which produced it. Accepts an exact value or a range.
     /// </param>
     /// <param name="limit">
     /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
