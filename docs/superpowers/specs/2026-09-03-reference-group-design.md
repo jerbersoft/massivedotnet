@@ -181,7 +181,7 @@ one of these sites, so they are `ReferenceDividend`, `ReferenceSplit`, and `Exch
 goes unprefixed because it spans every asset class, and `StockExchange` already holds the narrower
 one. The two IPO models differ in wire types, not just names, so they are `Ipo` and `IpoV1`.
 
-Tickers follow the constitution's own example in D4: `Ticker` is the list item, `TickerDetails`
+Tickers follow the constitution's own example in D4: `TickerSummary` is the list item (not `Ticker`: C# forbids a member named after its enclosing type, CS0542, and `Ticker` is the SDK-wide property name for the wire field), `TickerDetails`
 the singular, with `CompanyAddress` and `Branding` beneath it.
 
 ### D-R8 · SEC form names: a leading form number is spelled, a trailing one is kept
@@ -264,7 +264,7 @@ on `vX` routes carry `[Experimental("MASSIVE0001")]`.
 
 | Operation | Method | Returns |
 |---|---|---|
-| `ListTickers` | `ListTickersAsync(RangeFilter<string>? ticker, string? type, MarketType? market, string? exchange, string? cusip, string? cik, LocalDate? date, string? search, bool? active, SortOrder? order, int? limit, string? sort)`, `EnumerateTickersAsync` | `MassivePage<Ticker>`, `IAsyncEnumerable<Ticker>` |
+| `ListTickers` | `ListTickersAsync(RangeFilter<string>? ticker, string? type, MarketType? market, string? exchange, string? cusip, string? cik, LocalDate? date, string? search, bool? active, SortOrder? order, int? limit, string? sort)`, `EnumerateTickersAsync` | `MassivePage<TickerSummary>`, `IAsyncEnumerable<TickerSummary>` |
 | `GetTicker` | `GetTickerAsync(string ticker, LocalDate? date)` | `TickerDetails` |
 | `ListTickerTypes` | `ListTickerTypesAsync(MarketType? assetClass, string? locale)` | `TickerType[]` |
 | `GetEvents` | `GetTickerEventsAsync(string id, string? types)` | `TickerEvents` |
@@ -323,7 +323,7 @@ Plan A:
 
 | Model | Pointer, from | Notes |
 |---|---|---|
-| `Ticker` | `results/items` of `ListTickers` | `delisted_utc`, `last_updated_utc` are `Instant?` from their format |
+| `TickerSummary` | `results/items` of `ListTickers` | `delisted_utc`, `last_updated_utc` are `Instant?` from their format |
 | `TickerDetails` | `results` of `GetTicker` | `list_date` as `LocalDate?`; `delisted_utc` as `Instant?`; numbers as the schema declares |
 | `CompanyAddress` | `results/address` of `GetTicker` | |
 | `Branding` | `results/branding` of `GetTicker` | |
