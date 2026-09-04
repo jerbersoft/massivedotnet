@@ -166,9 +166,40 @@ public sealed class PooledArrayConverterTests
 
         Assert.Equal("""[{"n":1,"v":1.5}]""", Encoding.UTF8.GetString(buffer.WrittenSpan));
     }
+
+    /// <summary>
+    /// A null element. Pinned because the read loop is about to stop routing each element through
+    /// <see cref="JsonSerializer"/> and call the element converter directly, and null is the one
+    /// case the serializer settles before a converter ever sees it: a reference element takes the
+    /// null, a value element is rejected. Neither may change.
+    /// </summary>
+    [Fact]
+    public void ReadsANullElementOfAReferenceTypeAsNull()
+    {
+        Label?[] labels = Read<Label?>("""[{"text":"a"},null,{"text":"b"}]""")!;
+
+        Assert.Equal(3, labels.Length);
+        Assert.Null(labels[1]);
+        Assert.Equal("b", labels[2]?.Text);
+    }
+
+    [Fact]
+    public void RejectsANullElementOfAValueType() =>
+        Assert.Throws<JsonException>(() => Read<Row>("""[{"n":1},null]"""));
+
+    [Fact]
+    public void RejectsANullElementOfAPrimitive() =>
+        Assert.Throws<JsonException>(() => Read<int>("[1,null,3]"));
+
+    /// <summary>A nullable value element takes the null, the same as a reference one.</summary>
+    [Fact]
+    public void ReadsANullElementOfANullableValueTypeAsNull() =>
+        Assert.Equal([1, null, 3], Read<int?>("[1,null,3]")!);
 }
 
 [JsonSerializable(typeof(PooledArrayConverterTests.Row))]
 [JsonSerializable(typeof(PooledArrayConverterTests.Label))]
 [JsonSerializable(typeof(PooledArrayConverterTests.Bag))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(int?))]
 internal sealed partial class PooledArrayTestContext : JsonSerializerContext;

@@ -29,6 +29,9 @@ public sealed class StructModelJsonContractTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    /// <summary>What a consumer serializing a model would have: their own options, not the SDK's context.</summary>
+    private static readonly JsonSerializerOptions RoundTrip = new();
+
     /// <summary>A complete row, every property present and distinguishable from its neighbours.</summary>
     private const string CompleteRow = """
         {"id":"t1","sip_timestamp":1517562000016036600,"participant_timestamp":1517562000015577000,
@@ -210,5 +213,55 @@ public sealed class StructModelJsonContractTests
         Trade trade = Assert.Single(await ReadAsync("""{"id":null,"decimal_size":"2.0"}"""));
 
         Assert.Null(trade.TradeId);
+    }
+
+    /// <summary>
+    /// The generated <c>Write</c> round-trips through the generated <c>Read</c>.
+    /// </summary>
+    /// <remarks>
+    /// Nothing in the SDK serializes a model, which is exactly why this is here: the write half of
+    /// every generated converter would otherwise have no executable coverage at all, only the
+    /// generator tests asserting the text it emits. A consumer caching a page or returning one from
+    /// their own endpoint is doing something that works today, and this is what keeps it working.
+    /// Driven through a plain <see cref="JsonSerializerOptions"/> rather than the SDK's own context,
+    /// because that is what such a consumer would have.
+    /// </remarks>
+    [Fact]
+    public async Task RoundTripsThroughItsOwnWriter()
+    {
+        Trade original = Assert.Single(await ReadAsync(CompleteRow));
+
+        string written = JsonSerializer.Serialize(original, RoundTrip);
+        Trade returned = JsonSerializer.Deserialize<Trade>(written, RoundTrip);
+
+        // Compared as text rather than with Assert.Equal(original, returned): Trade is a record
+        // struct, so its synthesized equality compares the Conditions array by reference, and two
+        // arrays holding the same codes are never equal. Re-writing the returned value asks the
+        // question actually worth asking -- whether anything was lost -- and the array's contents
+        // are asserted separately below.
+        Assert.Equal(written, JsonSerializer.Serialize(returned, RoundTrip));
+        Assert.Equal<int>([14, 41], returned.Conditions!);
+        Assert.Equal(original.TradeId, returned.TradeId);
+        Assert.Equal(original.SipTimestampNanoseconds, returned.SipTimestampNanoseconds);
+        Assert.Equal(original.Price, returned.Price);
+    }
+
+    /// <summary>A null array and a null nullable survive the round trip as nulls, not as absences.</summary>
+    [Fact]
+    public async Task RoundTripsTheNullsToo()
+    {
+        Trade original = Assert.Single(await ReadAsync("""{"id":"t1","decimal_size":"2.0"}"""));
+
+        string written = JsonSerializer.Serialize(original, RoundTrip);
+        Trade returned = JsonSerializer.Deserialize<Trade>(written, RoundTrip);
+
+        // An absent optional is written as an explicit null rather than omitted, which is what
+        // System.Text.Json does by default and therefore what a consumer already sees.
+        Assert.Contains("\"conditions\":null", written, StringComparison.Ordinal);
+        Assert.Null(returned.Conditions);
+        Assert.Null(returned.TrfTimestampNanoseconds);
+
+        // Equality is safe here where it is not above: both arrays are null.
+        Assert.Equal(original, returned);
     }
 }

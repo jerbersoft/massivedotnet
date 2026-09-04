@@ -58,7 +58,12 @@ public sealed class PooledArrayConverter<T> : JsonConverter<T[]>
                 $"Expected an array of {typeof(T).Name}, found a {reader.TokenType} token.");
         }
 
-        JsonTypeInfo<T> elementInfo = ElementInfo(options);
+        JsonConverter<T> element = ElementConverter(options);
+
+        // Hoisted: HandleNull is a virtual property, and reading it per element on a 50,000 row
+        // page is 50,000 dispatches to answer a question whose answer cannot change.
+        bool handlesNull = element.HandleNull;
+
         T[] buffer = ArrayPool<T>.Shared.Rent(InitialCapacity);
         int count = 0;
 
@@ -74,7 +79,9 @@ public sealed class PooledArrayConverter<T> : JsonConverter<T[]>
                     buffer = larger;
                 }
 
-                buffer[count++] = JsonSerializer.Deserialize(ref reader, elementInfo)!;
+                buffer[count++] = reader.TokenType != JsonTokenType.Null || handlesNull
+                    ? element.Read(ref reader, typeof(T), options)!
+                    : NullElement();
             }
 
             // An empty result is common enough to be worth not allocating for: every unknown-ticker
@@ -106,6 +113,25 @@ public sealed class PooledArrayConverter<T> : JsonConverter<T[]>
     }
 
     /// <summary>
+    /// The value a null element yields, settling it the way <see cref="JsonSerializer"/> would
+    /// before a converter is reached.
+    /// </summary>
+    /// <remarks>
+    /// Calling the element converter directly is what makes a large page cheap, and this is the one
+    /// thing the serializer used to do on the way in. Its rule is reproduced rather than
+    /// approximated: a converter that opts into nulls gets the token, a nullable element takes the
+    /// null, and a non-nullable value element is rejected -- as a <see cref="JsonException"/>,
+    /// because the element converter's own accessor would raise
+    /// <see cref="InvalidOperationException"/>, which the transport does not read as a bad body.
+    /// </remarks>
+    /// <returns>The null element.</returns>
+    /// <exception cref="JsonException">The element type cannot hold a null.</exception>
+    private static T NullElement() =>
+        default(T) is null
+            ? default!
+            : throw new JsonException($"An array of {typeof(T).Name} carried a null element, which {typeof(T).Name} cannot hold.");
+
+    /// <summary>
     /// Resolves the element's source-generated metadata from the options in play.
     /// </summary>
     /// <param name="options">The options the serializer is running under.</param>
@@ -118,6 +144,23 @@ public sealed class PooledArrayConverter<T> : JsonConverter<T[]>
         options.GetTypeInfo(typeof(T)) as JsonTypeInfo<T>
             ?? throw new JsonException(
                 $"No source-generated metadata is registered for {typeof(T).Name}.");
+
+    /// <summary>
+    /// The element type's converter, taken from its source-generated metadata.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from <see cref="JsonTypeInfo{T}"/> rather than
+    /// <see cref="JsonSerializerOptions.GetConverter"/>, which is annotated as requiring reflection
+    /// and unreferenced code and so cannot be called from a library that sets
+    /// <c>IsAotCompatible</c> (rules 3 and 4).
+    /// </remarks>
+    /// <param name="options">The options the serializer is running under.</param>
+    /// <returns>The element type's converter.</returns>
+    /// <exception cref="JsonException">The metadata carries no converter of the expected type.</exception>
+    private static JsonConverter<T> ElementConverter(JsonSerializerOptions options) =>
+        ElementInfo(options).Converter as JsonConverter<T>
+            ?? throw new JsonException(
+                $"The registered metadata for {typeof(T).Name} carries no converter that can read it.");
 
     private static void Return(T[] buffer) =>
         ArrayPool<T>.Shared.Return(buffer, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
