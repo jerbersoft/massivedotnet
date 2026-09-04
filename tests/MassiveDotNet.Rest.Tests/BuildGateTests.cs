@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using Xunit;
 
 namespace MassiveDotNet.Rest.Tests;
@@ -100,12 +101,67 @@ public sealed class BuildGateTests
                 + $"shared suppression: {string.Join(", ", offenders)}.");
     }
 
+    /// <summary>
+    /// A project that exists on disk but is absent from the solution still builds, still passes its
+    /// own tests, and is invisible to every other gate here, because nothing walks the solution to
+    /// notice it is gone. That is what makes it worth a test: the benchmarks project was dropped
+    /// from <c>MassiveDotNet.slnx</c> by an editor rewrite on 2026-09-04, leaving an empty folder
+    /// entry behind, and the tree stayed green. It would have quietly falsified D31's claim that
+    /// the benchmarks compile in CI, and rule 13's same bargain for the live tier.
+    /// </summary>
+    /// <remarks>
+    /// The disk-to-solution direction is the one that fails silently and is the reason this exists.
+    /// The reverse, a solution entry whose file is gone, already fails the build loudly with
+    /// MSB3202; it is asserted anyway because the comparison is symmetric and costs nothing.
+    /// </remarks>
+    [Fact]
+    public void TheSolutionListsExactlyTheProjectsOnDisk()
+    {
+        string solution = Path.Combine(RepositoryRoot, "MassiveDotNet.slnx");
+
+        string[] onDisk =
+        [
+            .. Directory
+                .EnumerateFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories)
+                .Where(file => !IsUnderBuildOutput(file))
+                .Select(Relative)
+                .Order(StringComparer.Ordinal)
+        ];
+
+        string[] listed =
+        [
+            .. XDocument
+                .Load(solution)
+                .Descendants("Project")
+                .Select(element => (string?)element.Attribute("Path"))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.Replace('\\', '/'))
+                .Order(StringComparer.Ordinal)
+        ];
+
+        string[] unregistered = [.. onDisk.Except(listed, StringComparer.Ordinal)];
+        string[] absent = [.. listed.Except(onDisk, StringComparer.Ordinal)];
+
+        Assert.True(
+            unregistered.Length == 0,
+            $"These projects exist but are not in MassiveDotNet.slnx, so nothing builds them and "
+                + $"public API drift cannot break them: {string.Join(", ", unregistered)}.");
+
+        Assert.True(
+            absent.Length == 0,
+            $"MassiveDotNet.slnx names these projects, but no such file exists: "
+                + $"{string.Join(", ", absent)}.");
+    }
+
     private static bool SetsSeverityToWarning(string configuration, string rule) =>
         configuration
             .Split('\n')
             .Select(line => line.Trim())
             .Any(line => line.StartsWith($"dotnet_diagnostic.{rule}.severity", StringComparison.Ordinal)
                 && line.EndsWith("warning", StringComparison.Ordinal));
+
+    private static string Relative(string path) =>
+        Path.GetRelativePath(RepositoryRoot, path).Replace(Path.DirectorySeparatorChar, '/');
 
     private static bool IsUnderBuildOutput(string path) =>
         path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
