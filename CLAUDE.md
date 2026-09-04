@@ -94,6 +94,10 @@ samples/MassiveDotNet.AotSmokeTest
 
 ### Adding endpoints
 
+**Sequencing.** The Options (#10), Crypto (#11), Forex (#12), Futures (#13), Indices (#14), and
+Vendor datasets (#16) groups are held until the end of milestone v0.2. Do not start them before
+then. Cross-market snapshots (#17) is the only endpoint group still open for work.
+
 1. Add a row to `specs/endpoints.map.json`. Supply only what the spec lacks: `group`, `method`,
    .NET parameter names and types, and property names for anonymous result schemas.
    A nested object, or the element of a nested array of objects, needs its own `models` row with a
