@@ -25,8 +25,8 @@
     <Company>MassiveDotNet</Company>
     <Copyright>Copyright (c) 2026 Herbert Sabanal</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/herbertsabanal/massivedotnet</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/herbertsabanal/massivedotnet</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jerbersoft/massivedotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jerbersoft/massivedotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>massive;polygon;market-data;stocks;options;crypto;forex;futures;finance</PackageTags>
   </PropertyGroup>

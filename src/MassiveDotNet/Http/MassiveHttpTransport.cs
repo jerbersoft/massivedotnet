@@ -208,6 +208,15 @@ public sealed class MassiveHttpTransport : IDisposable
     /// page in hand are still yielded before the cancellation surfaces. Stopping mid-page is what
     /// <c>break</c> is for, and costs nothing on the traversals that never cancel.
     /// </para>
+    /// <para>
+    /// A server that returns the same <c>next_url</c> twice in a row would make the traversal
+    /// re-request one page forever, so that is detected and throws rather than followed. The check
+    /// compares against the cursor just followed and nothing older, which keeps the traversal's own
+    /// state constant however many pages it walks; the acknowledged cost is that a cycle through two
+    /// or more distinct cursors is not caught. There is no page cap: any limit high enough to be
+    /// safe for a genuine traversal is too high to bound a runaway usefully, and one low enough to
+    /// bound it would truncate real results.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="requestUri"/> or <paramref name="typeInfo"/> is <see langword="null"/>.
@@ -220,8 +229,8 @@ public sealed class MassiveHttpTransport : IDisposable
     /// what the server sends back.
     /// </exception>
     /// <exception cref="MassiveApiException">
-    /// The server responded with an error status, or returned a cursor that is not a usable URI or
-    /// points outside the configured base address.
+    /// The server responded with an error status, or returned a cursor that is not a usable URI,
+    /// points outside the configured base address, or repeats the cursor just followed.
     /// </exception>
     public IAsyncEnumerable<TItem> EnumerateAsync<TEnvelope, TItem>(
         string requestUri,
@@ -277,6 +286,12 @@ public sealed class MassiveHttpTransport : IDisposable
     {
         string? next = requestUri;
 
+        // The cursor most recently followed, so a server that keeps handing back the same one
+        // is caught rather than followed forever. Deliberately one value and not a set of every
+        // cursor seen: a set would grow with the number of pages, which is the one thing this
+        // traversal promises not to do, to catch a cycle nobody has observed. See D29.
+        string? followed = null;
+
         while (next is not null)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -302,9 +317,34 @@ public sealed class MassiveHttpTransport : IDisposable
             // page, forever, yielding duplicates and burning quota. `"next_url": ""` is also a
             // common way for a service to say "no next page", so the empty string is honoured as
             // the absence it means rather than followed as the URL it is not.
-            next = string.IsNullOrWhiteSpace(envelope.NextUrl)
-                ? null
-                : ResolveCursor(envelope.NextUrl).AbsoluteUri;
+            if (string.IsNullOrWhiteSpace(envelope.NextUrl))
+            {
+                next = null;
+                continue;
+            }
+
+            string cursor = ResolveCursor(envelope.NextUrl).AbsoluteUri;
+
+            // A cursor identical to the one that produced this page is a fixed point: following
+            // it re-requests the page in hand and asks again, forever. Compared after resolution
+            // rather than before, so a value like ":" or "?" -- which is not blank, resolves
+            // same-origin, and always resolves to the same absolute URI -- is caught as the fixed
+            // point it is rather than followed as the cursor it looks like.
+            //
+            // This throws rather than stopping quietly. A silent stop truncates the traversal and
+            // is indistinguishable from a complete one, which is the silent data loss this SDK
+            // refuses everywhere else a cursor cannot be followed.
+            if (string.Equals(cursor, followed, StringComparison.Ordinal))
+            {
+                throw new MassiveApiException(
+                    HttpStatusCode.OK,
+                    $"The server returned the same 'next_url' cursor twice in a row, '{cursor}', so "
+                    + "the traversal would repeat that page forever. It was stopped instead, which "
+                    + "means the results yielded so far are incomplete.");
+            }
+
+            followed = cursor;
+            next = cursor;
         }
     }
 

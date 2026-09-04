@@ -381,4 +381,103 @@ public sealed class CursorTraversalTests
 
         Assert.True(total > 0);
     }
+
+    [Fact]
+    public async Task ThrowsRatherThanLoopingOnACursorThatRepeatsTheOneJustFollowed()
+    {
+        // The stub serves its last scripted page forever, so this is the runaway the guard
+        // exists for: every response advertises the cursor that produced it.
+        PagingStubHandler handler = new(Page(1, Cursor("a")));
+
+        using MassiveHttpTransport transport = Create(handler);
+
+        List<int> seen = [];
+
+        MassiveApiException exception = await Assert.ThrowsAsync<MassiveApiException>(async () =>
+        {
+            await foreach (int value in transport.EnumerateAsync<FakePage, int>(
+                StartUri, TestJsonContext.Default.FakePage, Ct))
+            {
+                seen.Add(value);
+
+                // Bounded so a regression fails this test rather than hanging the suite:
+                // without the guard the traversal never terminates.
+                if (seen.Count > 10)
+                {
+                    break;
+                }
+            }
+        });
+
+        // The message has to name the cursor, because the whole point is that the server is
+        // misbehaving and the caller needs to be able to report which URL it repeated.
+        Assert.Contains("cursor=a", exception.Message, StringComparison.Ordinal);
+
+        // Two requests: the opening page, and the one the cursor asked for. A repetition is
+        // only visible once the same cursor has been produced twice in a row, so the guard
+        // cannot fire earlier than this without refusing traversals that are merely short.
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal([1, 2, 1, 2], seen);
+    }
+
+    [Theory]
+    [InlineData(":")]
+    [InlineData("?")]
+    [InlineData("#")]
+    public async Task ThrowsRatherThanLoopingOnACursorThatIsAFixedPointOfResolution(string cursor)
+    {
+        // None of these is blank, so the blank-cursor guard does not catch them, and each is
+        // same-origin once resolved, so the origin check passes. ResolveCursor always resolves
+        // against BaseAddress rather than against the URI just requested, so a server repeating
+        // one of these settles on "/:" or "/?" rather than on "/" -- a fixed point the traversal
+        // would otherwise spin on. They belong to this issue rather than to the blank-cursor one.
+        PagingStubHandler handler = new(Page(1, cursor));
+
+        using MassiveHttpTransport transport = Create(handler);
+
+        int seen = 0;
+
+        await Assert.ThrowsAsync<MassiveApiException>(async () =>
+        {
+            await foreach (int _ in transport.EnumerateAsync<FakePage, int>(
+                StartUri, TestJsonContext.Default.FakePage, Ct))
+            {
+                // Bounded for the same reason as above.
+                if (++seen > 10)
+                {
+                    break;
+                }
+            }
+        });
+
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task FollowsACursorThatRecursAfterAnInterveningPage()
+    {
+        // The guard compares against the cursor just followed, not against every cursor the
+        // traversal has seen, so its state stays O(1) and the "nothing accumulates" property
+        // documented on EnumerateAsync survives. This test is what fails if that is ever
+        // changed to a set: a server may legitimately reissue a URL after an intervening page,
+        // and only a fixed point is a hang. The acknowledged cost is that a multi-page cycle is
+        // not caught, which is recorded on EnumerateAsync and in decision D29.
+        PagingStubHandler handler = new(
+            Page(1, Cursor("a")),
+            Page(3, Cursor("b")),
+            Page(5, Cursor("a")),
+            Page(7, nextUrl: null));
+
+        using MassiveHttpTransport transport = Create(handler);
+
+        List<int> seen = [];
+        await foreach (int value in transport.EnumerateAsync<FakePage, int>(
+            StartUri, TestJsonContext.Default.FakePage, Ct))
+        {
+            seen.Add(value);
+        }
+
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8], seen);
+        Assert.Equal(4, handler.Requests.Count);
+    }
 }

@@ -1855,9 +1855,12 @@ public readonly partial struct StocksGroup
     /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
     /// cref="ListExchangesAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
     /// each page rather than the traversal, so lowering it issues more requests rather than returning
-    /// fewer items; bound the sequence with <c>Take</c> instead. The list is short and rarely changes,
-    /// so a single page usually holds all of it; <see cref="EnumerateExchangesAsync"/> follows the
-    /// cursor if the service ever pages it.
+    /// fewer items; bound the sequence with <c>Take</c> instead. The service does not serve this route
+    /// today: it answered a plain-text <c>404 page not found</c> on 2026-09-02, while Massive's own API
+    /// description continues to declare it. <see cref="ReferenceGroup.ListExchangesAsync"/> with an
+    /// <c>assetClass</c> of <see cref="MarketType.Stocks"/> returns the same exchanges and is served,
+    /// so prefer it until this route is stood up. The operation still ships because the description is
+    /// what this SDK contracts to cover, so it will start working the day Massive serves it.
     /// </remarks>
     /// <param name="limit">
     /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
@@ -1878,9 +1881,12 @@ public readonly partial struct StocksGroup
     /// <summary>Retrieves the exchanges and trade reporting facilities that US stocks trade on.</summary>
     /// <remarks>
     /// Returns the first page only. Use <see cref="EnumerateExchangesAsync"/> to walk every page
-    /// without handling cursors yourself. The list is short and rarely changes, so a single page
-    /// usually holds all of it; <see cref="EnumerateExchangesAsync"/> follows the cursor if the service
-    /// ever pages it.
+    /// without handling cursors yourself. The service does not serve this route today: it answered a
+    /// plain-text <c>404 page not found</c> on 2026-09-02, while Massive's own API description
+    /// continues to declare it. <see cref="ReferenceGroup.ListExchangesAsync"/> with an
+    /// <c>assetClass</c> of <see cref="MarketType.Stocks"/> returns the same exchanges and is served,
+    /// so prefer it until this route is stood up. The operation still ships because the description is
+    /// what this SDK contracts to cover, so it will start working the day Massive serves it.
     /// </remarks>
     /// <param name="limit">
     /// Limit the maximum number of results returned. Defaults to '100' if not specified. The maximum
