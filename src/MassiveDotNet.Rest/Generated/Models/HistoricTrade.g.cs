@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -94,6 +95,7 @@ public readonly partial record struct HistoricTrade
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public required int[] Conditions { get; init; }
 
     /// <summary>

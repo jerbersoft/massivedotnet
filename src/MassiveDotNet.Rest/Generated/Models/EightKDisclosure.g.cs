@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -40,6 +41,7 @@ public sealed partial record EightKDisclosure
     /// classes; empty if no ticker is currently mapped to the filer.
     /// </summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? Tickers { get; init; }
 
     /// <summary>

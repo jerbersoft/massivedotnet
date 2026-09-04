@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -40,6 +41,7 @@ public sealed partial record FinancialReport
 
     /// <summary>The list of ticker symbols for the company.</summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? Tickers { get; init; }
 
     /// <summary>The Standard Industrial Classification (SIC) code for the company.</summary>

@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -91,10 +92,12 @@ public readonly partial record struct HistoricQuote
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public required int[] Conditions { get; init; }
 
     /// <summary>The indicator codes. The description marks it required; the published example omits it.</summary>
     [JsonPropertyName("i")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Indicators { get; init; }
 
     /// <summary>

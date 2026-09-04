@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -89,6 +90,7 @@ public readonly partial record struct Trade
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("conditions")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>The trade correction indicator.</summary>

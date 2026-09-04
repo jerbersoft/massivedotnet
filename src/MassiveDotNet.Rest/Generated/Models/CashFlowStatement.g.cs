@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -188,6 +189,7 @@ public sealed partial record CashFlowStatement
     /// different share classes for the same company.
     /// </summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? Tickers { get; init; }
 
     /// <summary>The reporting period type. Possible values include: quarterly, annual, trailing_twelve_months.</summary>

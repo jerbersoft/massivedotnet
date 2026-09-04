@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -98,6 +99,7 @@ public sealed partial record ThirteenFHolding
     /// applicable.
     /// </summary>
     [JsonPropertyName("other_managers")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? OtherManagers { get; init; }
 
     /// <summary>Number of shares with sole voting authority.</summary>

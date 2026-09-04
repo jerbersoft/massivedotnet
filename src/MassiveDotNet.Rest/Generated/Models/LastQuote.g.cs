@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -82,10 +83,12 @@ public readonly partial record struct LastQuote
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>A list of indicator codes.</summary>
     [JsonPropertyName("i")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Indicators { get; init; }
 
     /// <summary>

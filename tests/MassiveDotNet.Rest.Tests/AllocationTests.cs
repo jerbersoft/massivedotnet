@@ -23,6 +23,13 @@ namespace MassiveDotNet.Rest.Tests;
 /// <c>docs/performance/</c> and are produced by <c>benchmarks/MassiveDotNet.Benchmarks</c>.
 /// </para>
 /// </remarks>
+// AllocationTests and CursorTraversalTests are pinned to one collection so xunit never runs them
+// concurrently. CursorTraversalTests measures GC.GetTotalMemory, which is process-wide, and
+// AllocationTests deserializes 50,000 rows next door. That was survivable while those rows were
+// garbage by the time the traversal measured; PooledArrayConverter (issue #47) makes the buffers
+// behind them live in ArrayPool<T>.Shared, so a forced collection no longer clears them and the
+// traversal read another class's pool as its own retention.
+[Collection("Process memory")]
 public sealed class AllocationTests
 {
     /// <summary>
@@ -132,9 +139,9 @@ public sealed class AllocationTests
     /// fix that makes it better.
     /// </remarks>
     [Theory]
-    [InlineData(1_000, 880_000L)]
-    [InlineData(10_000, 10_000_000L)]
-    [InlineData(50_000, 46_000_000L)]
+    [InlineData(1_000, 660_000L)]
+    [InlineData(10_000, 6_600_000L)]
+    [InlineData(50_000, 32_700_000L)]
     public void DeserializingAggregateRowsStaysUnderItsCeiling(int rows, long ceiling)
     {
         InlineStubHandler handler = new(AggregatesBody(rows));
@@ -182,7 +189,7 @@ public sealed class AllocationTests
         const int Pages = 100;
         const int RowsPerPage = 10;
         // Measured 10,274 B per page on 2026-09-04, of which 880 B is the ten bars themselves.
-        const long PerPageCeiling = 12_288L;
+        const long PerPageCeiling = 9_216L;
 
         InlineStubHandler handler = new(CursorScript(Pages, RowsPerPage));
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);

@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -79,10 +80,12 @@ public readonly partial record struct Quote
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("conditions")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>A list of indicator codes.</summary>
     [JsonPropertyName("indicators")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Indicators { get; init; }
 
     /// <summary>

@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -28,6 +29,7 @@ public sealed partial record MacdSeries
 {
     /// <summary>The MACD values for this page, oldest or newest first as requested.</summary>
     [JsonPropertyName("values")]
+    [JsonConverter(typeof(PooledArrayConverter<MacdValue>))]
     public MacdValue[]? Values { get; init; }
 
     /// <summary>The underlying aggregates used.</summary>

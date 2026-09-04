@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -30,5 +31,6 @@ public sealed partial record TickerEvents
 
     /// <summary>An array of event containing the requested data.</summary>
     [JsonPropertyName("events")]
+    [JsonConverter(typeof(PooledArrayConverter<TickerEvent>))]
     public TickerEvent[]? Events { get; init; }
 }

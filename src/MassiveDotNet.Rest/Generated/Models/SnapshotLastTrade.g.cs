@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -66,5 +67,6 @@ public readonly partial record struct SnapshotLastTrade
     /// the trade carried no conditions.
     /// </summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 }

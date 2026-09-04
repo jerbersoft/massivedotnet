@@ -86,6 +86,11 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line("using System.Text.Json.Serialization;");
 
         // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
+        if (members.Exists(m => ArrayElement(m.Type) is not null))
+        {
+            writer.Line("using MassiveDotNet.Serialization;");
+        }
+
         if (members.Exists(m => NamesNodaTime(m.Type)))
         {
             writer.Line("using NodaTime;");
@@ -117,6 +122,11 @@ internal sealed class Emitter(Spec spec, Map map)
 
                 writer.Doc("summary", summary, preserveMarkup: preserveMarkup);
                 writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
+
+                if (ArrayElement(type) is { } element)
+                {
+                    writer.Line($"[JsonConverter(typeof(PooledArrayConverter<{element}>))]");
+                }
 
                 string modifier = NeedsRequiredModifier(property.Required, type) ? "required " : "";
                 writer.Line($"public {modifier}{type} {name} {{ get; init; }}");
@@ -170,6 +180,11 @@ internal sealed class Emitter(Spec spec, Map map)
 
         writer.Line("using MassiveDotNet.Rest.Models;");
 
+        if (envelopes.Exists(e => e.Members.Exists(m => ArrayElement(m.Type) is not null)))
+        {
+            writer.Line("using MassiveDotNet.Serialization;");
+        }
+
         // An envelope can name a NodaTime type in its own right, when the description declares a
         // format: date or date-time property beside the payload.
         if (envelopes.Exists(e => e.Members.Exists(m => NamesNodaTime(m.Type))))
@@ -204,6 +219,12 @@ internal sealed class Emitter(Spec spec, Map map)
 
                     writer.Doc("summary", Prose.Clean(property.Description));
                     writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
+
+                    if (ArrayElement(type) is { } element)
+                    {
+                        writer.Line($"[JsonConverter(typeof(PooledArrayConverter<{element}>))]");
+                    }
+
                     writer.Line($"public {type} {Naming.Pascal(property.Name)} {{ get; init; }}");
                 }
 
@@ -719,6 +740,18 @@ internal sealed class Emitter(Spec spec, Map map)
 
     /// <summary>Separators that split an emitted type name into the identifiers it names.</summary>
     private static readonly char[] TypeNameSeparators = ['<', '>', ',', ' ', '?', '[', ']'];
+
+    /// <summary>
+    /// The element type of an array-typed property, or <c>null</c> when the property is not an
+    /// array. Array properties carry <c>PooledArrayConverter</c> so a large page allocates the
+    /// array it returns and not the doubling buffers behind it (issue #47).
+    /// </summary>
+    /// <param name="type">The C# type the property is bound to.</param>
+    /// <returns>The element type name, or <c>null</c>.</returns>
+    private static string? ArrayElement(string type) =>
+        type.EndsWith("[]?", StringComparison.Ordinal) ? type[..^3]
+            : type.EndsWith("[]", StringComparison.Ordinal) ? type[..^2]
+            : null;
 
     /// <summary>Whether a C# type name needs <c>using NodaTime;</c> in the file that declares it.</summary>
     /// <remarks>
