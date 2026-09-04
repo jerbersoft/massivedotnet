@@ -1739,7 +1739,7 @@
       "group": "Stocks",
       "method": "ListExchanges",
       "summary": "Retrieves the exchanges and trade reporting facilities that US stocks trade on.",
-      "remarks": "The list is short and rarely changes, so a single page usually holds all of it; <see cref=\"EnumerateExchangesAsync\"/> follows the cursor if the service ever pages it.",
+      "remarks": "The service does not serve this route today: it answered a plain-text <c>404 page not found</c> on 2026-09-02, while Massive's own API description continues to declare it. <see cref=\"ReferenceGroup.ListExchangesAsync\"/> with an <c>assetClass</c> of <see cref=\"MarketType.Stocks\"/> returns the same exchanges and is served, so prefer it until this route is stood up. The operation still ships because the description is what this SDK contracts to cover, so it will start working the day Massive serves it.",
       "result": { "kind": "array", "model": "StockExchange", "property": "results" },
       "parameters": {
         "limit": { "name": "limit" }
