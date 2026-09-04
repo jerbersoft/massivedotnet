@@ -75,19 +75,45 @@ jobs:
 
       - name: Regenerate and verify
         if: steps.diff.outputs.changed == 'true'
+        id: regen
         # A spec change can invalidate the generated code. Surface that in the PR rather
-        # than letting it fail later on someone else's branch.
+        # than letting it fail later on someone else's branch. continue-on-error reports
+        # this step's conclusion as success either way, so the outcome is recorded in an
+        # output the PR body reads: without it the body can only guess, and it guessed wrong.
         continue-on-error: true
         run: |
-          dotnet run --project tools/MassiveDotNet.CodeGen
-          dotnet build MassiveDotNet.slnx -c Release
+          fail() {
+            echo "status=$1" >> "$GITHUB_OUTPUT"
+            echo "::error::$2"
+            exit 1
+          }
+
+          dotnet run --project tools/MassiveDotNet.CodeGen \
+            || fail generator "The generator failed on the new spec."
+
+          # Constitution rule 6: same inputs, byte-identical output. The build job proves that
+          # against an unchanged spec; a new spec is the input where non-determinism would first
+          # appear, and it is the one input no other job ever sees. Staging the first run makes
+          # the index the baseline the second must reproduce exactly.
+          git add src/
+          dotnet run --project tools/MassiveDotNet.CodeGen \
+            || fail generator "The generator failed on its second run over the new spec."
+          git diff --exit-code --quiet -- src/ \
+            || fail nondeterministic "Two runs over the same spec disagreed (rule 6)."
+
+          dotnet build MassiveDotNet.slnx -c Release \
+            || fail build "The regenerated tree does not compile."
+
+          echo "status=ok" >> "$GITHUB_OUTPUT"
 
       - name: Open pull request
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGEN_STATUS: ${{ steps.regen.outputs.status }}
         run: |
-          branch="spec-sync/$(date -u +%Y-%m-%d)"
+          today="$(date -u +%Y-%m-%d)"
+          branch="spec-sync/$today"
 
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -97,18 +123,71 @@ jobs:
             exit 0
           fi
 
+          # What the PR says about generated code, and whether it carries any, both follow from
+          # one status. An unset status means the step did not reach its own reporting, so it
+          # falls through to the untrusted branch rather than being read as success.
+          case "$REGEN_STATUS" in
+            ok)
+              trust_src=yes
+              warn=""
+              note="Generated code was refreshed alongside the spec: the generator ran clean, ran
+          again to the same bytes, and the solution builds."
+              ;;
+            build)
+              trust_src=yes
+              warn="build failed"
+              note="**The regenerated tree does not compile.** Generated code is included because it
+          is what needs review: the spec change is the likely cause, and the build log in the
+          workflow run says where. Do not merge this until it builds."
+              ;;
+            nondeterministic)
+              trust_src=no
+              warn="generator is non-deterministic"
+              note="**Two generator runs over this spec produced different output**, which violates
+          constitution rule 6. Generated code is deliberately left out of this PR, because
+          neither run can be trusted as the one to review. This is a generator bug, not a
+          spec problem: reproduce with two consecutive runs over the spec below."
+              ;;
+            *)
+              trust_src=no
+              warn="generator failed"
+              note="**The generator failed on this spec, so no generated code accompanies it.** The
+          spec change travels alone and \`src/\` is untouched. The workflow run holds the
+          generator output. Regeneration is required before this can merge."
+              ;;
+          esac
+
+          # A half-written or untrustworthy src/ must not reach the commit. Restoring from HEAD
+          # rather than skipping the add also undoes whatever the failed run left behind.
+          if [ "$trust_src" != "yes" ]; then
+            git restore --source=HEAD --staged --worktree -- src/
+          fi
+
           git checkout -b "$branch"
           git add specs/openapi.json src/
           git commit -m "chore: sync OpenAPI description from api.massive.com"
+
+          if [ -n "$warn" ]; then
+            title="[warning] chore: sync OpenAPI description ($today) - $warn"
+          else
+            title="chore: sync OpenAPI description ($today)"
+          fi
+
+          cat > /tmp/pr-body.md <<BODY
+          Automated sync from \`https://api.massive.com/openapi\`.
+
+          $note
+
+          Review the operation summary in the workflow run, then check whether
+          \`specs/endpoints.map.json\` needs new rows for any added operations - coverage is
+          enforced by \`EndpointCoverageTests\`.
+          BODY
+
           git push origin "$branch"
 
           gh pr create \
-            --title "chore: sync OpenAPI description ($(date -u +%Y-%m-%d))" \
-            --body "Automated sync from \`https://api.massive.com/openapi\`.
-
-          Generated code has been refreshed alongside the spec. Review the operation summary in
-          the workflow run, then check whether \`specs/endpoints.map.json\` needs new rows for any
-          added operations — coverage is enforced by \`EndpointCoverageTests\`." \
+            --title "$title" \
+            --body-file /tmp/pr-body.md \
             --label "area:codegen" \
             --base master \
             --head "$branch"
