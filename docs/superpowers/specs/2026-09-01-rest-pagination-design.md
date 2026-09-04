@@ -247,6 +247,8 @@ from CI by category (rule 13).
 - **A page-count cap.** A server returning a self-referential `next_url` would loop forever. Any
   cap is arbitrary policy, and rate limiting (#5) surfaces the condition as a 429 regardless.
   Worth an issue; not worth inventing a number here.
+  *Settled by D29 (#30): still no cap, but a cursor identical to the one just followed now throws,
+  which bounds the self-referential case without inventing a number.*
 - **Auto-raising `limit` to minimise round trips.** `limit` stays whatever the caller passed, and is
   documented as per-page rather than total.
 - **`IAsyncEnumerable<MassivePage<T>>`.** Page-level iteration is a third surface serving a use case
