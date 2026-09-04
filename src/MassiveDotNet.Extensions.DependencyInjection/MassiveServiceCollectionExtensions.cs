@@ -123,11 +123,39 @@ public static class MassiveServiceCollectionExtensions
                 // lifetime is what actually keeps DNS fresh, exactly as core's own transport does.
                 PooledConnectionLifetime = Duration.FromMinutes(2).ToTimeSpan(),
             })
+            // Handler order is load-bearing and its failure mode is silent (D30). AddHttpMessageHandler
+            // appends outermost-first, so these three registrations read in pipeline order:
+            // authentication, then retry, then the limiter.
+            //
+            // Authentication is outermost because it REWRITES the request URI under the query
+            // scheme. A retry above it re-authenticates every attempt and appends the key again,
+            // producing ?apiKey=k&apiKey=k&apiKey=k — which the server still answers, so the only
+            // symptom is the key reaching access logs once per attempt (rule 11).
             .AddHttpMessageHandler(static provider =>
             {
                 MassiveClientOptions options = provider.GetRequiredService<IOptions<MassiveClientOptions>>().Value;
 
                 return new MassiveAuthenticationHandler(options.ApiKey!, options.AuthenticationScheme);
+            })
+            .AddHttpMessageHandler(static provider =>
+            {
+                MassiveClientOptions options = provider.GetRequiredService<IOptions<MassiveClientOptions>>().Value;
+
+                // Both features are off unless the caller sets their option, so an unconfigured
+                // registration still gets a handler — one that does nothing but forward.
+                return options.Retry is { } retry
+                    ? new MassiveRetryHandler(retry)
+                    : new PassThroughHandler();
+            })
+            // Innermost, so every physical attempt spends a permit: a retry is a request the
+            // server counts too.
+            .AddHttpMessageHandler(static provider =>
+            {
+                MassiveClientOptions options = provider.GetRequiredService<IOptions<MassiveClientOptions>>().Value;
+
+                return options.RateLimit is { } rateLimit
+                    ? new MassiveRateLimitHandler(rateLimit)
+                    : new PassThroughHandler();
             });
 
         // Rule 11, against the one thing this package adds that core does not have: a logger.

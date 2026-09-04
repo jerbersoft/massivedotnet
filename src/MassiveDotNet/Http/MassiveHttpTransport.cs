@@ -43,19 +43,16 @@ public sealed class MassiveHttpTransport : IDisposable
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
 
-        MassiveAuthenticationHandler authentication = new(options.ApiKey!, options.AuthenticationScheme)
+        HttpMessageHandler pipeline = CreateHandlerPipeline(options, new SocketsHttpHandler
         {
-            InnerHandler = new SocketsHttpHandler
-            {
-                AutomaticDecompression = DecompressionMethods.All,
-                // Boundary crossing (produce): converted inline from a Duration, so the
-                // BCL type is never named. Two minutes keeps connections fresh enough to
-                // follow DNS changes without re-establishing TLS on every request.
-                PooledConnectionLifetime = Duration.FromMinutes(2).ToTimeSpan(),
-            },
-        };
+            AutomaticDecompression = DecompressionMethods.All,
+            // Boundary crossing (produce): converted inline from a Duration, so the
+            // BCL type is never named. Two minutes keeps connections fresh enough to
+            // follow DNS changes without re-establishing TLS on every request.
+            PooledConnectionLifetime = Duration.FromMinutes(2).ToTimeSpan(),
+        });
 
-        _httpClient = new HttpClient(authentication, disposeHandler: true)
+        _httpClient = new HttpClient(pipeline, disposeHandler: true)
         {
             BaseAddress = options.BaseAddress,
             // Boundary crossing (produce): the domain Duration converts here and nowhere above.
@@ -83,6 +80,58 @@ public sealed class MassiveHttpTransport : IDisposable
 
         _httpClient = httpClient;
         _ownsHttpClient = false;
+    }
+
+    /// <summary>
+    /// Builds the handler pipeline this SDK sends through, wrapping <paramref name="primaryHandler"/>
+    /// with authentication and whatever resilience <paramref name="options"/> asks for.
+    /// </summary>
+    /// <param name="options">The client configuration.</param>
+    /// <param name="primaryHandler">The innermost handler, which performs the actual transport.</param>
+    /// <returns>The outermost handler, ready to hand to an <see cref="HttpClient"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// The constructor taking a <see cref="MassiveClientOptions"/> uses this, and it is public so a
+    /// caller supplying their own <see cref="HttpClient"/> can build the same pipeline instead of
+    /// reconstructing it by hand. Order is the reason it is worth exposing rather than repeating.
+    /// </para>
+    /// <para>
+    /// Handlers compose <strong>authentication outermost, then retry, then the rate limiter</strong>.
+    /// Authentication must be outermost because it rewrites the request URI under
+    /// <see cref="MassiveAuthenticationScheme.QueryString"/>: a retry above it re-authenticates every
+    /// attempt and appends the key once per try, which still succeeds and so is visible only as the
+    /// key repeating in access logs (rule 11). The limiter is innermost because a retried attempt is
+    /// a request the server counts, so it must spend a permit like any other (D30).
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="options"/> or <paramref name="primaryHandler"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="InvalidOperationException"><paramref name="options"/> is incomplete.</exception>
+    public static HttpMessageHandler CreateHandlerPipeline(
+        MassiveClientOptions options,
+        HttpMessageHandler primaryHandler)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(primaryHandler);
+        options.Validate();
+
+        HttpMessageHandler pipeline = primaryHandler;
+
+        if (options.RateLimit is { } rateLimit)
+        {
+            pipeline = new MassiveRateLimitHandler(rateLimit) { InnerHandler = pipeline };
+        }
+
+        if (options.Retry is { } retry)
+        {
+            pipeline = new MassiveRetryHandler(retry) { InnerHandler = pipeline };
+        }
+
+        return new MassiveAuthenticationHandler(options.ApiKey!, options.AuthenticationScheme)
+        {
+            InnerHandler = pipeline,
+        };
     }
 
     /// <summary>

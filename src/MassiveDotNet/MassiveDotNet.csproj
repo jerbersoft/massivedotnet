@@ -7,8 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The only external dependency permitted in core. See CLAUDE.md rules 7 and 12. -->
+    <!-- The only two external dependencies permitted in core. See CLAUDE.md rule 7, D12, and D30.
+         Both carry no transitive dependency on net10.0, so neither reaches a consumer's graph
+         beyond itself, and both publish Native AOT clean (rules 3 and 4). -->
     <PackageReference Include="NodaTime" />
+    <PackageReference Include="System.Threading.RateLimiting" />
   </ItemGroup>
 
 </Project>

@@ -46,9 +46,35 @@ public sealed class MassiveClientOptions
     public string? UserAgent { get; set; }
 
     /// <summary>
+    /// Client-side throttling, or <see langword="null"/> to send requests as fast as the caller
+    /// issues them. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// Assigning an instance is the whole opt-in:
+    /// <c>options.RateLimit = new MassiveRateLimitOptions { PermitsPerWindow = 5 }</c>. The SDK
+    /// cannot infer a key's entitlement, so it never throttles unless asked (D30).
+    /// </remarks>
+    public MassiveRateLimitOptions? RateLimit { get; set; }
+
+    /// <summary>
+    /// Bounded retry for HTTP 429 and 5xx, or <see langword="null"/> to surface the first failure.
+    /// Off by default.
+    /// </summary>
+    /// <remarks>
+    /// Assigning an instance is the whole opt-in:
+    /// <c>options.Retry = new MassiveRetryOptions()</c>. Retry is separate from
+    /// <see cref="RateLimit"/> because the two solve different problems — a caller on a paid tier
+    /// may want to ride out a transient 502 without pacing their requests at all (D30).
+    /// </remarks>
+    public MassiveRetryOptions? Retry { get; set; }
+
+    /// <summary>
     /// Throws if the options are not in a usable state.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The API key is missing, or the base address is not absolute.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The API key is missing, the base address is not absolute, or a configured
+    /// <see cref="RateLimit"/> or <see cref="Retry"/> holds a value it cannot act on.
+    /// </exception>
     public void Validate()
     {
         if (_apiKey is null)
@@ -62,5 +88,8 @@ public sealed class MassiveClientOptions
             throw new InvalidOperationException(
                 $"{nameof(MassiveClientOptions)}.{nameof(BaseAddress)} must be an absolute URI.");
         }
+
+        RateLimit?.Validate();
+        Retry?.Validate();
     }
 }

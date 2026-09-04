@@ -82,13 +82,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Constitution rule 7: NodaTime is the only dependency core may take.
-      - name: Core references only NodaTime
+      # Constitution rule 7: NodaTime (D12) and System.Threading.RateLimiting (D30) are the only
+      # dependencies core may take. Adding a third is a constitution change, not a build fix.
+      - name: Core references only its two permitted packages
         run: |
           unexpected=$(grep -oE 'PackageReference Include="[^"]+"' src/MassiveDotNet/MassiveDotNet.csproj \
-            | sed -E 's/.*Include="([^"]+)".*/\1/' | grep -v '^NodaTime$' || true)
+            | sed -E 's/.*Include="([^"]+)".*/\1/' \
+            | grep -vE '^(NodaTime|System\.Threading\.RateLimiting)$' || true)
           if [ -n "$unexpected" ]; then
-            echo "::error::MassiveDotNet (core) may only reference NodaTime. Found:"
+            echo "::error::MassiveDotNet (core) may only reference NodaTime and System.Threading.RateLimiting. Found:"
             echo "$unexpected"
             exit 1
           fi
