@@ -12,6 +12,7 @@
 
 using System.Text.Json.Serialization;
 using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -25,6 +26,7 @@ namespace MassiveDotNet.Rest.Models;
 /// The route is experimental (decision D22), so this shape may change with it; the description
 /// requires <see cref="SizeFraction"/> and calls it the fractional size without naming a unit.
 /// </remarks>
+[JsonConverter(typeof(DevTradeJsonConverter))]
 public readonly partial record struct DevTrade
 {
     /// <summary>

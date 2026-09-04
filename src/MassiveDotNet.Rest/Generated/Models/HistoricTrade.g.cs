@@ -12,6 +12,7 @@
 
 using System.Text.Json.Serialization;
 using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -25,6 +26,7 @@ namespace MassiveDotNet.Rest.Models;
 /// <c>r</c> required although its own example omits all four, and declares the nanosecond
 /// timestamps as bare integers; the map corrects both, and each corrected row says so.
 /// </remarks>
+[JsonConverter(typeof(HistoricTradeJsonConverter))]
 public readonly partial record struct HistoricTrade
 {
     /// <summary>

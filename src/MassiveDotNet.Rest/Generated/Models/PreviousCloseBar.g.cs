@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -22,6 +23,7 @@ namespace MassiveDotNet.Rest.Models;
 /// caller named it in the request. <see cref="Timestamp"/> is computed from <see
 /// cref="TimestampMilliseconds"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(PreviousCloseBarJsonConverter))]
 public readonly partial record struct PreviousCloseBar
 {
     /// <summary>The open price for the symbol in the given time period.</summary>

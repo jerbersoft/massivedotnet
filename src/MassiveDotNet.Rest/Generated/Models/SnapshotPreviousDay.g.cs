@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -19,6 +20,7 @@ namespace MassiveDotNet.Rest.Models;
 /// A struct like <see cref="Agg"/> (decision D4). <see cref="SnapshotDay"/> carries a decimal
 /// volume this shape lacks, which is why the two are separate models (decision D16).
 /// </remarks>
+[JsonConverter(typeof(SnapshotPreviousDayJsonConverter))]
 public readonly partial record struct SnapshotPreviousDay
 {
     /// <summary>The open price for the symbol in the given time period.</summary>

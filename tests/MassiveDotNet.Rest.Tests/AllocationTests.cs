@@ -132,16 +132,18 @@ public sealed class AllocationTests
     /// <param name="rows">Rows in the response body.</param>
     /// <param name="ceiling">Bytes this may allocate, with headroom over the measured figure.</param>
     /// <remarks>
-    /// The ceilings are roughly 20% above what was measured on 2026-09-04: 727,040 B for 1,000
-    /// rows, 8,326,496 B for 10,000, and 38,737,296 B for 50,000. Every one of those is between
-    /// eight and ten times the array it returns, which is #47 rather than an accident of
-    /// measurement — these ceilings pin the defect so it cannot get worse, and come down with the
-    /// fix that makes it better.
+    /// The ceilings are roughly 20% above what was measured on 2026-09-04, after issue #47 was
+    /// fixed in both halves: 90,864 B for 1,000 rows, 882,864 B for 10,000, and 4,402,864 B for
+    /// 50,000. Each is the array it returns plus a fixed overhead of about 2,864 B that does not
+    /// grow with the row count — the request, the response, and the envelope — so the ratio to the
+    /// floor improves with size rather than degrading: 1.03x at 1,000 rows and 1.0007x at 50,000.
+    /// Before the fix the same three paths cost 727,040 B, 8,326,496 B, and 38,737,296 B, between
+    /// eight and ten times the array. The gap between those two rows is the whole of #47.
     /// </remarks>
     [Theory]
-    [InlineData(1_000, 660_000L)]
-    [InlineData(10_000, 6_600_000L)]
-    [InlineData(50_000, 32_700_000L)]
+    [InlineData(1_000, 109_000L)]
+    [InlineData(10_000, 1_059_000L)]
+    [InlineData(50_000, 5_283_000L)]
     public void DeserializingAggregateRowsStaysUnderItsCeiling(int rows, long ceiling)
     {
         InlineStubHandler handler = new(AggregatesBody(rows));
@@ -188,8 +190,9 @@ public sealed class AllocationTests
     {
         const int Pages = 100;
         const int RowsPerPage = 10;
-        // Measured 10,274 B per page on 2026-09-04, of which 880 B is the ten bars themselves.
-        const long PerPageCeiling = 9_216L;
+        // Measured 2,909 B per page on 2026-09-04, of which 880 B is the ten bars themselves. It
+        // was 10,274 B before issue #47, and 7,469 B with only the first half of the fix in place.
+        const long PerPageCeiling = 3_490L;
 
         InlineStubHandler handler = new(CursorScript(Pages, RowsPerPage));
         (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);

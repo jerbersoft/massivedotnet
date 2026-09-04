@@ -12,6 +12,7 @@
 
 using System.Text.Json.Serialization;
 using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -23,6 +24,7 @@ namespace MassiveDotNet.Rest.Models;
 /// A tick-level type, so a struct (decision D4). Timestamps are stored as nanosecond <see
 /// cref="long"/> values and exposed as <see cref="NodaTime.Instant"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(TradeJsonConverter))]
 public readonly partial record struct Trade
 {
     /// <summary>

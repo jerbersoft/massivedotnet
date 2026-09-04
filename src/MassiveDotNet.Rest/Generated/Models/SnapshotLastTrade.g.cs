@@ -12,6 +12,7 @@
 
 using System.Text.Json.Serialization;
 using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -23,6 +24,7 @@ namespace MassiveDotNet.Rest.Models;
 /// A tick-level type, so a struct (decision D4). <see cref="SipTimestamp"/> is computed from <see
 /// cref="SipTimestampNanoseconds"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(SnapshotLastTradeJsonConverter))]
 public readonly partial record struct SnapshotLastTrade
 {
     /// <summary>

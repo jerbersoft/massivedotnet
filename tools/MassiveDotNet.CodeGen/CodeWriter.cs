@@ -55,8 +55,18 @@ internal sealed class CodeWriter
 
     public IDisposable Block(string header) => Block([header]);
 
+    /// <summary>Opens a block closed by something other than a bare brace.</summary>
+    /// <param name="header">The line preceding the opening brace.</param>
+    /// <param name="closing">The closing line, such as the <c>};</c> an object initializer ends with.</param>
+    public IDisposable Block(string header, string closing) => Block([header], closing);
+
     /// <summary>Opens a block whose header spans several lines, such as a wrapped signature.</summary>
-    public IDisposable Block(IReadOnlyList<string> headerLines)
+    public IDisposable Block(IReadOnlyList<string> headerLines) => Block(headerLines, "}");
+
+    /// <summary>Opens a multi-line-header block closed by something other than a bare brace.</summary>
+    /// <param name="headerLines">The lines preceding the opening brace.</param>
+    /// <param name="closing">The closing line.</param>
+    public IDisposable Block(IReadOnlyList<string> headerLines, string closing)
     {
         foreach (string line in headerLines)
         {
@@ -65,7 +75,7 @@ internal sealed class CodeWriter
 
         Line("{");
         _indent++;
-        return new Closer(this);
+        return new Closer(this, closing);
     }
 
     public override string ToString() => _buffer.ToString();
@@ -107,12 +117,12 @@ internal sealed class CodeWriter
         return lines;
     }
 
-    private sealed class Closer(CodeWriter writer) : IDisposable
+    private sealed class Closer(CodeWriter writer, string closing) : IDisposable
     {
         public void Dispose()
         {
             writer._indent--;
-            writer.Line("}");
+            writer.Line(closing);
         }
     }
 }

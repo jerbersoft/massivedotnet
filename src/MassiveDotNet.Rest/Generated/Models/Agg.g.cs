@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -19,6 +20,7 @@ namespace MassiveDotNet.Rest.Models;
 /// Aggregates are built only from qualifying trades. A window with no eligible trades produces no
 /// bar, so gaps in a series indicate an absence of trading activity rather than missing data.
 /// </remarks>
+[JsonConverter(typeof(AggJsonConverter))]
 public readonly partial record struct Agg
 {
     /// <summary>The open price for the symbol in the given time period.</summary>

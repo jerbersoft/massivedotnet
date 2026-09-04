@@ -107,7 +107,7 @@ public sealed class StructModelJsonContractTests
         Assert.Null(trade.Conditions);
     }
 
-    /// <summary>An explicit null is the absent case for a nullable, and for an array (D-A1).</summary>
+    /// <summary>An explicit null is the absent case for a nullable, and for an array alike.</summary>
     [Fact]
     public async Task ReadsAnExplicitNullAsAbsent()
     {
@@ -195,4 +195,20 @@ public sealed class StructModelJsonContractTests
     [Fact]
     public async Task RejectsATruncatedRow() =>
         await RejectsAsync("""{"id":"t1","decimal_size":"2.0","tape":""");
+
+    /// <summary>
+    /// A JSON null in a required, non-nullable reference property. System.Text.Json treats
+    /// <c>required</c> as a presence check, not a null check, so the key being there satisfies it
+    /// and the null lands in a property whose type says it cannot be null. Pinned because the
+    /// generated converter must reproduce it rather than improve on it: tightening this would
+    /// reject a body the SDK accepts today, which is a behaviour change #47 did not ask for and
+    /// nobody would find in a release note about allocation.
+    /// </summary>
+    [Fact]
+    public async Task AcceptsANullInARequiredStringExactlyAsSystemTextJsonDoes()
+    {
+        Trade trade = Assert.Single(await ReadAsync("""{"id":null,"decimal_size":"2.0"}"""));
+
+        Assert.Null(trade.TradeId);
+    }
 }

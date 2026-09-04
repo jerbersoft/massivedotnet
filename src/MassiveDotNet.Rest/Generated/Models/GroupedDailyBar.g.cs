@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -24,6 +25,7 @@ namespace MassiveDotNet.Rest.Models;
 /// model at a site that carries a property the model lacks (decision D16). <see cref="Timestamp"/>
 /// is computed from <see cref="TimestampMilliseconds"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(GroupedDailyBarJsonConverter))]
 public readonly partial record struct GroupedDailyBar
 {
     /// <summary>The exchange symbol that this item is traded under.</summary>
