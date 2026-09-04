@@ -67,9 +67,8 @@ public readonly partial record struct HistoricQuote
     public double BidPrice { get; init; }
 
     /// <summary>
-    /// The bid size. This represents the number of round lot orders at the given bid price. The normal
-    /// round lot size is 100 shares. A bid size of 2 means there are 200 shares for purchase at the
-    /// given bid price.
+    /// The bid size. This represents the number of shares buyers are bidding for at the given bid
+    /// price.
     /// </summary>
     [JsonPropertyName("s")]
     public int BidSize { get; init; }
@@ -82,11 +81,7 @@ public readonly partial record struct HistoricQuote
     [JsonPropertyName("P")]
     public double AskPrice { get; init; }
 
-    /// <summary>
-    /// The ask size. This represents the number of round lot orders at the given ask price. The normal
-    /// round lot size is 100 shares. An ask size of 2 means there are 200 shares available to purchase
-    /// at the given ask price.
-    /// </summary>
+    /// <summary>The ask size. This represents the number of shares sellers are offering at the given ask price.</summary>
     [JsonPropertyName("S")]
     public int AskSize { get; init; }
 

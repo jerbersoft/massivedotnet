@@ -292,7 +292,7 @@
         "type": "number"
       },
       "AskSize": {
-        "description": "The ask size. This represents the number of round lot orders at the given ask price. The normal round lot size is 100 shares. An ask size of 2 means there are 200 shares available to purchase at the given ask price.",
+        "description": "The ask size. This represents the number of shares sellers are offering at the given ask price.",
         "type": "integer"
       },
       "BidExchangeId": {
@@ -305,7 +305,7 @@
         "type": "number"
       },
       "BidSize": {
-        "description": "The bid size. This represents the number of round lot orders at the given bid price. The normal round lot size is 100 shares. A bid size of 2 means there are 200 shares for purchase at the given bid price.",
+        "description": "The bid size. This represents the number of shares buyers are bidding for at the given bid price.",
         "type": "integer"
       },
       "Close": {
@@ -4656,7 +4656,7 @@
                 "type": "number"
               },
               "S": {
-                "description": "The ask size. This represents the number of round lot orders at the given ask price. The normal round lot size is 100 shares. An ask size of 2 means there are 200 shares available to purchase at the given ask price.",
+                "description": "The ask size. This represents the number of shares sellers are offering at the given ask price.",
                 "type": "integer"
               },
               "X": {
@@ -4685,7 +4685,7 @@
                 "type": "number"
               },
               "s": {
-                "description": "The bid size. This represents the number of round lot orders at the given bid price. The normal round lot size is 100 shares. A bid size of 2 means there are 200 shares for purchase at the given bid price.",
+                "description": "The bid size. This represents the number of shares buyers are bidding for at the given bid price.",
                 "type": "integer"
               },
               "x": {
@@ -4758,7 +4758,7 @@
                       "type": "number"
                     },
                     "S": {
-                      "description": "The ask size. This represents the number of round lot orders at the given ask price. The normal round lot size is 100 shares. An ask size of 2 means there are 200 shares available to purchase at the given ask price.",
+                      "description": "The ask size. This represents the number of shares sellers are offering at the given ask price.",
                       "type": "integer"
                     },
                     "X": {
@@ -4787,7 +4787,7 @@
                       "type": "number"
                     },
                     "s": {
-                      "description": "The bid size. This represents the number of round lot orders at the given bid price. The normal round lot size is 100 shares. A bid size of 2 means there are 200 shares for purchase at the given bid price.",
+                      "description": "The bid size. This represents the number of shares buyers are bidding for at the given bid price.",
                       "type": "integer"
                     },
                     "x": {
@@ -45402,7 +45402,7 @@
                                     "type": "number"
                                   },
                                   "S": {
-                                    "description": "The ask size. This represents the number of round lot orders at the given ask price. The normal round lot size is 100 shares. An ask size of 2 means there are 200 shares available to purchase at the given ask price.",
+                                    "description": "The ask size. This represents the number of shares sellers are offering at the given ask price.",
                                     "type": "integer"
                                   },
                                   "X": {
@@ -45431,7 +45431,7 @@
                                     "type": "number"
                                   },
                                   "s": {
-                                    "description": "The bid size. This represents the number of round lot orders at the given bid price. The normal round lot size is 100 shares. A bid size of 2 means there are 200 shares for purchase at the given bid price.",
+                                    "description": "The bid size. This represents the number of shares buyers are bidding for at the given bid price.",
                                     "type": "integer"
                                   },
                                   "x": {
