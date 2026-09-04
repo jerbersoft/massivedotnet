@@ -29,7 +29,12 @@ public sealed partial class TemporalTypeTests
         typeof(TimeSpan),
     ];
 
-    private static readonly string[] ScannedDirectories = ["src", "tests", "samples", "tools"];
+    /// <summary>
+    /// Every tree the source scan reads. <see cref="EveryDirectoryHoldingSourceIsScanned"/> keeps
+    /// this list honest: adding a tree of C# without naming it here would leave a machine-checked
+    /// rule with a hole in exactly the shape of the new directory.
+    /// </summary>
+    private static readonly string[] ScannedDirectories = ["benchmarks", "samples", "src", "tests", "tools"];
 
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
@@ -53,6 +58,39 @@ public sealed partial class TemporalTypeTests
         string[] projects = Directory.GetDirectories(Path.Combine(RepositoryRoot, "src"));
 
         Assert.Equal(projects.Length, ShippedAssemblies.Length);
+    }
+
+    /// <summary>
+    /// The source scan reads a fixed list of directories, so a new tree of C# is covered only if
+    /// someone remembers to add it. This compares that list against what the repository actually
+    /// holds, in both directions: a tree with source that nobody scans is a hole, and a scanned
+    /// tree that no longer exists is a line that has stopped meaning anything.
+    /// </summary>
+    [Fact]
+    public void EveryDirectoryHoldingSourceIsScanned()
+    {
+        string[] holdingSource =
+        [
+            .. Directory
+                .EnumerateDirectories(RepositoryRoot)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                // Dot-directories are tooling scratch -- .git, .github, and whatever an agent or
+                // an IDE leaves behind. None of them is the SDK's source.
+                .Where(name => !name.StartsWith('.'))
+                .Where(name => Directory
+                    .EnumerateFiles(Path.Combine(RepositoryRoot, name), "*.cs", SearchOption.AllDirectories)
+                    .Any(file => !IsBuildOutput(file)))
+        ];
+
+        string[] unscanned = [.. holdingSource.Except(ScannedDirectories, StringComparer.Ordinal)];
+        string[] absent = [.. ScannedDirectories.Except(holdingSource, StringComparer.Ordinal)];
+
+        Assert.True(
+            unscanned.Length == 0 && absent.Length == 0,
+            $"The rule 12 source scan covers [{string.Join(", ", ScannedDirectories)}]. "
+                + $"Holding C# but never scanned: [{string.Join(", ", unscanned)}]. "
+                + $"Scanned but holding no C#: [{string.Join(", ", absent)}].");
     }
 
     [Fact]
@@ -218,12 +256,15 @@ public sealed partial class TemporalTypeTests
     private static IEnumerable<string> EnumerateSourceFiles() =>
         ScannedDirectories
             .Select(directory => Path.Combine(RepositoryRoot, directory))
+            // Every entry is proven to exist by EveryDirectoryHoldingSourceIsScanned, so this
+            // guard only keeps the failure readable rather than papering over a missing tree.
             .Where(Directory.Exists)
             .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
-                               StringComparison.Ordinal)
-                        && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
-                               StringComparison.Ordinal));
+            .Where(file => !IsBuildOutput(file));
+
+    private static bool IsBuildOutput(string path) =>
+        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+        || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
 
     /// <summary>
     /// Removes comments, string literals, and character literals, replacing them with whitespace so

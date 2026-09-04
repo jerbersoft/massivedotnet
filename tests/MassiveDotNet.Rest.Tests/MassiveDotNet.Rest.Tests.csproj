@@ -1,6 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!--
+      AllocationTests asserts byte counts, and tiered compilation makes them vary between runs of
+      the same binary: measured across four processes, 50,000-row deserialization reported either
+      38,737,296 or 36,473,232 bytes depending on which tier the measured call happened to run at.
+      Full optimization from the first call removes the variance, and it is also the right tier to
+      gate on: it is the steady state a long-lived client reaches, where a tier-0 figure is not.
+      The cost is roughly 0.35s on this project's ~1.6s run.
+    -->
+    <TieredCompilation>false</TieredCompilation>
     <OutputType>Exe</OutputType>
     <RootNamespace>MassiveDotNet.Rest.Tests</RootNamespace>
     <IsPackable>false</IsPackable>

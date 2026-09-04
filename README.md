@@ -283,6 +283,44 @@ zone resolution, and `System.Threading.RateLimiting`, which backs the opt-in thr
 carries a transitive dependency of its own, and the smoke test reaches both — an unexercised type
 is trimmed away, so a clean publish only proves what the sample actually calls.
 
+## Allocation
+
+Minimal allocation is the third design priority, so it is measured rather than asserted. Two
+instruments, because allocation is byte-exact and elapsed time is not:
+
+- **`AllocationTests`** runs with the offline suite and fails the build on a regression. It asserts
+  ceilings on request URI building, comparator rendering, aggregate deserialization at 1k / 10k /
+  50k rows, and per-page cost across a cursor traversal — and asserts **exactly zero** for group
+  navigation, which is the one place where zero is the actual claim.
+- **`benchmarks/MassiveDotNet.Benchmarks`** produces the comparative figures against naive
+  baselines. It never runs in CI, because a timing assertion on a shared runner is noise.
+
+Headline numbers, measured 2026-09-04 on an M4 Max:
+
+| | SDK | Naive baseline |
+|---|---:|---|
+| Build an aggregates request URI | **51 ns, 200 B** | `UriBuilder` + `Dictionary`: 410 ns, 1,856 B |
+| Read 50,000 aggregate bars | **24.1 ms, 32.0 MB** | same, body buffered into a string: 25.6 ms, 49.5 MB |
+| Navigate to a group | **0 B** | — |
+
+The 200 bytes are the returned string and nothing else. Streaming the response body rather than
+buffering it saves half the allocation at every payload size.
+
+One figure is not flattering and is documented anyway: reading 50,000 rows allocates between 7.6x
+and 8.8x the 4.2 MB array it returns — the range is how warm the JIT is — because
+`System.Text.Json` builds a JSON array through a doubling `List<T>`, where every growth slot costs
+a full 88-byte struct. That is [#47][issue-47]; the ceilings pin it so it cannot get worse, and
+they come down with the fix.
+
+Full tables, baselines, and the reasoning behind every ceiling are in
+[`docs/performance/2026-09-04-allocation-figures.md`](docs/performance/2026-09-04-allocation-figures.md).
+
+```bash
+dotnet run --project benchmarks/MassiveDotNet.Benchmarks -c Release
+```
+
+[issue-47]: https://github.com/jerbersoft/massivedotnet/issues/47
+
 ## Client lifetime
 
 `MassiveRestClient` is thread-safe and meant to be **long-lived**. Create one per application and
