@@ -1,0 +1,13 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup Label="Documentation">
+    <!-- The same carve-out tests/ and tools/ take, for the same reason: the root turns on the
+         documentation file so IDE0005 can run everywhere (#43), and rule 10's obligation is scoped
+         to the public members of the shipped libraries. A benchmark class is public because
+         BenchmarkDotNet requires it to be, not because anyone consumes it. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+  </PropertyGroup>
+
+</Project>

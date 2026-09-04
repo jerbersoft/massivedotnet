@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MassiveDotNet.Benchmarks</RootNamespace>
+    <IsPackable>false</IsPackable>
+
+    <!-- BenchmarkDotNet refuses to run a debug build, and says so rather than reporting bad
+         numbers. This makes `dotnet run` do the right thing without a -c flag. -->
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
+  </ItemGroup>
+
+</Project>

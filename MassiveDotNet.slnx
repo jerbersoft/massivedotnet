@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/MassiveDotNet.Benchmarks/MassiveDotNet.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/MassiveDotNet.AotSmokeTest/MassiveDotNet.AotSmokeTest.csproj" />
     <Project Path="samples/MassiveDotNet.HostSample/MassiveDotNet.HostSample.csproj" />
