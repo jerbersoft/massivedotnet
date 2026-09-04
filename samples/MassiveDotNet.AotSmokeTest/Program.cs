@@ -423,6 +423,61 @@ if (enumerated != 3 || handler.Requests != 18)
     return 1;
 }
 
+// The resilience handlers are rooted here for the reason every other section above is rooted:
+// System.Threading.RateLimiting is core's second package (D30), and an unreached TokenBucketRateLimiter
+// is trimmed away — so a clean publish would say nothing about it unless something here acquires a
+// permit and waits on the replenishment timer. A separate stub keeps the request count above intact.
+Console.WriteLine("\nresilience: retrying a 503 through a rate-limited pipeline:");
+
+FlakyHandler flaky = new();
+
+MassiveClientOptions resilientOptions = new()
+{
+    ApiKey = "aot-smoke-test-key",
+    AuthenticationScheme = MassiveAuthenticationScheme.QueryString,
+    Retry = new MassiveRetryOptions
+    {
+        MaxAttempts = 3,
+        InitialBackoff = Duration.FromMilliseconds(1),
+        MaxBackoff = Duration.FromMilliseconds(20),
+    },
+    RateLimit = new MassiveRateLimitOptions
+    {
+        PermitsPerWindow = 4,
+        Window = Duration.FromSeconds(1),
+    },
+};
+
+using HttpMessageHandler resilientPipeline =
+    MassiveHttpTransport.CreateHandlerPipeline(resilientOptions, flaky);
+
+using HttpClient resilientHttpClient = new(resilientPipeline, disposeHandler: false)
+{
+    BaseAddress = MassiveEndpoints.Production,
+};
+
+using MassiveHttpTransport resilientTransport = new(resilientHttpClient);
+using MassiveRestClient resilientClient = new(resilientTransport);
+
+MassivePage<TickerSummary> retried = await resilientClient.Reference.ListTickersAsync(limit: 1);
+
+Console.WriteLine($"request : {flaky.LastRequestUri}");
+Console.WriteLine($"attempts: {flaky.Requests} (results: {retried.Results.Length})");
+
+if (flaky.Requests != 3)
+{
+    Console.Error.WriteLine($"FAIL: expected the 503s to be retried to a third attempt; got {flaky.Requests}.");
+    return 1;
+}
+
+// The ordering property from D30, asserted where a trimmed or reordered pipeline would show up.
+if (flaky.SentQueries.Any(query => query.Split("apiKey=", StringSplitOptions.None).Length - 1 != 1))
+{
+    Console.Error.WriteLine(
+        $"FAIL: expected exactly one apiKey per attempt; got [{string.Join(", ", flaky.SentQueries)}].");
+    return 1;
+}
+
 Console.WriteLine("\nAOT smoke test passed.");
 return 0;
 
@@ -782,6 +837,38 @@ internal sealed class StubHandler : HttpMessageHandler
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        });
+    }
+}
+
+/// <summary>
+/// Answers 503 twice and then 200, so the retry handler actually retries. The shared
+/// <see cref="StubHandler"/> above cannot express this, and its request count is asserted.
+/// </summary>
+internal sealed class FlakyHandler : HttpMessageHandler
+{
+    private const string Body = """{"status":"OK","request_id":"aot","results":[]}""";
+
+    public Uri? LastRequestUri { get; private set; }
+
+    public int Requests { get; private set; }
+
+    /// <summary>Each attempt's query as it was sent; retry re-sends one request instance.</summary>
+    public List<string> SentQueries { get; } = [];
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        LastRequestUri = request.RequestUri;
+        Requests++;
+        SentQueries.Add(request.RequestUri?.Query ?? string.Empty);
+
+        HttpStatusCode status = Requests < 3 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK;
+
+        return Task.FromResult(new HttpResponseMessage(status)
+        {
+            Content = new StringContent(Body, Encoding.UTF8, "application/json"),
         });
     }
 }

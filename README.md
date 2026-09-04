@@ -215,8 +215,55 @@ catch (MassiveApiException exception)
 response's `Retry-After` header when the server sends one.
 
 Rate limiting and retry are **not** applied automatically — the SDK cannot know your tier, and
-silently retrying is not a decision to make on a caller's behalf. An opt-in handler is
-[#5](https://github.com/jerbersoft/massivedotnet/issues/5).
+silently retrying is not a decision to make on a caller's behalf. Both are available opt-in; see
+[Rate limiting and retry](#rate-limiting-and-retry).
+
+## Rate limiting and retry
+
+Off by default, because the SDK never learns your entitlement: a default tuned for the free tier's
+five requests a minute would throttle a paid key to a fraction of its allowance, and any other
+default would rate-limit the callers it was meant to protect. Each feature is one option.
+
+```csharp
+using MassiveRestClient client = new(new MassiveClientOptions
+{
+    ApiKey = apiKey,
+
+    // Pace requests so you stay inside your tier rather than discovering it through a 429.
+    RateLimit = new MassiveRateLimitOptions
+    {
+        PermitsPerWindow = 5,
+        Window = Duration.FromMinutes(1),
+    },
+
+    // Ride out a transient 429 or 5xx. Nothing else is retried.
+    Retry = new MassiveRetryOptions { MaxAttempts = 3 },
+});
+```
+
+They are separate options because they solve different problems — on a paid tier you may want to
+survive a transient 502 without pacing your requests at all.
+
+**Throttling.** Permits refill continuously rather than all at once on a window boundary, so a
+burst up to `PermitsPerWindow` goes out immediately and everything after it is paced. By default a
+request over the allowance waits; set `QueueLimit = 0` to have it throw
+`MassiveRateLimitExceededException` without reaching the network instead.
+
+**Retry.** Only HTTP 429 and 5xx. Every other 4xx describes a request that fails identically
+however often it is sent, so retrying one spends quota to reach the same answer. Backoff is
+exponential with jitter, and a server's `Retry-After` takes precedence over the computed delay —
+except when it exceeds `MaxBackoff`, where the 429 surfaces with its hint intact rather than
+holding your task for a period the SDK did not choose:
+
+```csharp
+catch (MassiveRateLimitExceededException exception)
+{
+    // Retry gave up, or the server asked for longer than MaxBackoff.
+    Console.Error.WriteLine($"Still limited. The server asked for {exception.RetryAfter}.");
+}
+```
+
+Both work identically under `AddMassive`, which reads the same options.
 
 ## Native AOT
 
@@ -231,8 +278,10 @@ build.
 dotnet publish samples/MassiveDotNet.AotSmokeTest -r osx-arm64 -c Release
 ```
 
-NodaTime is the SDK's only external dependency, and is verified AOT-clean at 3.3.3 including TZDB
-zone resolution.
+Core takes exactly two external dependencies: NodaTime, verified AOT-clean at 3.3.3 including TZDB
+zone resolution, and `System.Threading.RateLimiting`, which backs the opt-in throttle. Neither
+carries a transitive dependency of its own, and the smoke test reaches both — an unexercised type
+is trimmed away, so a clean publish only proves what the sample actually calls.
 
 ## Client lifetime
 
@@ -252,8 +301,8 @@ using MassiveRestClient client = new(new MassiveClientOptions
 ### Dependency injection
 
 `MassiveDotNet.Extensions.DependencyInjection` wires the client through `IHttpClientFactory`. It is
-a separate package so core stays dependency-free — it is the only project allowed to reference
-`Microsoft.Extensions.*`, and CI asserts that.
+a separate package so a REST consumer never pulls the DI stack — it is the only project allowed to
+reference `Microsoft.Extensions.*`, and CI asserts that.
 
 ```csharp
 builder.Services.AddMassive(options =>
@@ -297,6 +346,19 @@ HttpClient http = factory.CreateClient("massive");
 MassiveHttpTransport transport = new(http);
 MassiveRestClient client = new(transport);
 ```
+
+To get authentication and the resilience handlers in the order the SDK composes them, build the
+pipeline rather than assembling it by hand:
+
+```csharp
+HttpMessageHandler pipeline = MassiveHttpTransport.CreateHandlerPipeline(options, new SocketsHttpHandler());
+HttpClient http = new(pipeline) { BaseAddress = options.BaseAddress };
+```
+
+Order matters and its failure mode is silent. `MassiveAuthenticationHandler` rewrites the request
+URI under the query-string scheme, so a retry handler placed **outside** it re-authenticates every
+attempt and appends the key again — `?apiKey=k&apiKey=k&apiKey=k`. The request still succeeds; the
+only symptom is your key reaching access logs once per attempt.
 
 `BaseAddress` is required on that `HttpClient`: pagination checks a cursor's origin against it
 before sending your key, and throws if it is unset.
