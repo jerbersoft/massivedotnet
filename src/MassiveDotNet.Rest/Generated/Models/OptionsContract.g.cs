@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -79,5 +80,6 @@ public sealed partial record OptionsContract
     /// underlyings.
     /// </summary>
     [JsonPropertyName("additional_underlyings")]
+    [JsonConverter(typeof(PooledArrayConverter<AdditionalUnderlying>))]
     public AdditionalUnderlying[]? AdditionalUnderlyings { get; init; }
 }

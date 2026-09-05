@@ -11,6 +11,8 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -22,6 +24,7 @@ namespace MassiveDotNet.Rest.Models;
 /// A tick-level type, so a struct (decision D4). Timestamps are stored as nanosecond <see
 /// cref="long"/> values and exposed as <see cref="NodaTime.Instant"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(QuoteJsonConverter))]
 public readonly partial record struct Quote
 {
     /// <summary>
@@ -79,10 +82,12 @@ public readonly partial record struct Quote
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("conditions")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>A list of indicator codes.</summary>
     [JsonPropertyName("indicators")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Indicators { get; init; }
 
     /// <summary>

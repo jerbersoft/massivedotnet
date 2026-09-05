@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -23,6 +24,7 @@ namespace MassiveDotNet.Rest.Models;
 /// null-checks a point. <see cref="Timestamp"/> is computed from <see
 /// cref="TimestampMilliseconds"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(IndicatorValueJsonConverter))]
 public readonly partial record struct IndicatorValue
 {
     /// <summary>The Unix millisecond timestamp of the last aggregate used in this calculation.</summary>

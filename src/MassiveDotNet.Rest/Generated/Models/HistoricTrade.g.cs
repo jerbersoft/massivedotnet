@@ -11,6 +11,8 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -24,6 +26,7 @@ namespace MassiveDotNet.Rest.Models;
 /// <c>r</c> required although its own example omits all four, and declares the nanosecond
 /// timestamps as bare integers; the map corrects both, and each corrected row says so.
 /// </remarks>
+[JsonConverter(typeof(HistoricTradeJsonConverter))]
 public readonly partial record struct HistoricTrade
 {
     /// <summary>
@@ -94,6 +97,7 @@ public readonly partial record struct HistoricTrade
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public required int[] Conditions { get; init; }
 
     /// <summary>

@@ -3,6 +3,13 @@ using Xunit;
 
 namespace MassiveDotNet.Rest.Tests;
 
+// AllocationTests and CursorTraversalTests are pinned to one collection so xunit never runs them
+// concurrently. CursorTraversalTests measures GC.GetTotalMemory, which is process-wide, and
+// AllocationTests deserializes 50,000 rows next door. That was survivable while those rows were
+// garbage by the time the traversal measured; PooledArrayConverter (issue #47) makes the buffers
+// behind them live in ArrayPool<T>.Shared, so a forced collection no longer clears them and the
+// traversal read another class's pool as its own retention.
+[Collection("Process memory")]
 public sealed class CursorTraversalTests
 {
     private const string StartUri = "/v3/reference/things?limit=2";

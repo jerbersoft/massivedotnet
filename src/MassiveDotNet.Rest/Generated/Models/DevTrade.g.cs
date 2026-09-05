@@ -11,6 +11,8 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -24,6 +26,7 @@ namespace MassiveDotNet.Rest.Models;
 /// The route is experimental (decision D22), so this shape may change with it; the description
 /// requires <see cref="SizeFraction"/> and calls it the fractional size without naming a unit.
 /// </remarks>
+[JsonConverter(typeof(DevTradeJsonConverter))]
 public readonly partial record struct DevTrade
 {
     /// <summary>
@@ -92,6 +95,7 @@ public readonly partial record struct DevTrade
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("conditions")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>The trade correction indicator.</summary>

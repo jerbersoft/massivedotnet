@@ -22,6 +22,38 @@ internal static class Naming
     }
 
     /// <summary>
+    /// A local variable name for a property: <c>TradeId</c> becomes <c>tradeId</c>.
+    /// </summary>
+    /// <remarks>
+    /// Escapes a result that collides with a C# keyword rather than mangling it, because a wire
+    /// name is the service's to choose and <c>"do"</c> or <c>"for"</c> is a legal one. Only the
+    /// reserved words need this; a contextual keyword such as <c>value</c> is already a legal
+    /// identifier, and escaping it would emit <c>@value</c> where <c>value</c> reads better.
+    /// </remarks>
+    /// <param name="pascal">A PascalCase property name.</param>
+    /// <returns>The camelCase form, prefixed with <c>@</c> when it is a reserved word.</returns>
+    public static string Camel(string pascal)
+    {
+        string camel = char.ToLowerInvariant(pascal[0]) + pascal[1..];
+
+        return Reserved.Contains(camel) ? $"@{camel}" : camel;
+    }
+
+    /// <summary>The C# reserved words, which cannot be used as a bare identifier.</summary>
+    private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
+    {
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
+        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
+        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
+        "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
+        "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
+        "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
+        "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true",
+        "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual",
+        "void", "volatile", "while",
+    };
+
+    /// <summary>
     /// The enumerating counterpart of a paginated endpoint's method name:
     /// <c>ListAggregates</c> becomes <c>EnumerateAggregates</c>.
     /// </summary>

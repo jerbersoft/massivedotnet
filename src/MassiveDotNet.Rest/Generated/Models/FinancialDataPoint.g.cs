@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -54,6 +55,7 @@ public sealed partial record FinancialDataPoint
     /// true and if source is SourceInterReportDerived.
     /// </summary>
     [JsonPropertyName("derived_from")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? DerivedFrom { get; init; }
 
     /// <summary>

@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -51,6 +52,7 @@ public sealed partial record Condition
 
     /// <summary>Data types that this condition applies to.</summary>
     [JsonPropertyName("data_types")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public required string[] DataTypes { get; init; }
 
     /// <summary>

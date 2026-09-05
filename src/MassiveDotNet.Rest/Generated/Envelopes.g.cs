@@ -13,6 +13,7 @@
 using System.Text.Json.Serialization;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest.Models;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Serialization;
 
@@ -48,6 +49,7 @@ internal sealed class GetStocksAggregatesResponse : IPagedEnvelope<Agg>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Agg>))]
     public Agg[]? Results { get; init; }
 
     /// <summary>If present, this value can be used to fetch the next page of data.</summary>
@@ -68,6 +70,7 @@ internal sealed class GetStocksV1DividendsResponse : IPagedEnvelope<Dividend>
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Dividend>))]
     public Dividend[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -92,6 +95,7 @@ internal sealed class ListNewsResponse : IPagedEnvelope<NewsArticle>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<NewsArticle>))]
     public NewsArticle[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -161,6 +165,7 @@ internal sealed class GetGroupedStocksAggregatesResponse
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<GroupedDailyBar>))]
     public GroupedDailyBar[]? Results { get; init; }
 }
 
@@ -193,6 +198,7 @@ internal sealed class GetPreviousStocksAggregatesResponse
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<PreviousCloseBar>))]
     public PreviousCloseBar[]? Results { get; init; }
 }
 
@@ -224,6 +230,7 @@ internal sealed class TradesResponse : IPagedEnvelope<Trade>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Trade>))]
     public Trade[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -244,6 +251,7 @@ internal sealed class QuotesResponse : IPagedEnvelope<Quote>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Quote>))]
     public Quote[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -280,6 +288,7 @@ internal sealed class GetStocksSnapshotTickersResponse
 
     /// <summary>An array of snapshot data for the specified tickers.</summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<TickerSnapshot>))]
     public TickerSnapshot[]? Tickers { get; init; }
 }
 
@@ -292,6 +301,7 @@ internal sealed class GetStocksSnapshotDirectionResponse
 
     /// <summary>An array of snapshot data for the specified tickers.</summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<TickerSnapshot>))]
     public TickerSnapshot[]? Tickers { get; init; }
 }
 
@@ -381,6 +391,7 @@ internal sealed class DeprecatedGetHistoricStocksTradesResponse
     public string? Ticker { get; init; }
 
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<HistoricTrade>))]
     public HistoricTrade[]? Results { get; init; }
 }
 
@@ -404,6 +415,7 @@ internal sealed class DeprecatedGetHistoricStocksQuotesResponse
     public string? Ticker { get; init; }
 
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<HistoricQuote>))]
     public HistoricQuote[]? Results { get; init; }
 }
 
@@ -420,6 +432,7 @@ internal sealed class GetStocksV1SplitsResponse : IPagedEnvelope<Split>
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Split>))]
     public Split[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -440,6 +453,7 @@ internal sealed class GetStocksV1ExchangesResponse : IPagedEnvelope<StockExchang
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<StockExchange>))]
     public StockExchange[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -460,6 +474,7 @@ internal sealed class GetStocksDevTradesTickerResponse : IPagedEnvelope<DevTrade
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<DevTrade>))]
     public DevTrade[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -487,6 +502,7 @@ internal sealed class ListTickersResponse : IPagedEnvelope<TickerSummary>
     /// reasons we do not return the CUSIP in the response.
     /// </summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<TickerSummary>))]
     public TickerSummary[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -527,6 +543,7 @@ internal sealed class ListTickerTypesResponse
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<TickerType>))]
     public TickerType[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -559,6 +576,7 @@ internal sealed class GetRelatedCompaniesResponse
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<RelatedCompany>))]
     public RelatedCompany[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -587,6 +605,7 @@ internal sealed class ListConditionsResponse : IPagedEnvelope<Condition>
 
     /// <summary>An array of conditions that match your query.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Condition>))]
     public Condition[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -607,6 +626,7 @@ internal sealed class ListExchangesResponse
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Exchange>))]
     public Exchange[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -627,6 +647,7 @@ internal sealed class ListDividendsResponse : IPagedEnvelope<ReferenceDividend>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<ReferenceDividend>))]
     public ReferenceDividend[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -647,6 +668,7 @@ internal sealed class ListStockSplitsResponse : IPagedEnvelope<ReferenceSplit>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<ReferenceSplit>))]
     public ReferenceSplit[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -667,6 +689,7 @@ internal sealed class ListOptionsContractsResponse : IPagedEnvelope<OptionsContr
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<OptionsContract>))]
     public OptionsContract[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -703,6 +726,7 @@ internal sealed class ListIPOsResponse : IPagedEnvelope<Ipo>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Ipo>))]
     public Ipo[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -723,6 +747,7 @@ internal sealed class GetV1ReferenceIposResponse : IPagedEnvelope<IpoV1>
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<IpoV1>))]
     public IpoV1[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -743,6 +768,7 @@ internal sealed class GetStocksV1ShortInterestResponse : IPagedEnvelope<ShortInt
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<ShortInterest>))]
     public ShortInterest[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -763,6 +789,7 @@ internal sealed class GetStocksV1ShortVolumeResponse : IPagedEnvelope<ShortVolum
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<ShortVolume>))]
     public ShortVolume[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -783,6 +810,7 @@ internal sealed class GetStocksVXFloatResponse : IPagedEnvelope<ShareFloat>
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<ShareFloat>))]
     public ShareFloat[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -803,6 +831,7 @@ internal sealed class ListFilingsResponse : IPagedEnvelope<Filing>
     public string? RequestId { get; init; }
 
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Filing>))]
     public Filing[]? Results { get; init; }
 
     [JsonPropertyName("status")]
@@ -829,6 +858,7 @@ internal sealed class ListFilingFilesResponse : IPagedEnvelope<FilingFile>
     public string? RequestId { get; init; }
 
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<FilingFile>))]
     public FilingFile[]? Results { get; init; }
 
     [JsonPropertyName("status")]
@@ -848,6 +878,7 @@ internal sealed class GetStocksFilings10KVXSectionsResponse : IPagedEnvelope<Ten
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<TenKSection>))]
     public TenKSection[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -868,6 +899,7 @@ internal sealed class GetStocksFilings10KVX0SectionsResponse : IPagedEnvelope<Te
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<TenKSection>))]
     public TenKSection[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -888,6 +920,7 @@ internal sealed class GetStocksFilings8KVXDisclosuresResponse : IPagedEnvelope<E
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<EightKDisclosure>))]
     public EightKDisclosure[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -908,6 +941,7 @@ internal sealed class GetStocksFilings8KVXTextResponse : IPagedEnvelope<EightKTe
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<EightKText>))]
     public EightKText[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -928,6 +962,7 @@ internal sealed class GetStocksFilingsVX13FResponse : IPagedEnvelope<ThirteenFHo
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<ThirteenFHolding>))]
     public ThirteenFHolding[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -948,6 +983,7 @@ internal sealed class GetStocksFilingsVXForm3Response : IPagedEnvelope<Form3Fili
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Form3Filing>))]
     public Form3Filing[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -968,6 +1004,7 @@ internal sealed class GetStocksFilingsVXForm4Response : IPagedEnvelope<Form4Fili
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<Form4Filing>))]
     public Form4Filing[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -988,6 +1025,7 @@ internal sealed class GetStocksFilingsVXIndexResponse : IPagedEnvelope<FilingInd
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<FilingIndexEntry>))]
     public FilingIndexEntry[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1008,6 +1046,7 @@ internal sealed class GetStocksFilingsVXRiskFactorsResponse : IPagedEnvelope<Ris
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<RiskFactor>))]
     public RiskFactor[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1028,6 +1067,7 @@ internal sealed class GetStocksTaxonomiesVXDisclosuresResponse : IPagedEnvelope<
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<DisclosureTaxonomyEntry>))]
     public DisclosureTaxonomyEntry[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1048,6 +1088,7 @@ internal sealed class GetStocksTaxonomiesVXRiskFactorsResponse : IPagedEnvelope<
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<RiskFactorTaxonomyEntry>))]
     public RiskFactorTaxonomyEntry[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1072,6 +1113,7 @@ internal sealed class ListFinancialsResponse : IPagedEnvelope<FinancialReport>
 
     /// <summary>An array of results containing the requested data.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<FinancialReport>))]
     public FinancialReport[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1092,6 +1134,7 @@ internal sealed class GetStocksFinancialsV1BalanceSheetsResponse : IPagedEnvelop
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<BalanceSheet>))]
     public BalanceSheet[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1112,6 +1155,7 @@ internal sealed class GetStocksFinancialsV1CashFlowStatementsResponse : IPagedEn
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<CashFlowStatement>))]
     public CashFlowStatement[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1132,6 +1176,7 @@ internal sealed class GetStocksFinancialsV1IncomeStatementsResponse : IPagedEnve
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<IncomeStatement>))]
     public IncomeStatement[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>
@@ -1152,6 +1197,7 @@ internal sealed class GetStocksFinancialsV1RatiosResponse : IPagedEnvelope<Finan
 
     /// <summary>The results for this request.</summary>
     [JsonPropertyName("results")]
+    [JsonConverter(typeof(PooledArrayConverter<FinancialRatios>))]
     public FinancialRatios[]? Results { get; init; }
 
     /// <summary>The status of this request's response.</summary>

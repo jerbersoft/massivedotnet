@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -21,6 +22,7 @@ namespace MassiveDotNet.Rest.Models;
 /// timestamp and the accumulated volume as bare integers; the timestamp always overflows int32 and
 /// a busy session's accumulated volume can, so the map types both <see cref="long"/>.
 /// </remarks>
+[JsonConverter(typeof(SnapshotMinuteJsonConverter))]
 public readonly partial record struct SnapshotMinute
 {
     /// <summary>

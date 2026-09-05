@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -31,5 +32,6 @@ public sealed partial record IndicatorUnderlying
 
     /// <summary>The array of aggregates used in the calculation of this indicator.</summary>
     [JsonPropertyName("aggregates")]
+    [JsonConverter(typeof(PooledArrayConverter<Agg>))]
     public Agg[]? Aggregates { get; init; }
 }

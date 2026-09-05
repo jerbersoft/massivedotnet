@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -57,6 +58,7 @@ public sealed partial record Filing
 
     /// <summary>Entities related to the filing (e.g. the document filers).</summary>
     [JsonPropertyName("entities")]
+    [JsonConverter(typeof(PooledArrayConverter<FilingEntity>))]
     public required FilingEntity[] Entities { get; init; }
 
     /// <summary>The number of files associated with the filing.</summary>

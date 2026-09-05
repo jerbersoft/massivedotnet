@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -67,6 +68,7 @@ public sealed partial record Form3Filing
     /// classes.
     /// </summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? Tickers { get; init; }
 
     /// <summary>SEC Central Index Key of the reporting owner (10 digits, zero-padded).</summary>
@@ -149,6 +151,7 @@ public sealed partial record Form3Filing
     /// description.
     /// </summary>
     [JsonPropertyName("footnotes")]
+    [JsonConverter(typeof(PooledArrayConverter<FilingFootnote>))]
     public FilingFootnote[]? Footnotes { get; init; }
 
     /// <summary>Additional remarks included in the filing.</summary>

@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -27,6 +28,7 @@ public sealed partial record IndicatorSeries
 {
     /// <summary>The indicator values for this page, oldest or newest first as requested.</summary>
     [JsonPropertyName("values")]
+    [JsonConverter(typeof(PooledArrayConverter<IndicatorValue>))]
     public IndicatorValue[]? Values { get; init; }
 
     /// <summary>The underlying aggregates used.</summary>

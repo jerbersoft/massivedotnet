@@ -11,6 +11,8 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -23,6 +25,7 @@ namespace MassiveDotNet.Rest.Models;
 /// names. Timestamps are stored as nanosecond <see cref="long"/> values and exposed as <see
 /// cref="NodaTime.Instant"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(LastTradeJsonConverter))]
 public readonly partial record struct LastTrade
 {
     /// <summary>The exchange symbol that this item is traded under.</summary>
@@ -91,6 +94,7 @@ public readonly partial record struct LastTrade
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>The trade correction indicator.</summary>

@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -22,6 +23,7 @@ namespace MassiveDotNet.Rest.Models;
 /// A struct, like <see cref="IndicatorValue"/> (decision D4). <see cref="Timestamp"/> is computed
 /// from <see cref="TimestampMilliseconds"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(MacdValueJsonConverter))]
 public readonly partial record struct MacdValue
 {
     /// <summary>The Unix millisecond timestamp of the last aggregate used in this calculation.</summary>

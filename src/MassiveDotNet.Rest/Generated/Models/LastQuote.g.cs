@@ -11,6 +11,8 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
+using MassiveDotNet.Rest.Serialization;
 
 namespace MassiveDotNet.Rest.Models;
 
@@ -24,6 +26,7 @@ namespace MassiveDotNet.Rest.Models;
 /// overflows, so the map types them <see cref="long"/>; they are exposed as <see
 /// cref="NodaTime.Instant"/> only when read (decision D5).
 /// </remarks>
+[JsonConverter(typeof(LastQuoteJsonConverter))]
 public readonly partial record struct LastQuote
 {
     /// <summary>The exchange symbol that this item is traded under.</summary>
@@ -82,10 +85,12 @@ public readonly partial record struct LastQuote
 
     /// <summary>A list of condition codes.</summary>
     [JsonPropertyName("c")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
     /// <summary>A list of indicator codes.</summary>
     [JsonPropertyName("i")]
+    [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Indicators { get; init; }
 
     /// <summary>

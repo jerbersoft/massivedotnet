@@ -11,6 +11,7 @@
 #nullable enable
 
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Models;
@@ -63,10 +64,12 @@ public sealed partial record NewsArticle
 
     /// <summary>The ticker symbols associated with the article.</summary>
     [JsonPropertyName("tickers")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public required string[] Tickers { get; init; }
 
     /// <summary>The keywords associated with the article (which will vary depending on the publishing source).</summary>
     [JsonPropertyName("keywords")]
+    [JsonConverter(typeof(PooledArrayConverter<string>))]
     public string[]? Keywords { get; init; }
 
     /// <summary>
@@ -78,5 +81,6 @@ public sealed partial record NewsArticle
 
     /// <summary>The insights related to the article.</summary>
     [JsonPropertyName("insights")]
+    [JsonConverter(typeof(PooledArrayConverter<NewsInsight>))]
     public NewsInsight[]? Insights { get; init; }
 }

@@ -1,7 +1,8 @@
 # Allocation and throughput figures
 
-Measured 2026-09-04 for issue #7. These are the numbers behind the constitution's third design
-priority, and the baselines that say what decisions D4, D5, and D15 actually bought.
+Measured 2026-09-04 for issue #7, and the deserialization figures re-measured the same day after
+issue #47 was fixed. These are the numbers behind the constitution's third design priority, and the
+baselines that say what decisions D4, D5, D15, and D32 actually bought.
 
 | | |
 |---|---|
@@ -29,15 +30,18 @@ reproducible on a shared CI runner and the other is not.
 | Measures | one call, `GC.GetAllocatedBytesForCurrentThread` | many calls, BenchmarkDotNet |
 | JIT | tiering off (`TieredCompilation=false`) | tiering and dynamic PGO on, fully warmed |
 
-**The two report different numbers for the same path, and both are correct.** Deserializing 50,000
-rows measures 38,737,296 B in the gate and 33,542,195 B here. The difference is 5,195,101 B, or
-103.9 bytes per row — suspiciously close to one boxed 88-byte row plus a 16-byte header, which
-suggests an allocation the fully-warmed JIT elides and the cold one does not. That reading has not
-been confirmed against the generated code, and nothing here depends on it: what matters is that
-the two instruments bracket the same path rather than contradict each other. The gate takes the
-higher, colder figure because it is the deterministic one: with tiering left on, the same binary reported either
-38,737,296 or 36,473,232 bytes across repeated runs depending on which tier the measured call
-happened to execute at, and a gate that fails 1 run in 3 is not a gate.
+**The two used to report different numbers for the same path, and the gap turned out to be the
+bug.** Before #47, deserializing 50,000 rows measured 38,737,296 B in the gate and 33,542,195 B
+here — 5,195,101 B apart, or 103.9 bytes per row, suspiciously close to one boxed 88-byte row plus
+a 16-byte header. The guess recorded here was an allocation the fully-warmed JIT elides and the
+cold one does not. It was close: D32 removed exactly that per-row boxing, and the two instruments
+now agree to within a kilobyte — 4,402,864 B in the gate against 4,401,858 B here, on a path that
+allocates 4,400,000 B of array.
+
+The gate still takes the colder figure, because it is the deterministic one: with tiering left on,
+the same binary reported either 38,737,296 or 36,473,232 bytes across repeated runs depending on
+which tier the measured call happened to execute at, and a gate that fails 1 run in 3 is not a
+gate.
 
 So the gate's ceilings are conservative against what a warmed client pays, and the accepted cost is
 real: a regression visible only on the PGO-enabled path would not fail the build. Nothing observed
@@ -74,41 +78,64 @@ One payload, four arms. The SDK arm goes through the public API — the JSON con
 so calling the serializer directly would skip a transport that no consumer can skip. The other
 three share one `HttpClient` and one handler and differ from each other only in the thing named.
 
+Re-measured after #47. The `Gen0/1/2` columns are collections per 1,000 operations and are the
+reason the means below must not be read on their own.
+
 ### 50,000 rows
 
-| Arm | Mean | Allocated | vs SDK |
-|---|---:|---:|---|
-| SDK, struct rows, streamed | 24,102.9 us | 32,756 KB | baseline |
-| Local struct rows, streamed | 24,100.7 us | 32,755 KB | 1.00x |
-| Local class rows, streamed | 28,030.9 us | 18,606 KB | 16% slower, **0.57x the allocation** |
-| Local struct rows, body buffered into a string | 25,595.2 us | 50,696 KB | 1.55x the allocation |
+| Arm | Mean | Allocated | Gen0 / Gen1 / Gen2 |
+|---|---:|---:|---:|
+| SDK, struct rows, streamed | 33,304.2 us | **4,299 KB** | **0 / 0 / 0** |
+| Local struct rows, streamed | 24,347.5 us | 32,756 KB | 3,188 / 1,094 / 1,094 |
+| Local class rows, streamed | 28,123.3 us | 18,606 KB | 2,469 / 969 / 469 |
+| Local struct rows, body buffered into a string | 25,064.5 us | 50,696 KB | 3,500 / 781 / 781 |
 
 ### 10,000 rows
 
-| Arm | Mean | Allocated | vs SDK |
-|---|---:|---:|---|
-| SDK, struct rows, streamed | 5,050.5 us | 7,120 KB | baseline |
-| Local struct rows, streamed | 5,197.4 us | 7,119 KB | 1.00x |
-| Local class rows, streamed | 5,315.7 us | 3,774 KB | 0.53x the allocation |
-| Local struct rows, body buffered into a string | 5,736.5 us | 10,686 KB | 1.50x the allocation |
+| Arm | Mean | Allocated | Gen0 / Gen1 / Gen2 |
+|---|---:|---:|---:|
+| SDK, struct rows, streamed | 5,284.8 us | **862 KB** | 141 / 141 / 141 |
+| Local struct rows, streamed | 5,281.7 us | 7,119 KB | 1,422 / 992 / 992 |
+| Local class rows, streamed | 5,340.8 us | 3,774 KB | 445 / 164 / 78 |
+| Local struct rows, body buffered into a string | 5,405.3 us | 10,686 KB | 1,320 / 766 / 766 |
 
 ### 1,000 rows
 
-| Arm | Mean | Allocated | vs SDK |
-|---|---:|---:|---|
-| SDK, struct rows, streamed | 508.2 us | 608 KB | baseline |
-| Local struct rows, streamed | 501.2 us | 607 KB | 1.00x |
-| Local class rows, streamed | 456.8 us | 369 KB | 0.61x the allocation |
-| Local struct rows, body buffered into a string | 516.8 us | 964 KB | 1.59x the allocation |
+| Arm | Mean | Allocated | Gen0 / Gen1 / Gen2 |
+|---|---:|---:|---:|
+| SDK, struct rows, streamed | 550.3 us | **88 KB** | 27 / 27 / 27 |
+| Local struct rows, streamed | 528.3 us | 607 KB | 55 / 55 / 55 |
+| Local class rows, streamed | 463.8 us | 369 KB | 45 / 11 / 0 |
+| Local struct rows, body buffered into a string | 540.4 us | 964 KB | 138 / 138 / 138 |
 
 *(Deserialization arms ran as `ShortRun`: 3 warmup and 3 target iterations. The allocation columns
 are exact regardless; the means carry wider error bars than the URI table's.)*
 
 ### What these say
 
-**The SDK adds nothing measurable over a raw deserialize.** 32,756 KB against 32,755 KB at 50,000
-rows: the transport, the URI, the status check, and the page wrapper together cost about a
-kilobyte, which is the result the two-level API and the pooled builder were supposed to produce.
+**The SDK now allocates 7.6x less than a raw deserialize, and pays for it in wall clock.** This is
+the honest headline and it goes first. At 50,000 rows the SDK arm is 4,299 KB against the naive
+32,756 KB, and 33,304 us against 24,348 — **37% slower**. At 10,000 rows the two are the same speed
+within noise (5,285 against 5,282) for 8.3x less allocation, and at 1,000 rows the SDK is 4% slower
+for 6.9x less.
+
+**The 50,000-row mean is measured in the one setting that flatters the naive arm.** BenchmarkDotNet
+runs one operation at a time in a quiet process, so garbage collection is nearly free: nothing else
+is competing for the heap and a Gen2 pause stalls no one but the benchmark. The Gen columns say
+what that hides. Per 1,000 operations the SDK arm triggers **no collections at all**, where the
+naive arm triggers 3,188 Gen0, 1,094 Gen1, and 1,094 Gen2. A Gen2 collection is process-wide: in a
+service reading market data on one thread while serving requests on others, that cost lands on
+every one of them, and it does not appear in this table. The 37% is real and is not being explained
+away — it is being placed next to a number the benchmark cannot charge to the arm that causes it.
+
+**Where the 37% comes from.** A custom collection converter cannot be resumed mid-buffer, so
+`System.Text.Json` buffers the whole array and scans it once to find its extent before the
+converter parses it again. That double scan is inherent to reading an array through a converter of
+our own on the streaming path, and it is the price of the pooled buffer. Two things that looked
+like the cause were measured and were not: replacing the pooled buffer with a plain `List<T>` made
+no difference (89.9 ms against 89.1 ms on a tiering-off harness), and the per-element
+`JsonSerializer.Deserialize` call **was** a real cost, worth 121.9 ms to 89.1 ms once the element
+converter was resolved once and called directly.
 
 **Streaming the body is worth 50%.** Reading into a string before parsing costs 1.50x to 1.59x the
 allocation at every size, and it is slower. The constitution's "deserialize from the response
@@ -116,9 +143,11 @@ stream; never buffer a body into a string first" is worth what it claims, and
 `AllocationTests.DeserializingAggregateRowsStaysUnderItsCeiling` fails at all three sizes when the
 transport is changed to buffer.
 
-**D4 needs both halves of the story, and this table is only one of them.** Class rows allocate
-roughly half what struct rows do transiently — the opposite of what "structs allocate less" would
-suggest, and the whole of issue #47. What they do not do is retain less:
+**D4 needed both halves of the story, and #47 has now settled the half that was against it.** The
+naive class arm still allocates roughly half what the naive struct arm does transiently, which is
+what made #47 look like an argument against D4. It never was: the SDK's struct path now allocates
+**4.3x less than the naive class path** (4,299 KB against 18,606 KB) and is 16% faster than it.
+Retention was always the other half, and it always favoured the struct:
 
 | 50,000 rows, retained | Bytes | Objects |
 |---|---:|---:|
@@ -130,21 +159,38 @@ CoreCLR object header is 16 bytes, and a reference is 8.)*
 
 So the struct array holds 21% less memory in one object that the GC traces once, where the class
 array hands the collector fifty thousand and one. D4 is about what a 50,000-row response leaves
-behind, and on that measure it is right. The transient cost above is a defect in **how rows are
+behind, and on that measure it was always right. The transient cost was a defect in **how rows are
 read**, not evidence about **what rows should be** — see the next section.
 
 ---
 
-## Issue #47, in one line
+## Issue #47, and what fixing it cost
 
-`System.Text.Json` materializes a JSON array through `List<T>` and then `ToArray()`. `List<T>`
-doubles its backing array as it grows, and for an 88-byte struct every growth slot costs 88 bytes
-where a class costs 8 for the reference. That is why `Agg[]` costs 8.8x the array it returns while
-`ClassAgg[]` lands near its own floor, and why the fix is a converter or pooling decision rather
-than a reversal of D4.
+The issue reported that reading 50,000 aggregate rows allocates 8.8x the array it returns, and
+attributed it to one cause: `System.Text.Json` materializes a JSON array through a doubling
+`List<T>` and then `ToArray()`, and for an 88-byte struct every growth slot costs the whole value
+where a class costs 8 bytes for a reference.
 
-The gate's ceilings pin the current figures so the defect cannot get worse. They come down with the
-change that makes it better.
+That was about 30% of it. Measured, the 38,737,296 B split two ways:
+
+| Cause | Bytes | Share | Removed by |
+|---|---:|---:|---|
+| The doubling `List<T>` chain | 11,534,432 | 30% | `PooledArrayConverter<T>` |
+| Per-element object machinery, ~456 B/row | 22,800,000 | 59% | a generated converter per struct model (D32) |
+| The array itself, plus request and envelope | 4,402,864 | 11% | nothing; this is the floor |
+
+Both halves shipped. 50,000 rows now cost 4,402,864 B — 1.0007x the array — and the remainder is a
+fixed 2,864 B of request and envelope that does not grow with the row count, so the ratio improves
+with size rather than degrading: 1.03x at 1,000 rows, 1.0007x at 50,000.
+
+**The cost was wall clock, and it was not free.** The table above has the figures: no measurable
+change at 10,000 rows, 4% at 1,000, and 37% at 50,000, against a naive arm that pays for its speed
+in collections the benchmark does not charge it for. Whether that trade is the right one is a
+judgement the constitution has already made — allocation is a named design priority and throughput
+is not — but it is a trade, and it is written down here rather than left for someone to discover.
+
+The AOT image got *smaller*: 8,104,248 bytes against 8,337,640 before #47, because
+`System.Text.Json`'s object machinery for seventeen struct models is no longer rooted.
 
 ---
 
@@ -158,10 +204,17 @@ these was verified by deliberately regressing its path and watching the assertio
 | Group navigation, 2,000 hops | **0 B** | exactly 0 | one allocation added to the property: 24,000 B |
 | Aggregates request URI | 200 B | 256 B | `AppendPathLiteral` materializing its span: 376 B |
 | Six comparator forms | 648 B | 744 B | a concatenated string per form: 824 B |
-| Deserialize 1,000 rows | 727,040 B | 880,000 B | body buffered into a string: 988,552 B |
-| Deserialize 10,000 rows | 8,326,496 B | 10,000,000 B | body buffered into a string: 10,940,008 B |
-| Deserialize 50,000 rows | 38,737,296 B | 46,000,000 B | body buffered into a string: 51,910,808 B |
-| Traverse 100 pages x 10 rows | 10,274 B/page | 12,288 B/page | pages accumulated per iteration: 54,738 B/page |
+| Deserialize 1,000 rows | 90,864 B | 109,000 B | converter emission disabled: 546,864 B |
+| Deserialize 10,000 rows | 882,864 B | 1,059,000 B | converter emission disabled: 5,442,864 B |
+| Deserialize 50,000 rows | 4,402,864 B | 5,283,000 B | converter emission disabled: 27,202,864 B |
+| Traverse 100 pages x 10 rows | 2,909 B/page | 3,490 B/page | converter emission disabled: 7,469 B/page |
+
+The four deserialization rows were re-measured on 2026-09-04 after issue #47 was fixed. Their
+earlier figures, against which the same ceilings were first set, were 727,040 B, 8,326,496 B,
+38,737,296 B, and 10,274 B/page; the regression that proved those was buffering the body into a
+string, which cost 988,552 B, 10,940,008 B, 51,910,808 B, and 54,738 B/page. Both regressions still
+fail all four, and the current column names the cheaper one to reproduce -- turning off the
+generator's converter emission and regenerating.
 
 The last row is the one worth keeping. Under an accumulating traversal,
 `CursorTraversalTests.RetainsNoMemoryProportionalToThePagesTraversed` **still passed** — it measures

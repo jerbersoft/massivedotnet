@@ -38,6 +38,13 @@ internal sealed class Emitter(Spec spec, Map map)
         foreach (MapModel model in map.Models)
         {
             files[Path.Combine("Models", $"{model.Name}.g.cs")] = EmitModel(model);
+
+            // Struct models are the ones that arrive in bulk -- that is what decision D4 made them
+            // structs for -- so they are the ones that carry a converter (D32).
+            if (model.Kind == "struct")
+            {
+                files[Path.Combine("Serialization", $"{ConverterName(model)}.g.cs")] = EmitModelConverter(model);
+            }
         }
 
         // A map of body payloads alone has no envelope, and a file holding only usings would
@@ -57,7 +64,25 @@ internal sealed class Emitter(Spec spec, Map map)
         return files;
     }
 
-    private string EmitModel(MapModel model)
+    /// <summary>One resolved property of a model: what it is called, what it binds to, and its prose.</summary>
+    /// <param name="Property">The property as the description declares it, which carries the wire name and requiredness.</param>
+    /// <param name="Name">The .NET property name.</param>
+    /// <param name="Type">The resolved C# type, nullable annotation included.</param>
+    /// <param name="Summary">The prose for the XML doc comment.</param>
+    /// <param name="PreserveMarkup">Whether the summary is map-authored markup rather than escaped prose.</param>
+    private sealed record Member(SpecProperty Property, string Name, string Type, string? Summary, bool PreserveMarkup);
+
+    /// <summary>
+    /// A model's properties, in the order they are emitted.
+    /// </summary>
+    /// <remarks>
+    /// Resolved once and shared by the type and its converter, so the two cannot disagree about a
+    /// property's name, type, or position -- a converter that read one property fewer than the type
+    /// declares would drop a field silently on every row.
+    /// </remarks>
+    /// <param name="model">The model row.</param>
+    /// <returns>The resolved properties.</returns>
+    private List<Member> Members(MapModel model)
     {
         SpecOperation operation = spec.Operation(model.SchemaOperationId);
         JsonElement schema = Spec.Navigate(Spec.SuccessSchema(operation), model.SchemaPointer);
@@ -68,17 +93,22 @@ internal sealed class Emitter(Spec spec, Map map)
         List<SpecProperty> properties = [.. Spec.Properties(schema)
             .OrderBy(p => model.Properties.FindIndex(row => row.WireName == p.Name) is var i and >= 0 ? i : int.MaxValue)];
 
-        List<(SpecProperty Property, string Name, string Type, string? Summary, bool PreserveMarkup)> members = [.. properties.Select(property =>
+        return [.. properties.Select(property =>
         {
             MapProperty? mapped = model.Property(property.Name);
 
-            return (
+            return new Member(
                 property,
                 mapped?.Name ?? Naming.Pascal(property.Name),
                 PropertyType(model, property, mapped),
                 mapped?.Summary ?? Prose.Clean(property.Description),
                 mapped?.Summary is not null);
         })];
+    }
+
+    private string EmitModel(MapModel model)
+    {
+        List<Member> members = Members(model);
 
         CodeWriter writer = new();
         writer.Line(Header);
@@ -86,6 +116,16 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Line("using System.Text.Json.Serialization;");
 
         // Emitted conditionally: an unused using fails the build under EnforceCodeStyleInBuild.
+        if (members.Exists(m => ArrayElement(m.Type) is not null))
+        {
+            writer.Line("using MassiveDotNet.Serialization;");
+        }
+
+        if (model.Kind == "struct")
+        {
+            writer.Line("using MassiveDotNet.Rest.Serialization;");
+        }
+
         if (members.Exists(m => NamesNodaTime(m.Type)))
         {
             writer.Line("using NodaTime;");
@@ -98,6 +138,11 @@ internal sealed class Emitter(Spec spec, Map map)
         writer.Doc("summary", model.Summary, preserveMarkup: true);
         writer.Doc("remarks", model.Remarks, preserveMarkup: true);
 
+        if (model.Kind == "struct")
+        {
+            writer.Line($"[JsonConverter(typeof({ConverterName(model)}))]");
+        }
+
         string declaration = model.Kind == "struct"
             ? $"public readonly partial record struct {model.Name}"
             : $"public sealed partial record {model.Name}";
@@ -106,7 +151,7 @@ internal sealed class Emitter(Spec spec, Map map)
         {
             bool first = true;
 
-            foreach ((SpecProperty property, string name, string type, string? summary, bool preserveMarkup) in members)
+            foreach (Member member in members)
             {
                 if (!first)
                 {
@@ -115,16 +160,389 @@ internal sealed class Emitter(Spec spec, Map map)
 
                 first = false;
 
-                writer.Doc("summary", summary, preserveMarkup: preserveMarkup);
-                writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
+                writer.Doc("summary", member.Summary, preserveMarkup: member.PreserveMarkup);
+                writer.Line($"[JsonPropertyName(\"{member.Property.Name}\")]");
 
-                string modifier = NeedsRequiredModifier(property.Required, type) ? "required " : "";
-                writer.Line($"public {modifier}{type} {name} {{ get; init; }}");
+                if (ArrayElement(member.Type) is { } element)
+                {
+                    writer.Line($"[JsonConverter(typeof(PooledArrayConverter<{element}>))]");
+                }
+
+                string modifier = NeedsRequiredModifier(member.Property.Required, member.Type) ? "required " : "";
+                writer.Line($"public {modifier}{member.Type} {member.Name} {{ get; init; }}");
             }
         }
 
         return writer.ToString();
     }
+
+
+    /// <summary>The .NET name of a struct model's generated converter.</summary>
+    /// <param name="model">The model row.</param>
+    /// <returns>The converter's type name.</returns>
+    private static string ConverterName(MapModel model) => $"{model.Name}JsonConverter";
+
+    /// <summary>Why the struct models are read by hand rather than by System.Text.Json.</summary>
+    private const string ConverterRemarks = """
+        System.Text.Json reads an object by boxing a converter-shaped state machine and setting each
+        property through it, which costs roughly 480 bytes for a struct with <c>init</c> accessors --
+        paid per row, so a 50,000 row page pays it 50,000 times (issue #47). Reading the tokens
+        directly costs nothing per row, leaving the returned array as the only allocation. Only the
+        struct models get one: decision D4 made a type a struct precisely because it arrives in bulk,
+        so that is the same question already answered, not a second one.
+        """;
+
+    /// <summary>
+    /// Emits the <see cref="System.Text.Json.Serialization.JsonConverter{T}"/> for a struct model.
+    /// </summary>
+    /// <remarks>
+    /// The reader is a single forward pass, which is what makes it cheap and also what fixes its
+    /// semantics: a repeated key takes the last value, and a property absent from the body keeps
+    /// the local's initial value. Both match what System.Text.Json does, which
+    /// <c>StructModelJsonContractTests</c> pins against the built-in path.
+    /// </remarks>
+    /// <param name="model">The model row, which must be of kind <c>struct</c>.</param>
+    /// <returns>The converter's source.</returns>
+    private string EmitModelConverter(MapModel model)
+    {
+        List<Member> members = Members(model);
+
+        // One shared instance per element type: the pooled converter holds no state, and renting a
+        // fresh one per row would reintroduce an allocation on the path this exists to clear.
+        List<string> elements = [.. members
+            .Select(m => ArrayElement(m.Type))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+
+        CodeWriter writer = new();
+        writer.Line(Header);
+        writer.Line();
+        writer.Line("using System.Text.Json;");
+        writer.Line("using System.Text.Json.Serialization;");
+        writer.Line("using MassiveDotNet.Rest.Models;");
+        writer.Line("using MassiveDotNet.Serialization;");
+        writer.Line();
+        writer.Line("namespace MassiveDotNet.Rest.Serialization;");
+        writer.Line();
+        writer.Doc("summary", $"Reads and writes <see cref=\"{model.Name}\"/> straight from the reader's tokens.", preserveMarkup: true);
+        writer.Doc("remarks", ConverterRemarks, preserveMarkup: true);
+
+        using (writer.Block($"internal sealed class {ConverterName(model)} : JsonConverter<{model.Name}>"))
+        {
+            foreach (string element in elements)
+            {
+                writer.Doc("summary", $"Reads this model's <c>{element}</c> arrays into a pooled buffer.", preserveMarkup: true);
+                writer.Line($"private static readonly PooledArrayConverter<{element}> {ArrayConverterField(element)} = new();");
+                writer.Line();
+            }
+
+            EmitConverterRead(writer, model, members);
+            writer.Line();
+            EmitConverterWrite(writer, model, members);
+        }
+
+        return writer.ToString();
+    }
+
+    /// <summary>Emits the converter's <c>Read</c>: one forward pass over the object's properties.</summary>
+    /// <param name="writer">The buffer being emitted into.</param>
+    /// <param name="model">The model being read.</param>
+    /// <param name="members">The model's resolved properties.</param>
+    private void EmitConverterRead(CodeWriter writer, MapModel model, List<Member> members)
+    {
+        List<Member> required = [.. members.Where(m => NeedsRequiredModifier(m.Property.Required, m.Type))];
+
+        writer.Line("/// <inheritdoc />");
+
+        using (writer.Block($"public override {model.Name} Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)"))
+        {
+            using (writer.Block("if (reader.TokenType != JsonTokenType.StartObject)"))
+            {
+                writer.Line($"throw new JsonException($\"Expected an object for {model.Name}, but the response carried a {{reader.TokenType}} token.\");");
+            }
+
+            writer.Line();
+
+            foreach (Member member in members)
+            {
+                writer.Line($"{LocalType(member.Type)} {Naming.Camel(member.Name)} = {(LocalType(member.Type).EndsWith('?') ? "null" : "default")};");
+            }
+
+            foreach (Member member in required)
+            {
+                writer.Line($"bool saw{member.Name} = false;");
+            }
+
+            if (members.Count > 0 || required.Count > 0)
+            {
+                writer.Line();
+            }
+
+            using (writer.Block("while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)"))
+            {
+                bool first = true;
+
+                foreach (Member member in members)
+                {
+                    using (writer.Block($"{(first ? "if" : "else if")} (reader.ValueTextEquals(\"{Utf8Literal(model, member)}\"u8))"))
+                    {
+                        writer.Line("reader.Read();");
+                        writer.Line($"{Naming.Camel(member.Name)} = {ReadCall(model, member)};");
+
+                        if (required.Contains(member))
+                        {
+                            writer.Line($"saw{member.Name} = true;");
+                        }
+                    }
+
+                    first = false;
+                }
+
+                // The service adds fields without warning, so an unknown one is skipped rather than
+                // rejected. Skip steps over a nested object or array whole, which is what keeps an
+                // unknown object's own keys from being read as this model's. A model with no
+                // properties at all skips unconditionally: there is no chain for it to fall off.
+                if (first)
+                {
+                    writer.Line("// Nothing is bound, so every property is unknown and stepped over whole.");
+                    writer.Line("reader.Read();");
+                    writer.Line("reader.Skip();");
+                }
+                else
+                {
+                    using (writer.Block("else"))
+                    {
+                        writer.Line("// The service adds fields without warning, so an unknown one is skipped");
+                        writer.Line("// rather than rejected. Skip steps over a nested object or array whole,");
+                        writer.Line("// which keeps an unknown object's own keys out of this model's.");
+                        writer.Line("reader.Read();");
+                        writer.Line("reader.Skip();");
+                    }
+                }
+            }
+
+            foreach (Member member in required)
+            {
+                writer.Line();
+
+                using (writer.Block($"if (!saw{member.Name})"))
+                {
+                    // Matches System.Text.Json, which treats `required` as a presence check: the key
+                    // being absent is the failure, and an explicit null satisfies it.
+                    writer.Line($"throw new JsonException(\"{model.Name} is missing the required property '{member.Property.Name}'.\");");
+                }
+            }
+
+            writer.Line();
+
+            if (members.Count == 0)
+            {
+                writer.Line($"return new {model.Name}();");
+                return;
+            }
+
+            using (writer.Block($"return new {model.Name}", "};"))
+            {
+                foreach (Member member in members)
+                {
+                    string suppress = LocalType(member.Type) == member.Type ? "" : "!";
+                    writer.Line($"{member.Name} = {Naming.Camel(member.Name)}{suppress},");
+                }
+            }
+        }
+    }
+
+    /// <summary>Emits the converter's <c>Write</c>, so a model still round-trips through the SDK's own converter.</summary>
+    /// <remarks>
+    /// Nothing in the SDK serializes a model, but a consumer may -- caching a page, or returning one
+    /// from their own endpoint -- and that works today through System.Text.Json's object machinery.
+    /// A converter that threw on write would take it away, which is a worse regression than the
+    /// allocation this change is here to fix.
+    /// </remarks>
+    /// <param name="writer">The buffer being emitted into.</param>
+    /// <param name="model">The model being written.</param>
+    /// <param name="members">The model's resolved properties.</param>
+    private static void EmitConverterWrite(CodeWriter writer, MapModel model, List<Member> members)
+    {
+        writer.Line("/// <inheritdoc />");
+
+        using (writer.Block($"public override void Write(Utf8JsonWriter writer, {model.Name} value, JsonSerializerOptions options)"))
+        {
+            writer.Line("writer.WriteStartObject();");
+
+            bool previousWasBlock = false;
+
+            foreach (Member member in members)
+            {
+                string wire = Utf8Literal(model, member);
+                string access = $"value.{member.Name}";
+                bool isBlock = ArrayElement(member.Type) is not null
+                    || (member.Type.EndsWith('?') && member.Type != "string?");
+
+                // A one-line write reads fine in a run; an if/else pair does not, so the two shapes
+                // are separated from each other and from themselves.
+                if (isBlock || previousWasBlock)
+                {
+                    writer.Line();
+                }
+
+                previousWasBlock = isBlock;
+
+                if (ArrayElement(member.Type) is { } element)
+                {
+                    using (writer.Block($"if ({access} is {{ }} {Naming.Camel(member.Name)})"))
+                    {
+                        writer.Line($"writer.WritePropertyName(\"{wire}\");");
+                        writer.Line($"{ArrayConverterField(element)}.Write(writer, {Naming.Camel(member.Name)}, options);");
+                    }
+
+                    using (writer.Block("else"))
+                    {
+                        writer.Line($"writer.WriteNull(\"{wire}\");");
+                    }
+                }
+                else if (member.Type.EndsWith('?') && member.Type != "string?")
+                {
+                    using (writer.Block($"if ({access} is {{ }} {Naming.Camel(member.Name)})"))
+                    {
+                        writer.Line($"writer.{WriteCall(member.Type[..^1])}(\"{wire}\", {Naming.Camel(member.Name)});");
+                    }
+
+                    using (writer.Block("else"))
+                    {
+                        writer.Line($"writer.WriteNull(\"{wire}\");");
+                    }
+                }
+                else
+                {
+                    // WriteString writes a JSON null for a null string, which is what the reader
+                    // accepts back, so the nullable and non-nullable string cases are the same line.
+                    writer.Line($"writer.{WriteCall(member.Type)}(\"{wire}\", {access});");
+                }
+            }
+
+            writer.Line();
+            writer.Line("writer.WriteEndObject();");
+        }
+    }
+
+    /// <summary>The static field holding the pooled converter for an element type.</summary>
+    /// <param name="element">The array's element type.</param>
+    /// <returns>The field name.</returns>
+    private static string ArrayConverterField(string element) => $"{Naming.Pascal(element)}Arrays";
+
+    /// <summary>
+    /// The type of the local a property is read into, which is nullable wherever the property's own
+    /// type is not, so an absent property has something to hold before the model is constructed.
+    /// </summary>
+    /// <param name="type">The property's resolved C# type.</param>
+    /// <returns>The local's type.</returns>
+    private static string LocalType(string type) =>
+        type.EndsWith('?') || !IsReferenceType(type) ? type : $"{type}?";
+
+    /// <summary>Whether a supported property type is a reference type, and so needs a nullable local.</summary>
+    /// <param name="type">The property's resolved C# type.</param>
+    /// <returns><see langword="true"/> for <c>string</c> and array types.</returns>
+    private static bool IsReferenceType(string type) => type == "string" || ArrayElement(type) is not null;
+
+    /// <summary>The call that reads one property's value from the reader.</summary>
+    /// <param name="model">The model being read, named in the failure message the call may throw.</param>
+    /// <param name="member">The property being read.</param>
+    /// <returns>The C# expression.</returns>
+    /// <exception cref="InvalidOperationException">The property's type has no reader.</exception>
+    private static string ReadCall(MapModel model, Member member)
+    {
+        if (ArrayElement(member.Type) is { } element)
+        {
+            return ScalarReader(element) is null
+                ? throw Unreadable(model, member, $"its element type '{element}' has no reader")
+                : $"{ArrayConverterField(element)}.Read(ref reader, typeof({element}[]), options)";
+        }
+
+        return ScalarReader(member.Type) is { } method
+            ? $"JsonValueReader.{method}(ref reader, \"{model.Name}\", \"{member.Property.Name}\")"
+            : throw Unreadable(model, member, "it has no reader");
+    }
+
+    /// <summary>The <see cref="System.Text.Json.Utf8JsonWriter"/> method that writes a property of this type.</summary>
+    /// <param name="type">A non-nullable supported property type.</param>
+    /// <returns>The method name.</returns>
+    private static string WriteCall(string type) => type switch
+    {
+        "string" or "string?" => "WriteString",
+        "bool" => "WriteBoolean",
+        _ => "WriteNumber",
+    };
+
+    /// <summary>
+    /// The <c>JsonValueReader</c> method for a scalar type, or <see langword="null"/> when
+    /// the type is not one the generated converters can read.
+    /// </summary>
+    /// <remarks>
+    /// A closed set on purpose, and the same closed-set posture decisions D15 and D16 take: a type
+    /// outside it fails generation rather than binding to something that compiles and throws at
+    /// deserialization. Extending it means adding a reader to <c>JsonValueReader</c> first, which is
+    /// where the tests for the new type belong anyway.
+    /// </remarks>
+    /// <param name="type">The property's resolved C# type.</param>
+    /// <returns>The reader method name, or <see langword="null"/>.</returns>
+    private static string? ScalarReader(string type) => type switch
+    {
+        "string" or "string?" => "ReadString",
+        "bool" => "ReadBoolean",
+        "bool?" => "ReadNullableBoolean",
+        "int" => "ReadInt32",
+        "int?" => "ReadNullableInt32",
+        "long" => "ReadInt64",
+        "long?" => "ReadNullableInt64",
+        "double" => "ReadDouble",
+        "double?" => "ReadNullableDouble",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A wire name, checked to be safe inside a C# string and a UTF-8 literal.
+    /// </summary>
+    /// <remarks>
+    /// The generated converter compares property names against <c>"name"u8</c> literals, so a name
+    /// carrying a quote or a backslash would emit source that does not compile, or worse, compiles
+    /// to a comparison against something else. Refused rather than escaped: no such name exists in
+    /// the description, and inventing an escaping scheme for one that does not occur is how a bug
+    /// gets written that nothing ever exercises.
+    /// </remarks>
+    /// <param name="model">The model the property belongs to.</param>
+    /// <param name="member">The property.</param>
+    /// <returns>The wire name, verbatim.</returns>
+    /// <exception cref="InvalidOperationException">The name carries a character the literal cannot.</exception>
+    private static string Utf8Literal(MapModel model, Member member)
+    {
+        foreach (char character in member.Property.Name)
+        {
+            if (!char.IsAsciiLetterOrDigit(character) && character is not ('_' or '-' or '.'))
+            {
+                throw new InvalidOperationException(
+                    $"Model '{model.Name}' has a property named '{member.Property.Name}', which carries "
+                    + $"the character '{character}'. The generated converter compares wire names against "
+                    + "UTF-8 literals, which this name cannot be written as. Rename it in the "
+                    + "description, or teach the converter emitter to escape it.");
+            }
+        }
+
+        return member.Property.Name;
+    }
+
+    /// <summary>The refusal raised for a struct model property the converter emitter cannot read.</summary>
+    /// <param name="model">The model.</param>
+    /// <param name="member">The offending property.</param>
+    /// <param name="because">Why it cannot be read.</param>
+    /// <returns>The exception to throw.</returns>
+    private static InvalidOperationException Unreadable(MapModel model, Member member, string because) =>
+        new($"Model '{model.Name}' is a struct, so the generator emits a converter for it, but its "
+            + $"property '{member.Property.Name}' binds to '{member.Type}' and {because}. Add one to "
+            + "JsonValueReader and a case to Emitter.ScalarReader, or declare the model a class so "
+            + "System.Text.Json reads it. Refusing rather than guessing, for the reason D16 gives: a "
+            + "binding that is wrong here fails at deserialization, where this fails at generation.");
 
     private string? EmitEnvelopes()
     {
@@ -170,6 +588,11 @@ internal sealed class Emitter(Spec spec, Map map)
 
         writer.Line("using MassiveDotNet.Rest.Models;");
 
+        if (envelopes.Exists(e => e.Members.Exists(m => ArrayElement(m.Type) is not null)))
+        {
+            writer.Line("using MassiveDotNet.Serialization;");
+        }
+
         // An envelope can name a NodaTime type in its own right, when the description declares a
         // format: date or date-time property beside the payload.
         if (envelopes.Exists(e => e.Members.Exists(m => NamesNodaTime(m.Type))))
@@ -204,6 +627,12 @@ internal sealed class Emitter(Spec spec, Map map)
 
                     writer.Doc("summary", Prose.Clean(property.Description));
                     writer.Line($"[JsonPropertyName(\"{property.Name}\")]");
+
+                    if (ArrayElement(type) is { } element)
+                    {
+                        writer.Line($"[JsonConverter(typeof(PooledArrayConverter<{element}>))]");
+                    }
+
                     writer.Line($"public {type} {Naming.Pascal(property.Name)} {{ get; init; }}");
                 }
 
@@ -719,6 +1148,18 @@ internal sealed class Emitter(Spec spec, Map map)
 
     /// <summary>Separators that split an emitted type name into the identifiers it names.</summary>
     private static readonly char[] TypeNameSeparators = ['<', '>', ',', ' ', '?', '[', ']'];
+
+    /// <summary>
+    /// The element type of an array-typed property, or <c>null</c> when the property is not an
+    /// array. Array properties carry <c>PooledArrayConverter</c> so a large page allocates the
+    /// array it returns and not the doubling buffers behind it (issue #47).
+    /// </summary>
+    /// <param name="type">The C# type the property is bound to.</param>
+    /// <returns>The element type name, or <c>null</c>.</returns>
+    private static string? ArrayElement(string type) =>
+        type.EndsWith("[]?", StringComparison.Ordinal) ? type[..^3]
+            : type.EndsWith("[]", StringComparison.Ordinal) ? type[..^2]
+            : null;
 
     /// <summary>Whether a C# type name needs <c>using NodaTime;</c> in the file that declares it.</summary>
     /// <remarks>
