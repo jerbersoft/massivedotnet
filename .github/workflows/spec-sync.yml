@@ -15,6 +15,10 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # The fallback that makes a refused pull request visible opens an issue, and that needs its own
+  # scope. Without it the fallback dies with "Resource not accessible by integration (createIssue)"
+  # -- the blocked sync going unseen a second way, which is the whole of #45.
+  issues: write
 
 jobs:
   sync:
@@ -242,11 +246,16 @@ jobs:
           re-run opens one for the branch that is already there rather than skipping the day.
           BLOCKED
 
-          gh issue create \
+          # Reported from whether the issue was actually opened, not from having attempted it:
+          # claiming an issue that does not exist is the failure this fallback exists to prevent.
+          if gh issue create \
             --title "spec-sync could not open a pull request for $branch" \
             --body-file /tmp/blocked-body.md \
-            --label "area:ci" \
-            || echo "::error::The fallback issue could not be opened either."
+            --label "area:ci"
+          then
+            echo "::error::Pull request creation was refused for $branch; opened an issue instead."
+          else
+            echo "::error::Pull request creation was refused for $branch, and the fallback issue could not be opened either. Check the workflow's issues: write permission."
+          fi
 
-          echo "::error::Pull request creation was refused for $branch; opened an issue instead."
           exit 1
