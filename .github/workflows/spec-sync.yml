@@ -6,10 +6,19 @@ on:
   schedule:
     - cron: '17 6 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: Open a pull request even when the spec is unchanged, to exercise the path.
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   pull-requests: write
+  # The fallback that makes a refused pull request visible opens an issue, and that needs its own
+  # scope. Without it the fallback dies with "Resource not accessible by integration (createIssue)"
+  # -- the blocked sync going unseen a second way, which is the whole of #45.
+  issues: write
 
 jobs:
   sync:
@@ -36,13 +45,22 @@ jobs:
 
       - name: Detect changes
         id: diff
+        # The pull request path runs only when upstream actually drifts, which is why it went
+        # three nights unexercised (#45). The force input runs it on demand against an unchanged
+        # spec, so the mechanism can be proven before the drift it exists to report arrives.
+        env:
+          FORCE: ${{ inputs.force }}
         run: |
-          if git diff --quiet -- specs/openapi.json; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No upstream changes."
-          else
+          if ! git diff --quiet -- specs/openapi.json; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git diff --stat -- specs/openapi.json
+          elif [ "$FORCE" = "true" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "forced=true" >> "$GITHUB_OUTPUT"
+            echo "No upstream changes; forced, so the pull request path runs anyway."
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No upstream changes."
           fi
 
       - name: Summarize operation changes
@@ -111,6 +129,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGEN_STATUS: ${{ steps.regen.outputs.status }}
+          FORCED: ${{ steps.diff.outputs.forced }}
         run: |
           today="$(date -u +%Y-%m-%d)"
           branch="spec-sync/$today"
@@ -118,8 +137,12 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-            echo "Branch $branch already exists; nothing to do."
+          # Keyed on the pull request, not the branch. A run that pushed its branch and then
+          # failed to open the PR leaves the branch behind looking complete, so keying on the
+          # branch made re-running that day -- the one action that repairs it -- a no-op that
+          # reported success (#45).
+          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            echo "A pull request is already open for $branch; nothing to do."
             exit 0
           fi
 
@@ -165,12 +188,23 @@ jobs:
 
           git checkout -b "$branch"
           git add specs/openapi.json src/
-          git commit -m "chore: sync OpenAPI description from api.massive.com"
 
-          if [ -n "$warn" ]; then
-            title="[warning] chore: sync OpenAPI description ($today) - $warn"
+          # A forced run has nothing to commit by definition: it exists to exercise this path
+          # against an unchanged spec, so the empty commit is the point rather than a mistake.
+          if [ "$FORCED" = "true" ]; then
+            git commit --allow-empty -m "chore: sync OpenAPI description from api.massive.com"
+            note="**This is a self-test of the sync, not a sync. Close it; do not merge it.** It was
+          dispatched with \`force\` to prove the pull request path works while upstream is
+          unchanged, so its diff is deliberately empty. $note"
+            title="[do not merge] spec-sync self-test ($today)"
           else
-            title="chore: sync OpenAPI description ($today)"
+            git commit -m "chore: sync OpenAPI description from api.massive.com"
+
+            if [ -n "$warn" ]; then
+              title="[warning] chore: sync OpenAPI description ($today) - $warn"
+            else
+              title="chore: sync OpenAPI description ($today)"
+            fi
           fi
 
           cat > /tmp/pr-body.md <<BODY
@@ -183,11 +217,45 @@ jobs:
           enforced by \`EndpointCoverageTests\`.
           BODY
 
-          git push origin "$branch"
+          # Forcing is safe because the guard above established that no open pull request is
+          # reviewing this branch, so anything already on it is an abandoned run's leftovers.
+          git push --force origin "$branch"
 
-          gh pr create \
+          if gh pr create \
             --title "$title" \
             --body-file /tmp/pr-body.md \
             --label "area:codegen" \
             --base master \
             --head "$branch"
+          then
+            exit 0
+          fi
+
+          # The branch is pushed by now, so a refused pull request leaves the repository looking
+          # like the sync worked -- exactly how #45 stayed invisible for three nights. The issue
+          # puts the blockage where a human actually looks, and the step still fails.
+          cat > /tmp/blocked-body.md <<BLOCKED
+          The nightly spec sync pushed \`$branch\` but could not open a pull request for it, so the
+          upstream diff is sitting on the remote with nothing pointing at it.
+
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+          The usual cause is **Settings -> Actions -> General -> Workflow permissions -> "Allow
+          GitHub Actions to create and approve pull requests"** being switched off, which is #45.
+          Turn it back on, then re-run the workflow: the guard keys on the pull request, so a
+          re-run opens one for the branch that is already there rather than skipping the day.
+          BLOCKED
+
+          # Reported from whether the issue was actually opened, not from having attempted it:
+          # claiming an issue that does not exist is the failure this fallback exists to prevent.
+          if gh issue create \
+            --title "spec-sync could not open a pull request for $branch" \
+            --body-file /tmp/blocked-body.md \
+            --label "area:ci"
+          then
+            echo "::error::Pull request creation was refused for $branch; opened an issue instead."
+          else
+            echo "::error::Pull request creation was refused for $branch, and the fallback issue could not be opened either. Check the workflow's issues: write permission."
+          fi
+
+          exit 1
