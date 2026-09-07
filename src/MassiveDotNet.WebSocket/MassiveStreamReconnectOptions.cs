@@ -37,14 +37,14 @@ public sealed class MassiveStreamReconnectOptions
                 + $"{nameof(InitialBackoff)}.");
         }
 
-        if (BackoffMultiplier < 1.0)
+        if (BackoffMultiplier < 1.0 || double.IsNaN(BackoffMultiplier))
         {
             throw new InvalidOperationException(
                 $"{nameof(MassiveStreamReconnectOptions)}.{nameof(BackoffMultiplier)} must be at "
                 + "least 1.0, or the delay shrinks on every attempt.");
         }
 
-        if (Jitter is < 0.0 or > 1.0)
+        if (Jitter is < 0.0 or > 1.0 || double.IsNaN(Jitter))
         {
             throw new InvalidOperationException(
                 $"{nameof(MassiveStreamReconnectOptions)}.{nameof(Jitter)} must be between 0 and 1.");

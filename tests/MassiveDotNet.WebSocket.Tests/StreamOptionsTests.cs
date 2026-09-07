@@ -83,4 +83,30 @@ public class StreamOptionsTests
 
         Assert.Throws<InvalidOperationException>(options.Validate);
     }
+
+    // Math.Pow(NaN, 0) == 1 under IEEE 754, so a NaN multiplier lets the first reconnect attempt
+    // through silently; Validate() is what stops it before Task 11's background loop ever sees it.
+    [Fact]
+    public void ValidateRejectsANaNBackoffMultiplier()
+    {
+        MassiveStreamOptions options = new()
+        {
+            ApiKey = "k",
+            Reconnect = new MassiveStreamReconnectOptions { BackoffMultiplier = double.NaN },
+        };
+
+        Assert.Throws<InvalidOperationException>(options.Validate);
+    }
+
+    [Fact]
+    public void ValidateRejectsANaNJitter()
+    {
+        MassiveStreamOptions options = new()
+        {
+            ApiKey = "k",
+            Reconnect = new MassiveStreamReconnectOptions { Jitter = double.NaN },
+        };
+
+        Assert.Throws<InvalidOperationException>(options.Validate);
+    }
 }
