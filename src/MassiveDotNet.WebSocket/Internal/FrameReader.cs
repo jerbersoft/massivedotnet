@@ -31,9 +31,18 @@ internal sealed class FrameReader(IMassiveWebSocket socket, int maxMessageBytes)
         {
             if (written == limit)
             {
+                // Which bound was hit is the caller's first question, and answering it wrong sends
+                // them after the wrong bug: a short destination is this SDK's mistake, an oversized
+                // message is the server's. No caller can pass a short one today -- FrameReader is
+                // internal and both call sites size at or above the ceiling -- so this arm exists
+                // to stay honest if that ever stops being true.
                 throw new MassiveStreamException(
-                    $"The stream sent a message larger than the {maxMessageBytes} byte ceiling "
-                    + $"({nameof(MassiveStreamOptions.MaxMessageBytes)}).");
+                    limit == maxMessageBytes
+                        ? $"The stream sent a message larger than the {maxMessageBytes} byte ceiling "
+                          + $"({nameof(MassiveStreamOptions.MaxMessageBytes)})."
+                        : $"The stream sent a message larger than the {limit} byte destination it "
+                          + $"was given, below the {maxMessageBytes} byte ceiling "
+                          + $"({nameof(MassiveStreamOptions.MaxMessageBytes)}).");
             }
 
             result = await socket.ReceiveAsync(destination[written..limit], cancellationToken);

@@ -60,6 +60,27 @@ public class ReadLoopTests
         Assert.Contains("64", error.Message, StringComparison.Ordinal);
     }
 
+    // Two different faults reached one message: a destination shorter than the ceiling is this SDK
+    // handing itself too small a buffer, where an overrun is the server sending too much. Reporting
+    // the ceiling for both sends a caller after the server for a bug on our side. Unreachable today
+    // -- FrameReader is internal and both call sites size at or above the ceiling -- so this pins the
+    // arm rather than a path anyone can hit.
+    [Fact]
+    public async Task AShortDestinationIsReportedAsTheBufferNotTheCeiling()
+    {
+        await using FakeWebSocket socket = new();
+        socket.EnqueueFragmented(new string('x', 512), chunkSize: 16);
+
+        FrameReader reader = new(socket, maxMessageBytes: 4096);
+        byte[] destination = new byte[64];
+
+        MassiveStreamException error = await Assert.ThrowsAsync<MassiveStreamException>(async () =>
+            await reader.ReadMessageAsync(destination, TestContext.Current.CancellationToken));
+
+        Assert.Contains("64 byte destination", error.Message, StringComparison.Ordinal);
+        Assert.Contains("below the 4096 byte ceiling", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TheLoopDeliversEveryMessageInOrder()
     {
