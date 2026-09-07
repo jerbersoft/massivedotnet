@@ -10,7 +10,14 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 {
     private readonly MassiveStreamOptions _options;
     private readonly MassiveWebSocketFactory _factory;
+    // Read by Task 11's reconnect backoff, not by the handshake, so IDE0052 sees an unused private
+    // field until that lands. Suppressed narrowly rather than exposed through an accessor: this type
+    // is partial, so the later half reads _clock directly from its own file, and an internal property
+    // minted to satisfy the analyzer would be dead surface the analyzer can never flag again --
+    // IDE0052 only sees private members.
+#pragma warning disable IDE0052
     private readonly IClock _clock;
+#pragma warning restore IDE0052
 
     private IMassiveWebSocket? _socket;
 
@@ -33,11 +40,6 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 
     /// <summary>The URI this connection opens: the feed host with the market as its path.</summary>
     public Uri Endpoint { get; }
-
-    // Not read by this task's half: reconnect backoff (Tasks 7, 8, 10, 11) computes its delay from
-    // this clock, which is why it is injected here rather than read from SystemClock.Instance --
-    // an instant reconnect test would otherwise need to wait out a real backoff.
-    internal IClock Clock => _clock;
 
     /// <summary>Opens the socket and authenticates, returning only once the server accepts.</summary>
     public async Task ConnectAsync(CancellationToken cancellationToken)

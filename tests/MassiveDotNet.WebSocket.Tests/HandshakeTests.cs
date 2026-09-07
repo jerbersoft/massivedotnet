@@ -137,6 +137,26 @@ public class HandshakeTests
             async () => await connection.ConnectAsync(TestContext.Current.CancellationToken));
     }
 
+    // The overflow guard below proves Parse refuses to drop events, but nothing proved it actually
+    // READS more than one -- a Parse that returned after the first event would satisfy that test and
+    // still lose the second acknowledgement of every two-topic subscribe. Observed on the wire
+    // 2026-09-07: one frame carried both `subscribed to: T.AAPL` and `subscribed to: A.AAPL`.
+    [Fact]
+    public void ParseReadsEveryEventInAFrameThatCarriesSeveral()
+    {
+        ReadOnlySpan<byte> payload =
+            """[{"ev":"status","status":"success","message":"subscribed to: T.AAPL"},{"ev":"status","status":"success","message":"subscribed to: A.AAPL"}]"""u8;
+        Span<StatusMessage> destination = new StatusMessage[4];
+
+        int count = StatusMessage.Parse(payload, destination);
+
+        Assert.Equal(2, count);
+        Assert.Equal("success", destination[0].Status);
+        Assert.Equal("subscribed to: T.AAPL", destination[0].Message);
+        Assert.Equal("success", destination[1].Status);
+        Assert.Equal("subscribed to: A.AAPL", destination[1].Message);
+    }
+
     // A frame can carry more than one status event (a subscribe to two topics acknowledges both in
     // one frame). Silently keeping only the first `destination.Length` of them would drop the rest
     // without a trace, which is the class of data loss this SDK refuses elsewhere (D29) -- so this
