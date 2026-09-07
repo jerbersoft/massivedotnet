@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using System.Text.Json;
 using NodaTime;
 
 namespace MassiveDotNet.WebSocket.Internal;
@@ -24,19 +25,32 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private bool _disposed;
 
     // One subscribe (or unsubscribe) in flight at a time: acknowledgements carry no correlation
-    // id, so two overlapping requests could not tell whose acknowledgement arrived.
+    // id, so two overlapping requests could not tell whose acknowledgement arrived. Both
+    // SubscribeAsync and UnsubscribeAsync take this, even though only the former waits on it.
     private readonly SemaphoreSlim _subscribeGate = new(1, 1);
-    private TaskCompletionSource? _pendingAcknowledgements;
 
-    // How many acknowledgements are still owed. Signed rather than a plain non-negative count: the
-    // read loop runs continuously, independent of when a subscribe call happens to reach its own
-    // send, so a status frame already sitting in the transport (or delivered on another thread
-    // before this one finishes its own send) can be processed before SubscribeAsync ever assigns
-    // this field. Letting OnStatus decrement unconditionally banks that acknowledgement as negative
-    // credit instead of discarding it; SubscribeAsync then *adds* its own count on top rather than
-    // overwriting, which redeems whatever was already banked. Reset to 0 whenever a subscribe call
-    // ends (success, shortfall, or cancellation) so a later call never inherits stale credit.
-    private int _outstanding;
+    // Guards _pendingAcks and _pendingAcknowledgements together. OnStatus reads both to decide
+    // whether a match should signal completion, and SubscribeAsync writes both to publish a new
+    // request; a window where one is updated and not the other is a lost wakeup (a prior version
+    // of this file had exactly that gap between an Interlocked.Add and the next statement -- fixed
+    // here by making "publish" and "match" each a single critical section under one plain lock,
+    // not a pair of individually-atomic fields that must additionally stay in step with each
+    // other). Contention is trivial -- a handful of control frames -- so a lock is the right
+    // instrument, not further Interlocked bookkeeping.
+    private readonly object _ackLock = new();
+
+    // The exact acknowledgement message text still owed for the in-flight subscribe, keyed by that
+    // text and valued by the ticker it names -- e.g. "subscribed to: T.AAPL" -> "AAPL". Matching by
+    // content rather than counting is load-bearing: the server acknowledges an unsubscribe with the
+    // same "success" status a subscribe uses, just a different verb in the message ("unsubscribed
+    // to: T.AAPL", confirmed on the wire 2026-09-07), so a bare count cannot tell the two apart --
+    // and a prior version of this file that counted regardless of content let an unsubscribe's own
+    // acknowledgement silently satisfy whatever subscribe happened to ask next. Because the key is
+    // the full message text, only a message this connection is actually waiting on can ever match;
+    // an unsubscribe's acknowledgement, a stale one from an already-finished request, or a bare
+    // "connected"/"auth_success" never collide with it and are simply ignored.
+    private Dictionary<string, string>? _pendingAcks;
+    private TaskCompletionSource? _pendingAcknowledgements;
 
     public MassiveStreamConnection(
         MassiveStreamOptions options,
@@ -140,35 +154,98 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// </returns>
     private bool DispatchStatusEvents(ReadOnlySpan<byte> payload)
     {
-        // Sized for the acknowledgements a pending subscribe is still waiting on -- correct for
-        // every frame this connection sends itself, since SubscribeAsync sets _outstanding before
-        // sending. It can still be too small: the read loop runs continuously regardless of send
-        // timing, so a frame can be parsed before the subscribe that owns it has published its
-        // count (see the field comment on _outstanding). StatusMessage.Parse refuses to truncate
-        // rather than drop an event, so that undersized guess throws instead of losing data --
-        // caught below and retried against a destination sized from the payload itself, which no
-        // JSON array can ever overflow (each object needs at least two bytes, "{}").
-        int guess = Math.Max(_outstanding, 1);
-        StatusMessage[] statuses;
-        int written;
+        int count = CountStatusEvents(payload, out bool isArray);
+
+        if (isArray && count == 0)
+        {
+            // A genuine data frame (a trade or quote tick): no "ev": "status" object anywhere in
+            // it, so StatusMessage.Parse would find nothing here either. Skipped rather than run a
+            // second time -- the count above already proves it, and this is the hot path, running
+            // on every message the socket ever delivers.
+            return false;
+        }
+
+        // Sized to the actual number of status events the payload carries -- never to the
+        // payload's byte length. A byte-length-sized destination was the previous design here and
+        // was measured: 7.3 MB parsing a 178 KB frame, 64 MiB on the Large Object Heap at the
+        // 4 MiB default MaxMessageBytes -- reachable from an ordinary batched multi-ticker
+        // unsubscribe acknowledgement, and squarely against this SDK's minimal-allocation goal
+        // (D31). Rented, not allocated with `new`, because this runs on every control frame this
+        // connection ever receives, not just the rare oversized one. `Math.Max(count, 1)` keeps a
+        // malformed non-array payload routed through StatusMessage.Parse's own "not a JSON array"
+        // check rather than skipped, matching this method's behaviour before this fix.
+        int capacity = Math.Max(count, 1);
+        StatusMessage[] rented = ArrayPool<StatusMessage>.Shared.Rent(capacity);
 
         try
         {
-            statuses = new StatusMessage[guess];
-            written = StatusMessage.Parse(payload, statuses);
+            int written = StatusMessage.Parse(payload, rented.AsSpan(0, capacity));
+
+            for (int i = 0; i < written; i++)
+            {
+                OnStatus(rented[i]);
+            }
+
+            return written > 0;
         }
-        catch (MassiveStreamException) when (guess < payload.Length)
+        finally
         {
-            statuses = new StatusMessage[payload.Length];
-            written = StatusMessage.Parse(payload, statuses);
+            // clearArray: true -- StatusMessage holds strings, and a pooled array that kept them
+            // would extend their lifetime for whichever caller rents this slot next.
+            ArrayPool<StatusMessage>.Shared.Return(rented, clearArray: true);
+        }
+    }
+
+    /// <summary>
+    /// Counts the <c>ev: status</c> events in <paramref name="payload"/> without allocating one, so
+    /// <see cref="DispatchStatusEvents"/> can size its real parse to the event count rather than
+    /// the payload's byte length (see the sizing comment there for why that distinction matters).
+    /// </summary>
+    /// <param name="payload">The raw message bytes, exactly as the socket delivered them.</param>
+    /// <param name="isArray">
+    /// Whether the payload's top-level token is a JSON array -- the shape every inbound message
+    /// takes. <see langword="false"/> means the real parse should still run so its own
+    /// "not a JSON array" error reaches the caller unchanged, rather than this method silently
+    /// treating a malformed payload as an ordinary data frame.
+    /// </param>
+    private static int CountStatusEvents(ReadOnlySpan<byte> payload, out bool isArray)
+    {
+        Utf8JsonReader reader = new(payload);
+
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
+        {
+            isArray = false;
+            return 0;
         }
 
-        for (int i = 0; i < written; i++)
+        isArray = true;
+        int count = 0;
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.StartObject)
         {
-            OnStatus(statuses[i]);
+            bool isStatus = false;
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                if (reader.ValueTextEquals("ev"u8))
+                {
+                    reader.Read();
+                    isStatus = reader.TokenType == JsonTokenType.String && reader.ValueTextEquals("status"u8);
+                }
+                else
+                {
+                    reader.Read();
+                    reader.Skip();
+                }
+            }
+
+            if (isStatus)
+            {
+                count++;
+            }
         }
 
-        return written > 0;
+        return count;
     }
 
     /// <summary>Called for every status event the read loop parses, before anything else sees it.</summary>
@@ -179,13 +256,18 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             return;
         }
 
-        // Decremented unconditionally -- see the field comment on _outstanding for why an event
-        // that arrives with no subscribe currently pending must still be counted rather than
-        // dropped. _pendingAcknowledgements is only non-null once SubscribeAsync has redeemed
-        // whatever was already banked, so completing it here is safe exactly when it is non-null.
-        if (Interlocked.Decrement(ref _outstanding) <= 0)
+        string message = status.Message;
+
+        lock (_ackLock)
         {
-            _pendingAcknowledgements?.TrySetResult();
+            // Matched by the exact message text, not counted -- see the field comment on
+            // _pendingAcks for why a bare count cannot tell a subscribe's acknowledgement from an
+            // unsubscribe's. Anything that does not match a currently-tracked message is ignored
+            // here rather than credited toward whatever request happens to be waiting next.
+            if (_pendingAcks is { } pending && pending.Remove(message) && pending.Count == 0)
+            {
+                _pendingAcknowledgements?.TrySetResult();
+            }
         }
     }
 
@@ -201,22 +283,33 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     {
         string parameters = string.Join(',', tickers.Select(ticker => $"{topicCode}.{ticker}"));
 
-        // One subscribe in flight at a time: acknowledgements carry no correlation id, so two
-        // overlapping requests could not tell whose acknowledgement arrived.
+        // One subscribe (or unsubscribe) in flight at a time: acknowledgements carry no
+        // correlation id, so two overlapping requests could not tell whose acknowledgement arrived.
         await _subscribeGate.WaitAsync(cancellationToken);
 
         try
         {
-            // Add rather than overwrite: redeems any credit OnStatus already banked in _outstanding
-            // for this request (see the field comment) instead of discarding it. In the ordinary
-            // case nothing has arrived yet, _outstanding is 0, and this is exactly tickers.Count.
-            int remaining = Interlocked.Add(ref _outstanding, tickers.Count);
-            _pendingAcknowledgements = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dictionary<string, string> pending = new(StringComparer.Ordinal);
 
-            if (remaining <= 0)
+            foreach (string ticker in tickers)
             {
-                // Every acknowledgement this request needed was already banked before it got here.
-                _pendingAcknowledgements.TrySetResult();
+                pending[$"subscribed to: {topicCode}.{ticker}"] = ticker;
+            }
+
+            TaskCompletionSource acknowledgements = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            // Published as one unit: OnStatus reads _pendingAcks and _pendingAcknowledgements
+            // together under the same lock to decide whether a match completes the wait, so both
+            // must become visible together, not one after the other.
+            lock (_ackLock)
+            {
+                _pendingAcks = pending;
+                _pendingAcknowledgements = acknowledgements;
+
+                if (pending.Count == 0)
+                {
+                    acknowledgements.TrySetResult();
+                }
             }
 
             await SendActionAsync("subscribe", parameters, cancellationToken);
@@ -225,36 +318,49 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             // Boundary crossing (produce): the domain Duration converts here and nowhere above.
             timeout.CancelAfter(_options.HandshakeTimeout.ToTimeSpan());
 
-            bool everyPairAcknowledged = true;
-
             try
             {
-                await _pendingAcknowledgements.Task.WaitAsync(timeout.Token);
+                await acknowledgements.Task.WaitAsync(timeout.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // The window closed before every pair was acknowledged.
-                everyPairAcknowledged = false;
+                // The window closed before every pair was acknowledged; `pending` below still
+                // holds exactly which ones, read under the same lock OnStatus removes them under.
             }
 
-            // _outstanding holds how many are still missing (0 or negative once satisfied), so this
-            // names the true shortfall rather than assuming none arrived when the wait times out.
-            int acknowledged = everyPairAcknowledged ? tickers.Count : tickers.Count - Math.Max(_outstanding, 0);
+            string[] unacknowledgedTickers;
 
-            if (acknowledged < tickers.Count)
+            lock (_ackLock)
             {
-                throw new MassiveStreamSubscriptionException(parameters, tickers.Count - acknowledged);
+                unacknowledgedTickers = [.. pending.Values];
+            }
+
+            if (unacknowledgedTickers.Length > 0)
+            {
+                // Whatever *was* acknowledged is still real and still live -- a partial shortfall
+                // must not leave the registry believing none of it landed, since Task 11's
+                // reconnect replays exactly what Registry holds.
+                string[] acknowledgedTickers =
+                    [.. tickers.Except(unacknowledgedTickers, StringComparer.Ordinal)];
+
+                if (acknowledgedTickers.Length > 0)
+                {
+                    Registry.Add(topicCode, acknowledgedTickers);
+                }
+
+                throw new MassiveStreamSubscriptionException(parameters, unacknowledgedTickers.Length);
             }
 
             Registry.Add(topicCode, tickers);
         }
         finally
         {
-            // Reset rather than left at whatever it settled on: a call that timed out would
-            // otherwise leave a positive remainder that silently discounts the very next
-            // subscribe's count, and stray credit from this call has nowhere else to go.
-            _outstanding = 0;
-            _pendingAcknowledgements = null;
+            lock (_ackLock)
+            {
+                _pendingAcks = null;
+                _pendingAcknowledgements = null;
+            }
+
             _subscribeGate.Release();
         }
     }
@@ -262,19 +368,35 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// <summary>
     /// Unsubscribes from every ticker under one topic. Not acknowledgement-counted: an unsubscribe
     /// for a pair the server never had is harmless, where a subscribe that silently did nothing is
-    /// data the caller will never see.
+    /// data the caller will never see. The server does still acknowledge it (with the same
+    /// "success" status a subscribe gets, just a different verb in the message, confirmed on the
+    /// wire 2026-09-07) -- OnStatus sees that acknowledgement through the read loop like any other
+    /// and ignores it, since nothing this method sends is ever tracked in _pendingAcks.
     /// </summary>
     /// <param name="topicCode">The wire topic code, such as <c>T</c>.</param>
     /// <param name="tickers">The tickers to unsubscribe from alongside <paramref name="topicCode"/>.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     public async Task UnsubscribeAsync(string topicCode, IReadOnlyCollection<string> tickers, CancellationToken cancellationToken)
     {
-        await SendActionAsync(
-            "unsubscribe",
-            string.Join(',', tickers.Select(ticker => $"{topicCode}.{ticker}")),
-            cancellationToken);
+        // Same gate as SubscribeAsync: the field's own comment says one subscribe *or unsubscribe*
+        // in flight at a time, and honouring that here (even though this method waits on nothing
+        // of its own) is what keeps a concurrent SubscribeAsync's _pendingAcks publish from ever
+        // racing this method's send.
+        await _subscribeGate.WaitAsync(cancellationToken);
 
-        Registry.Remove(topicCode, tickers);
+        try
+        {
+            await SendActionAsync(
+                "unsubscribe",
+                string.Join(',', tickers.Select(ticker => $"{topicCode}.{ticker}")),
+                cancellationToken);
+
+            Registry.Remove(topicCode, tickers);
+        }
+        finally
+        {
+            _subscribeGate.Release();
+        }
     }
 
     private async Task SendActionAsync(string action, string parameters, CancellationToken cancellationToken)
