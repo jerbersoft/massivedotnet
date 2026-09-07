@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Net.WebSockets;
 using System.Text;
 using NodaTime;
 
@@ -20,6 +19,9 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 #pragma warning restore IDE0052
 
     private IMassiveWebSocket? _socket;
+    private FrameReader? _reader;
+    private readonly CancellationTokenSource _shutdown = new();
+    private bool _disposed;
 
     public MassiveStreamConnection(
         MassiveStreamOptions options,
@@ -41,6 +43,17 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// <summary>The URI this connection opens: the feed host with the market as its path.</summary>
     public Uri Endpoint { get; }
 
+    /// <summary>Receives the payload of every message the socket delivers, in order.</summary>
+    /// <remarks>
+    /// Attached by the façade. It must never block: every topic shares this one loop, so a handler
+    /// that waits stalls the socket, closes the receive window, and gets the connection dropped for
+    /// being a slow consumer -- taking down the topics that were keeping up (D-W4).
+    /// </remarks>
+    public Func<ReadOnlyMemory<byte>, ValueTask>? OnMessage { get; set; }
+
+    /// <summary>The loop's task, so shutdown -- and Task 11's reconnect -- can observe how it ended.</summary>
+    public Task ReadLoopTask { get; private set; } = Task.CompletedTask;
+
     /// <summary>Opens the socket and authenticates, returning only once the server accepts.</summary>
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
@@ -54,6 +67,41 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         await ExpectStatusAsync(StatusMessage.Connected, timeout.Token);
         await SendAuthenticationAsync(timeout.Token);
         await ExpectAuthenticationAsync(timeout.Token);
+    }
+
+    /// <summary>Begins the background read loop. Called once authentication has succeeded.</summary>
+    /// <remarks>
+    /// The loop owns one buffer for the connection's whole life -- allocated here, not inside the
+    /// loop, so a long-lived stream costs one allocation total rather than one per message.
+    /// </remarks>
+    public void StartReading()
+    {
+        _reader = new FrameReader(_socket!, _options.MaxMessageBytes);
+        ReadLoopTask = Task.Run(() => ReadLoopAsync(_shutdown.Token), _shutdown.Token);
+    }
+
+    private async Task ReadLoopAsync(CancellationToken cancellationToken)
+    {
+        byte[] buffer = GC.AllocateUninitializedArray<byte>(_options.MaxMessageBytes);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            int length = await _reader!.ReadMessageAsync(buffer, cancellationToken);
+
+            if (OnMessage is { } handler)
+            {
+                // Handed the whole message, not a reader the handler could hold across an await:
+                // Task 10's ITopicSink.Write(ref Utf8JsonReader) cannot cross one, so the dispatch
+                // this loop drives has to be a single synchronous pass over the buffer.
+                await handler(buffer.AsMemory(0, length));
+            }
+        }
+
+        // The loop only reaches here if cancellation was requested but the receive that would have
+        // observed it never came (nothing pending). Throwing here, rather than returning, keeps
+        // every exit ReadLoopTask can report consistent: cancellation always ends the task Canceled,
+        // never RanToCompletion, so a caller never has to ask which kind of "done" this was.
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private async Task SendAuthenticationAsync(CancellationToken cancellationToken)
@@ -120,30 +168,41 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             : throw new MassiveStreamException("The stream sent a message carrying no status event.");
     }
 
-    // Task 7's frame reassembly replaces this with the bounded implementation and its own tests;
-    // the handshake only ever needs one message read at a time, so this loops ReceiveAsync until
-    // the server marks the message complete.
-    private async Task<int> ReadMessageAsync(Memory<byte> buffer, CancellationToken cancellationToken)
-    {
-        int offset = 0;
-
-        while (true)
-        {
-            ValueWebSocketReceiveResult result = await _socket!.ReceiveAsync(buffer[offset..], cancellationToken);
-            offset += result.Count;
-
-            if (result.EndOfMessage)
-            {
-                return offset;
-            }
-        }
-    }
+    // The handshake is strictly sequential -- one message at a time -- so a fresh FrameReader here
+    // costs nothing next to the loop's own buffer, which StartReading allocates once and reuses for
+    // the connection's whole life (see ReadLoopAsync).
+    private ValueTask<int> ReadMessageAsync(Memory<byte> buffer, CancellationToken cancellationToken) =>
+        new FrameReader(_socket!, _options.MaxMessageBytes).ReadMessageAsync(buffer, cancellationToken);
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // Cancel before the socket underneath the loop is torn down, so a pending receive fails on
+        // cancellation rather than on a socket that vanished out from under it.
+        await _shutdown.CancelAsync();
+
+        try
+        {
+            await ReadLoopTask;
+        }
+        catch (Exception)
+        {
+            // The loop's own outcome -- cancelled, faulted, or never started -- stays observable on
+            // ReadLoopTask itself. Disposing must not throw a second time merely because the caller
+            // chose to stop the stream; Faulted (Task 11) is where a consumer learns why it stopped.
+        }
+
         if (_socket is not null)
         {
             await _socket.DisposeAsync();
         }
+
+        _shutdown.Dispose();
     }
 }
