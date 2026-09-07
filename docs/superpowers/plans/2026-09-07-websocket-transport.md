@@ -131,7 +131,7 @@ src/MassiveDotNet.WebSocket/
   MassiveFeeds.cs                       8 hosts + Legacy nested class
   MassiveMarket.cs                      6 markets, rendered as a path segment
   MassiveStreamOptions.cs               Duration throughout; Validate()
-  MassiveStreamRetryOptions.cs          Backoff triple + jitter
+  MassiveStreamReconnectOptions.cs      Backoff triple + jitter
   MassiveStreamClient.cs                Entry point; owns the connection
   MassiveStockStream.cs                 Stocks façade: typed topic subscriptions
   StockTopic.cs                         Trades, Quotes (enum; #21 adds six)
@@ -3832,6 +3832,8 @@ Claude-Session: https://claude.ai/code/session_01GQnnMUgFsvPrAq2DXpt6kB"
 - Produces: `public sealed class MassiveStreamClient : IAsyncDisposable` with
   `MassiveStreamClient(MassiveStreamOptions options)` and
   `Task<MassiveStockStream> ConnectStocksAsync(CancellationToken cancellationToken = default)`
+  and `internal Task<MassiveStockStream> ConnectStocksAsync(MassiveWebSocketFactory factory, CancellationToken cancellationToken)`,
+  the seam the tests drive -- a factory, never a socket instance, because reconnect mints a new one per attempt
   and `internal Task ConnectRawAsync(MassiveMarket market, CancellationToken cancellationToken)`,
   which performs the handshake for any market and returns nothing — it exists so Task 14 can pin
   the entitlement of the five markets #20 ships no facade for;
@@ -3865,7 +3867,7 @@ public class StockStreamTests
         socket.EnqueueText(AuthSuccess);
 
         MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = "k" });
-        MassiveStockStream stream = await client.ConnectStocksAsync(socket, TestContext.Current.CancellationToken);
+        MassiveStockStream stream = await client.ConnectStocksAsync(() => socket, TestContext.Current.CancellationToken);
 
         return (stream, socket);
     }
@@ -4058,11 +4060,14 @@ public sealed class MassiveStreamClient : IAsyncDisposable
     /// server's own message is on <see cref="MassiveStreamAuthenticationException.ServerMessage"/>.
     /// </exception>
     public Task<MassiveStockStream> ConnectStocksAsync(CancellationToken cancellationToken = default) =>
-        ConnectStocksAsync(new ClientWebSocketAdapter(_options), cancellationToken);
+        ConnectStocksAsync(() => new ClientWebSocketAdapter(_options), cancellationToken);
 
-    internal async Task<MassiveStockStream> ConnectStocksAsync(IMassiveWebSocket socket, CancellationToken cancellationToken)
+    // Takes the factory rather than a socket: a ClientWebSocket cannot be reconnected once aborted,
+    // so reconnect calls this back for a fresh one on every attempt. Handing it a single instance
+    // would pass every offline test -- the fakes are minted per attempt -- and never reconnect live.
+    internal async Task<MassiveStockStream> ConnectStocksAsync(MassiveWebSocketFactory factory, CancellationToken cancellationToken)
     {
-        MassiveStreamConnection connection = new(_options, MassiveMarket.Stocks, () => socket, _clock);
+        MassiveStreamConnection connection = new(_options, MassiveMarket.Stocks, factory, _clock);
 
         await connection.ConnectAsync(cancellationToken);
         connection.StartReading();
