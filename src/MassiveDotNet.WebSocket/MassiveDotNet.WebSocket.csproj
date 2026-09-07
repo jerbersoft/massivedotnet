@@ -12,4 +12,10 @@
     <ProjectReference Include="../MassiveDotNet/MassiveDotNet.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- TickerPool and the rest of Internal/ are internal; the tests need to construct them
+         directly, the same reasoning MassiveDotNet.CodeGen already uses for its diagnostics. -->
+    <InternalsVisibleTo Include="MassiveDotNet.WebSocket.Tests" />
+  </ItemGroup>
+
 </Project>
