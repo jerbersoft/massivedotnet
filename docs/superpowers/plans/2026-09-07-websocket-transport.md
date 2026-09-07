@@ -210,7 +210,7 @@ the enforcement and the package have to land together or the tree is red.
 `tests/MassiveDotNet.WebSocket.Tests/FeedTests.cs`:
 
 ```csharp
-using MassiveDotNet.WebSocket;
+using Xunit;
 
 namespace MassiveDotNet.WebSocket.Tests;
 
@@ -570,7 +570,6 @@ shipped packages.
 `tests/MassiveDotNet.Rest.Tests/EpochTests.cs`:
 
 ```csharp
-using MassiveDotNet;
 using NodaTime;
 
 namespace MassiveDotNet.Rest.Tests;
@@ -1362,7 +1361,6 @@ internal delegate IMassiveWebSocket MassiveWebSocketFactory();
 
 ```csharp
 using System.Net.WebSockets;
-using MassiveDotNet.WebSocket;
 using NodaTime;
 
 namespace MassiveDotNet.WebSocket.Internal;
@@ -2595,7 +2593,6 @@ fixture wiring.
 ```csharp
 using System.Text;
 using System.Text.Json;
-using MassiveDotNet;
 using MassiveDotNet.WebSocket.Events;
 using MassiveDotNet.WebSocket.Internal;
 using NodaTime;
