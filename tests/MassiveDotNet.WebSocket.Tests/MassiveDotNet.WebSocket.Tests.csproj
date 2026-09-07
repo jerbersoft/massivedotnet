@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- AllocationTests in Task 13 asserts byte counts, and tiered compilation makes them vary
+         between runs of the same binary. Same reasoning as the Rest test project (D31). -->
+    <TieredCompilation>false</TieredCompilation>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MassiveDotNet.WebSocket.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
+  </ItemGroup>
+
+</Project>

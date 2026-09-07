@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MassiveDotNet.WebSocket</RootNamespace>
+    <PackageId>MassiveDotNet.WebSocket</PackageId>
+    <Description>WebSocket streaming client for the Massive (formerly Polygon.io) market data platform: real-time trades, quotes, and aggregates over the platform's feed hosts.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core only. ClientWebSocket and System.Threading.Channels are both in-box on net10.0,
+         so this package adds nothing to a consumer's restore graph (rules 7 and 8). -->
+    <ProjectReference Include="../MassiveDotNet/MassiveDotNet.csproj" />
+  </ItemGroup>
+
+</Project>

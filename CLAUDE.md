@@ -241,7 +241,7 @@ Anticipated, for work not yet written:
 
 `TemporalTypeTests` runs two independent layers, because neither is sufficient alone:
 
-1. **Reflection** over the exported surface of both shipped assemblies — properties, fields,
+1. **Reflection** over the exported surface of all four shipped assemblies — properties, fields,
    methods, operators, and constructors. Operators are deliberately included: an implicit
    conversion from a BCL type would reintroduce it into the public API.
 2. **A source scan** over `benchmarks`, `samples`, `src`, `tests`, and `tools`. Reflection cannot
