@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using MassiveDotNet.Serialization;
 using NodaTime;
 
 namespace MassiveDotNet.WebSocket.Internal;
@@ -109,6 +110,12 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     public void StartReading()
     {
         _reader = new FrameReader(_socket!, _options.MaxMessageBytes);
+
+        // Defaults dispatch to the registered sinks, but never overwrites a handler a caller (or a
+        // test) already set: OnMessage is a public seam Task 7 exposed before sinks existed, and
+        // several tests still drive it directly.
+        OnMessage ??= DispatchAsync;
+
         ReadLoopTask = Task.Run(() => ReadLoopAsync(_shutdown.Token), _shutdown.Token);
     }
 
@@ -121,13 +128,13 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             int length = await _reader!.ReadMessageAsync(buffer, cancellationToken);
 
             // Every control message -- a subscribe or unsubscribe acknowledgement -- arrives
-            // through this same loop, so each payload is checked for status events before it is
-            // ever offered to OnMessage. A frame that carries one is consumed here and stops:
-            // OnMessage sees ticks and quotes, never the acknowledgements that produced them.
-            if (DispatchStatusEvents(buffer.AsSpan(0, length)))
-            {
-                continue;
-            }
+            // through this same loop, so each payload is checked for status events first. The
+            // frame is still offered to OnMessage regardless of what this found: a status object
+            // routes to no sink (nothing registers one under "status"), so nothing is handled
+            // twice. Skipping OnMessage whenever this returned true used to be how a frame
+            // carrying BOTH a status event and tick data lost the ticks with no trace -- ruling T1
+            // on Task 10, and exactly the silent data loss this SDK refuses everywhere else.
+            DispatchStatusEvents(buffer.AsSpan(0, length));
 
             if (OnMessage is { } handler)
             {
@@ -149,8 +156,10 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// Parses <paramref name="payload"/> for status events and routes each to <see cref="OnStatus"/>.
     /// </summary>
     /// <returns>
-    /// <see langword="true"/> if the payload carried at least one status event -- meaning it is a
-    /// control frame that must not also be handed to <see cref="OnMessage"/>.
+    /// <see langword="true"/> if the payload carried at least one status event. No longer gates
+    /// whether <see cref="OnMessage"/> also sees the payload (ruling T1 on Task 10): a frame can
+    /// carry a status event and tick data together, and the read loop now offers every frame to
+    /// <see cref="OnMessage"/> regardless of what this returns.
     /// </returns>
     private bool DispatchStatusEvents(ReadOnlySpan<byte> payload)
     {
@@ -275,6 +284,107 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 _pendingAcknowledgements?.TrySetResult();
             }
         }
+    }
+
+    // Copy-on-write: AddSink runs on a caller's thread (Task 12's façade calls it when a consumer
+    // subscribes) while DispatchAsync reads this on the read-loop thread started by StartReading --
+    // a genuine data race on a plain Dictionary, not a theoretical one (ruling T3 on Task 10).
+    // Concurrent mutation of a plain Dictionary is documented as unsupported and known to corrupt
+    // its internal state under contention -- confirmed separately with a small multi-writer rig
+    // that reproduced the documented failure immediately and repeatedly. Rebuilding a whole new
+    // dictionary and publishing it with Volatile.Write keeps the hot read path -- one Volatile.Read
+    // plus a lookup, on every dispatched frame -- lock-free and allocation-free; AddSink pays one
+    // allocation, which is the right side to spend it on since subscribing is rare and dispatch is
+    // not. A ConcurrentDictionary was the other option considered; this one was chosen because the
+    // read side (DispatchAsync) never mutates, so there is nothing for a concurrent collection's
+    // per-bucket locking to buy that a plain snapshot read does not already give for free.
+    private Dictionary<string, ITopicSink> _sinks = new(StringComparer.Ordinal);
+
+    /// <summary>Registers where <see cref="DispatchAsync"/> routes an event carrying this sink's topic code.</summary>
+    /// <param name="sink">The sink. Replaces any sink already registered under the same topic code.</param>
+    public void AddSink(ITopicSink sink)
+    {
+        Dictionary<string, ITopicSink> current = Volatile.Read(ref _sinks);
+        Dictionary<string, ITopicSink> updated = new(current, StringComparer.Ordinal) { [sink.TopicCode] = sink };
+        Volatile.Write(ref _sinks, updated);
+    }
+
+    /// <summary>Routes every event in <paramref name="payload"/> to the sink its <c>ev</c> code names.</summary>
+    /// <remarks>
+    /// Cannot be <see langword="async"/>: <see cref="Utf8JsonReader"/> is a <see langword="ref struct"/>
+    /// and this method holds one across the whole pass, so every sink is driven synchronously in one
+    /// walk (constraint noted in the task 10 brief for <see cref="ITopicSink.Write"/>).
+    /// </remarks>
+    private ValueTask DispatchAsync(ReadOnlyMemory<byte> payload)
+    {
+        Utf8JsonReader reader = new(payload.Span);
+
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
+        {
+            throw new MassiveStreamException("The stream sent a message that is not a JSON array.");
+        }
+
+        // One snapshot for the whole frame, not one per event: several events sharing a frame then
+        // share one table even if AddSink races this read (see the _sinks field comment).
+        Dictionary<string, ITopicSink> sinks = Volatile.Read(ref _sinks);
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.StartObject)
+        {
+            // A struct copy is a free bookmark. "ev" was first in every message observed, but
+            // nothing in the protocol promises that, so the position is saved and the object is
+            // re-read from the start once the code is known.
+            Utf8JsonReader start = reader;
+            string? code = ReadEventCode(ref reader);
+
+            if (code is not null && sinks.TryGetValue(code, out ITopicSink? sink))
+            {
+                // Every data frame is walked twice: DispatchStatusEvents/CountStatusEvents already
+                // walked it once to check for status events, and this is the second walk, over the
+                // same bytes, to find "ev" again. Both passes are allocation-free, so the cost is
+                // CPU, not memory. Left as-is on purpose (ruling T2 on Task 10): the coherent fix
+                // would delete machinery Tasks 8 and 9 spent getting right, on no more than a hunch
+                // that the double walk costs enough to matter -- not a measurement.
+                Utf8JsonReader replay = start;
+                sink.Write(ref replay);
+            }
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Reads an object's <c>ev</c>, leaving the reader on that object's end token.</summary>
+    /// <param name="reader">A reader positioned on the object's <c>StartObject</c> token.</param>
+    /// <returns>The event code, or <see langword="null"/> if the object carries no <c>ev</c>.</returns>
+    /// <exception cref="JsonException"><c>ev</c> is present but is neither a string nor <see langword="null"/>.</exception>
+    internal static string? ReadEventCode(ref Utf8JsonReader reader)
+    {
+        const string Model = "Event";
+        string? code = null;
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            bool isEventCode = reader.ValueTextEquals("ev"u8);
+            reader.Read();
+
+            if (isEventCode)
+            {
+                // Through JsonValueReader, the way every other field in this codebase is read, so a
+                // malformed "ev" surfaces as a JsonException naming the model and property rather
+                // than Utf8JsonReader's own InvalidOperationException -- the same class of finding
+                // as Task 9's "sym" (ruling T4 on Task 10).
+                code = JsonValueReader.ReadString(ref reader, Model, "ev");
+            }
+
+            // Skip either way. It is a no-op on "ev" itself -- JsonValueReader.ReadString above
+            // already leaves the reader on the scalar it read, or has thrown before this line runs
+            // -- but every OTHER property needs it to step over a container value rather than walk
+            // into it: the exact shape of the bug Task 8 found in this method's sibling,
+            // CountStatusEvents, where a read without a skip let the reader misread everything after
+            // a malformed value as the outer object's own properties.
+            reader.Skip();
+        }
+
+        return code;
     }
 
     /// <summary>Subscribes to every ticker under one topic, throwing unless every pair is acknowledged.</summary>
