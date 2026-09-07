@@ -78,4 +78,22 @@ public class TickerPoolTests
         Assert.Equal(overlong, pool.Intern(ref reader));
         Assert.Equal(0, pool.Count);
     }
+
+    // Reading ValueSpan raw is the tempting shortcut, and it is wrong: a JSON string carrying an
+    // escape sequence comes back with the backslashes still in it, so the ticker is silently
+    // corrupted rather than failing. CopyString unescapes. Nothing else in the suite would notice
+    // a regression to the raw span, because no other fixture contains an escape.
+    [Fact]
+    public void AnEscapedValueIsUnescapedRatherThanReadRaw()
+    {
+        TickerPool pool = new(capacity: 16);
+        byte[] json = Encoding.UTF8.GetBytes("""{"sym":"X:BTC\/USD"}""");
+
+        Utf8JsonReader reader = new(json);
+        reader.Read();
+        reader.Read();
+        reader.Read();
+
+        Assert.Equal("X:BTC/USD", pool.Intern(ref reader));
+    }
 }
