@@ -110,12 +110,6 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     public void StartReading()
     {
         _reader = new FrameReader(_socket!, _options.MaxMessageBytes);
-
-        // Defaults dispatch to the registered sinks, but never overwrites a handler a caller (or a
-        // test) already set: OnMessage is a public seam Task 7 exposed before sinks existed, and
-        // several tests still drive it directly.
-        OnMessage ??= DispatchAsync;
-
         ReadLoopTask = Task.Run(() => ReadLoopAsync(_shutdown.Token), _shutdown.Token);
     }
 
@@ -128,19 +122,23 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             int length = await _reader!.ReadMessageAsync(buffer, cancellationToken);
 
             // Every control message -- a subscribe or unsubscribe acknowledgement -- arrives
-            // through this same loop, so each payload is checked for status events first. The
-            // frame is still offered to OnMessage regardless of what this found: a status object
-            // routes to no sink (nothing registers one under "status"), so nothing is handled
-            // twice. Skipping OnMessage whenever this returned true used to be how a frame
-            // carrying BOTH a status event and tick data lost the ticks with no trace -- ruling T1
-            // on Task 10, and exactly the silent data loss this SDK refuses everywhere else.
+            // through this same loop, so each payload is checked for status events first. Dispatch
+            // to the registered sinks then runs unconditionally: a status object routes to no sink
+            // (nothing registers one under "status"), so nothing is handled twice, and a frame
+            // carrying BOTH a status event and tick data must still reach whichever sink the tick
+            // belongs to -- ruling T1 on Task 10, and exactly the silent data loss this SDK
+            // refuses everywhere else.
             DispatchStatusEvents(buffer.AsSpan(0, length));
+            Dispatch(buffer.AsSpan(0, length));
 
+            // OnMessage is a separate observer seam, independent of the dispatch above -- it is
+            // not how an event reaches its sink, so it is never what gates or substitutes for that
+            // (F2, Task 10 review round 1: an earlier version only defaulted OnMessage to drive
+            // dispatch, which meant a caller who set OnMessage for their own purposes silently
+            // suppressed every sink). Handed the whole message, not a reader the handler could
+            // hold across an await.
             if (OnMessage is { } handler)
             {
-                // Handed the whole message, not a reader the handler could hold across an await:
-                // Task 10's ITopicSink.Write(ref Utf8JsonReader) cannot cross one, so the dispatch
-                // this loop drives has to be a single synchronous pass over the buffer.
                 await handler(buffer.AsMemory(0, length));
             }
         }
@@ -286,38 +284,46 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         }
     }
 
-    // Copy-on-write: AddSink runs on a caller's thread (Task 12's façade calls it when a consumer
-    // subscribes) while DispatchAsync reads this on the read-loop thread started by StartReading --
-    // a genuine data race on a plain Dictionary, not a theoretical one (ruling T3 on Task 10).
-    // Concurrent mutation of a plain Dictionary is documented as unsupported and known to corrupt
-    // its internal state under contention -- confirmed separately with a small multi-writer rig
-    // that reproduced the documented failure immediately and repeatedly. Rebuilding a whole new
-    // dictionary and publishing it with Volatile.Write keeps the hot read path -- one Volatile.Read
-    // plus a lookup, on every dispatched frame -- lock-free and allocation-free; AddSink pays one
-    // allocation, which is the right side to spend it on since subscribing is rare and dispatch is
-    // not. A ConcurrentDictionary was the other option considered; this one was chosen because the
-    // read side (DispatchAsync) never mutates, so there is nothing for a concurrent collection's
-    // per-bucket locking to buy that a plain snapshot read does not already give for free.
+    // Guards the read-copy-publish in AddSink. A first version of AddSink read _sinks, copied it,
+    // and published the copy with no lock at all (ruling T3 on Task 10); that stopped Dispatch's
+    // read from ever seeing a torn Dictionary, but left the WRITE side unguarded, and two
+    // concurrent AddSink calls can both read the same snapshot, each build a copy holding only its
+    // own addition, and the second Volatile.Write silently discard the first sink -- measured by
+    // review round 1 at 8 threads x 200 topics: 1,600 expected, 320 survived, 1,280 lost with no
+    // exception anywhere (F1). A consumer that subscribes, gets acknowledged, and then never
+    // receives anything is a worse failure than T3's corruption, which at least throws. This lock
+    // serializes AddSink only -- rare, a subscribe call -- and buys nothing on the read side, which
+    // stays exactly as lock-free as before: Dispatch still takes one Volatile.Read snapshot per
+    // frame and never touches this lock. A ConcurrentDictionary would also fix the write race, but
+    // its per-bucket locking is a cost paid on every read too, for safety a read-only consumer
+    // never needed once the write side is correctly serialized on its own.
+    private readonly object _sinksLock = new();
     private Dictionary<string, ITopicSink> _sinks = new(StringComparer.Ordinal);
 
-    /// <summary>Registers where <see cref="DispatchAsync"/> routes an event carrying this sink's topic code.</summary>
+    /// <summary>Registers where <see cref="Dispatch"/> routes an event carrying this sink's topic code.</summary>
     /// <param name="sink">The sink. Replaces any sink already registered under the same topic code.</param>
     public void AddSink(ITopicSink sink)
     {
-        Dictionary<string, ITopicSink> current = Volatile.Read(ref _sinks);
-        Dictionary<string, ITopicSink> updated = new(current, StringComparer.Ordinal) { [sink.TopicCode] = sink };
-        Volatile.Write(ref _sinks, updated);
+        lock (_sinksLock)
+        {
+            Dictionary<string, ITopicSink> current = Volatile.Read(ref _sinks);
+            Dictionary<string, ITopicSink> updated = new(current, StringComparer.Ordinal) { [sink.TopicCode] = sink };
+            Volatile.Write(ref _sinks, updated);
+        }
     }
 
     /// <summary>Routes every event in <paramref name="payload"/> to the sink its <c>ev</c> code names.</summary>
     /// <remarks>
-    /// Cannot be <see langword="async"/>: <see cref="Utf8JsonReader"/> is a <see langword="ref struct"/>
-    /// and this method holds one across the whole pass, so every sink is driven synchronously in one
-    /// walk (constraint noted in the task 10 brief for <see cref="ITopicSink.Write"/>).
+    /// Synchronous, not <see langword="async"/>: <see cref="Utf8JsonReader"/> is a
+    /// <see langword="ref struct"/> and this method holds one across the whole pass, so every sink
+    /// is driven in one walk with no opportunity to await mid-frame (constraint noted in the
+    /// Task 10 brief for <see cref="ITopicSink.Write"/>). Runs unconditionally from the read loop,
+    /// independently of <see cref="OnMessage"/>: dispatch is not something a caller who sets
+    /// OnMessage for their own purposes can suppress or substitute for (F2, Task 10 review round 1).
     /// </remarks>
-    private ValueTask DispatchAsync(ReadOnlyMemory<byte> payload)
+    private void Dispatch(ReadOnlySpan<byte> payload)
     {
-        Utf8JsonReader reader = new(payload.Span);
+        Utf8JsonReader reader = new(payload);
 
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
         {
@@ -325,7 +331,9 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         }
 
         // One snapshot for the whole frame, not one per event: several events sharing a frame then
-        // share one table even if AddSink races this read (see the _sinks field comment).
+        // share one table even if AddSink races this read (see the _sinks field comment). A sink
+        // that another event's Write call registers mid-frame is therefore not retroactively fed
+        // the rest of THIS frame -- it starts receiving on the next one (F4, Task 10 review round 1).
         Dictionary<string, ITopicSink> sinks = Volatile.Read(ref _sinks);
 
         while (reader.Read() && reader.TokenType == JsonTokenType.StartObject)
@@ -348,8 +356,6 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 sink.Write(ref replay);
             }
         }
-
-        return ValueTask.CompletedTask;
     }
 
     /// <summary>Reads an object's <c>ev</c>, leaving the reader on that object's end token.</summary>
@@ -613,6 +619,18 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             // The loop's own outcome -- cancelled, faulted, or never started -- stays observable on
             // ReadLoopTask itself. Disposing must not throw a second time merely because the caller
             // chose to stop the stream; Faulted (Task 11) is where a consumer learns why it stopped.
+        }
+
+        // Every registered sink's sequence ends here, and only here -- never on a transient
+        // read-loop fault above, which Task 11's reconnect resumes through, so a sequence must
+        // survive that. Without this, TopicSink.Complete() existed since Task 10 but nothing ever
+        // called it, so a consumer's `await foreach` never ended even after the connection it was
+        // reading from had been disposed (F5, review round 1). Complete() on an already-completed
+        // channel, and TryWrite racing a Complete() from the loop's own last iteration, are both
+        // no-ops/false rather than exceptions, so no lock is needed against Dispatch here.
+        foreach (ITopicSink sink in Volatile.Read(ref _sinks).Values)
+        {
+            sink.Complete();
         }
 
         if (_socket is not null)

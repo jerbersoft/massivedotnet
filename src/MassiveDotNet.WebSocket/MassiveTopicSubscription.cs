@@ -22,8 +22,7 @@ public sealed class MassiveTopicSubscription<T> : IAsyncEnumerable<T>
     /// <remarks>
     /// Monotonic, and exact rather than estimated. A non-zero value means the consumer is slower
     /// than the feed: raise <see cref="MassiveStreamOptions.TopicBufferCapacity"/>, or do less work
-    /// in the loop. A consumer wiring the SDK through <c>AddMassiveStream</c> is warned on their
-    /// logger automatically.
+    /// in the loop.
     /// </remarks>
     public long DroppedCount => Interlocked.Read(ref _dropped);
 
