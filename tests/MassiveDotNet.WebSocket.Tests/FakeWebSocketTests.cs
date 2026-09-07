@@ -44,6 +44,37 @@ public class FakeWebSocketTests
         Assert.Equal("""[{"ev":"status"}]""", assembled.ToString());
     }
 
+    // Task 7's FrameReader shrinks the destination slice on every call to enforce a message-size
+    // ceiling, so a frame that outruns the remaining buffer must be a normal partial read, not a
+    // crash. A real ClientWebSocket fills whatever buffer it is given and leaves EndOfMessage
+    // false until the frame is exhausted.
+    [Fact]
+    public async Task ItFillsATooSmallBufferAcrossMultipleReceives()
+    {
+        await using FakeWebSocket socket = new();
+        socket.EnqueueText("0123456789");
+
+        byte[] buffer = new byte[4];
+        StringBuilder assembled = new();
+
+        ValueWebSocketReceiveResult first = await socket.ReceiveAsync(buffer, TestContext.Current.CancellationToken);
+        Assert.Equal(4, first.Count);
+        Assert.False(first.EndOfMessage);
+        assembled.Append(Encoding.UTF8.GetString(buffer, 0, first.Count));
+
+        ValueWebSocketReceiveResult second = await socket.ReceiveAsync(buffer, TestContext.Current.CancellationToken);
+        Assert.Equal(4, second.Count);
+        Assert.False(second.EndOfMessage);
+        assembled.Append(Encoding.UTF8.GetString(buffer, 0, second.Count));
+
+        ValueWebSocketReceiveResult third = await socket.ReceiveAsync(buffer, TestContext.Current.CancellationToken);
+        Assert.Equal(2, third.Count);
+        Assert.True(third.EndOfMessage);
+        assembled.Append(Encoding.UTF8.GetString(buffer, 0, third.Count));
+
+        Assert.Equal("0123456789", assembled.ToString());
+    }
+
     [Fact]
     public async Task ItRecordsWhatWasSent()
     {
@@ -64,5 +95,23 @@ public class FakeWebSocketTests
 
         await Assert.ThrowsAsync<WebSocketException>(async () =>
             await socket.ReceiveAsync(new byte[128], TestContext.Current.CancellationToken));
+    }
+
+    // Distinct from AbortNext: a graceful close is a normal ReceiveAsync result, not a throw.
+    // Task 7's FrameReader branches on WebSocketMessageType.Close, so this path needs its own
+    // fixture rather than being folded into the abort case.
+    [Fact]
+    public async Task ItCanEnqueueAnOrdinaryCloseFrame()
+    {
+        await using FakeWebSocket socket = new();
+        socket.EnqueueClose(WebSocketCloseStatus.NormalClosure, "bye");
+
+        ValueWebSocketReceiveResult result = await socket.ReceiveAsync(new byte[128], TestContext.Current.CancellationToken);
+
+        Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+        Assert.True(result.EndOfMessage);
+        Assert.Equal(0, result.Count);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.CloseStatus);
+        Assert.Equal("bye", socket.CloseStatusDescription);
     }
 }
