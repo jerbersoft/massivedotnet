@@ -208,7 +208,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// "not a JSON array" error reaches the caller unchanged, rather than this method silently
     /// treating a malformed payload as an ordinary data frame.
     /// </param>
-    private static int CountStatusEvents(ReadOnlySpan<byte> payload, out bool isArray)
+    internal static int CountStatusEvents(ReadOnlySpan<byte> payload, out bool isArray)
     {
         Utf8JsonReader reader = new(payload);
 
@@ -231,6 +231,12 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 {
                     reader.Read();
                     isStatus = reader.TokenType == JsonTokenType.String && reader.ValueTextEquals("status"u8);
+
+                    // Skip even though `ev` is a string on every real frame: if a malformed one ever
+                    // makes it an object or array, reading without skipping walks INTO it and every
+                    // subsequent token is misread as a property of the outer event. Skip is a no-op
+                    // on the scalar this always is, so the honest case pays nothing.
+                    reader.Skip();
                 }
                 else
                 {

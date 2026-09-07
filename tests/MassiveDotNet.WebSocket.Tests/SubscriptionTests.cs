@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using MassiveDotNet.WebSocket.Internal;
 using NodaTime;
 using NodaTime.Testing;
@@ -52,6 +54,68 @@ public class SubscriptionTests
         socket.EnqueueText(ackFrame);
 
         return subscribeTask;
+    }
+
+    // An `ev` that is not a string is malformed, and the two halves answer it differently on purpose:
+    // the counter reports no status events, so the frame goes to dispatch, while a parse of it fails
+    // closed rather than inventing a StatusMessage. What neither may do is walk INTO the object and
+    // misread the rest of the event as its properties -- before the Skip that now guards this, the
+    // counter did exactly that and stopped counting early.
+    [Fact]
+    public void AMalformedEventKindIsRefusedRatherThanMisread()
+    {
+        // The genuine status event AFTER the malformed one is what makes this bite. Without the skip,
+        // the counter walks into the `ev` object, reads its members as the outer event's properties,
+        // then meets `"status"` where it expects the next event to start and stops -- reporting one
+        // event as zero. Sized by that, Parse would throw on a frame carrying a real acknowledgement.
+        ReadOnlySpan<byte> payload =
+            """[{"ev":{"not":"a string"},"x":1},{"ev":"status","status":"success","message":"m"}]"""u8;
+
+        int counted = MassiveStreamConnection.CountStatusEvents(payload, out bool isArray);
+
+        Assert.True(isArray);
+        Assert.Equal(1, counted);
+
+        // Span<T> is a ref struct, so Assert.Throws cannot close over it.
+        bool threw = false;
+
+        try
+        {
+            StatusMessage.Parse(payload, new StatusMessage[counted]);
+        }
+        catch (JsonException)
+        {
+            threw = true;
+        }
+
+        Assert.True(threw);
+    }
+
+    // CountStatusEvents sizes the buffer that StatusMessage.Parse then fills, and Parse THROWS rather
+    // than truncating when it does not fit. Nothing but this test makes the two agree: the retry that
+    // used to cover a disagreement was removed with F4's allocation fix, so a divergence now surfaces
+    // as a thrown subscribe on a perfectly good frame. Every shape here is one the counter and the
+    // parser could plausibly disagree about.
+    [Theory]
+    [InlineData("""[]""")]
+    [InlineData("""[{"ev":"status","status":"success","message":"subscribed to: T.A"}]""")]
+    [InlineData("""[{"ev":"status","status":"success","message":"a"},{"ev":"status","status":"success","message":"b"}]""")]
+    [InlineData("""[{"ev":"T","sym":"AAPL","p":1.0}]""")]
+    [InlineData("""[{"ev":"T","sym":"AAPL"},{"ev":"status","status":"success","message":"m"}]""")]
+    [InlineData("""[{"ev":"status","status":"success","message":"m","extra":{"nested":[1,2,3]}}]""")]
+    [InlineData("""[{"extra":{"ev":"status"},"ev":"status","status":"success","message":"m"}]""")]
+    public void TheCounterAndTheParserAgreeOnHowManyStatusEventsAFrameHolds(string json)
+    {
+        ReadOnlySpan<byte> payload = Encoding.UTF8.GetBytes(json);
+
+        int counted = MassiveStreamConnection.CountStatusEvents(payload, out bool isArray);
+
+        Assert.True(isArray);
+
+        Span<StatusMessage> destination = new StatusMessage[counted];
+        int parsed = StatusMessage.Parse(payload, destination);
+
+        Assert.Equal(counted, parsed);
     }
 
     [Fact]
