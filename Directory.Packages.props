@@ -25,6 +25,8 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <!-- Pinned to the NodaTime version already in use (D12); FakeClock is test-only, never src. -->
+    <PackageVersion Include="NodaTime.Testing" Version="3.3.3" />
   </ItemGroup>
 
   <ItemGroup Label="Benchmarks">
