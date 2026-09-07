@@ -42,6 +42,16 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
             if (reader.ValueTextEquals("sym"u8))
             {
                 reader.Read();
+
+                // tickers.Intern bypasses JsonValueReader (it reads the raw UTF-8 bytes directly
+                // for the pooling fast path), so a malformed "sym" is checked here instead: without
+                // this, a null or numeric "sym" would surface as Utf8JsonReader's own
+                // InvalidOperationException rather than the JsonException every other field throws.
+                if (reader.TokenType != JsonTokenType.String)
+                {
+                    throw new JsonException($"Expected a string for {Model}.sym, but found a {reader.TokenType} token.");
+                }
+
                 ticker = tickers.Intern(ref reader);
             }
             else if (reader.ValueTextEquals("i"u8))
@@ -77,7 +87,7 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
             else if (reader.ValueTextEquals("c"u8))
             {
                 reader.Read();
-                conditions = ReadConditions(ref reader, Model, "c");
+                conditions = ConditionSetSerialization.Read(ref reader, Model, "c");
             }
             else if (reader.ValueTextEquals("t"u8))
             {
@@ -131,54 +141,50 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
         };
     }
 
-    /// <summary>Reads a code array into inline storage, spilling only past the inline capacity.</summary>
-    internal static ConditionSet ReadConditions(ref Utf8JsonReader reader, string model, string property)
-    {
-        if (reader.TokenType == JsonTokenType.Null)
-        {
-            return default;
-        }
-
-        if (reader.TokenType != JsonTokenType.StartArray)
-        {
-            throw new JsonException($"Expected an array for {model}.{property}, but found a {reader.TokenType} token.");
-        }
-
-        Span<int> inline = stackalloc int[ConditionSet.InlineCapacity];
-        List<int>? spilled = null;
-        int count = 0;
-
-        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-        {
-            int code = JsonValueReader.ReadInt32(ref reader, model, property);
-
-            if (count < ConditionSet.InlineCapacity)
-            {
-                inline[count] = code;
-            }
-            else
-            {
-                spilled ??= [.. inline];
-                spilled.Add(code);
-            }
-
-            count++;
-        }
-
-        return spilled is null ? new ConditionSet(inline[..count]) : new ConditionSet([.. spilled]);
-    }
-
     public override void Write(Utf8JsonWriter writer, StockTrade value, JsonSerializerOptions options)
     {
+        // Every field the reader understands is written back, optional ones only when present
+        // (an absent optional is omitted, never written as null): a round trip that silently
+        // dropped a field would be exactly the data loss this SDK refuses everywhere else.
         writer.WriteStartObject();
         writer.WriteString("ev", "T");
         writer.WriteString("sym", value.Ticker);
         writer.WriteNumber("x", value.ExchangeId);
+
+        if (value.Tape is { } tape)
+        {
+            writer.WriteNumber("z", tape);
+        }
+
         writer.WriteString("i", value.TradeId);
         writer.WriteNumber("p", value.Price);
         writer.WriteNumber("s", value.Size);
+
+        if (value.DecimalSize is { } decimalSize)
+        {
+            writer.WriteString("ds", decimalSize);
+        }
+
+        ConditionSetSerialization.Write(writer, "c", value.Conditions);
         writer.WriteNumber("t", value.SipTimestampMilliseconds);
+
+        if (value.ParticipantTimestampMilliseconds is { } participantTimestamp)
+        {
+            writer.WriteNumber("pt", participantTimestamp);
+        }
+
         writer.WriteNumber("q", value.SequenceNumber);
+
+        if (value.TrfId is { } trfId)
+        {
+            writer.WriteNumber("trfi", trfId);
+        }
+
+        if (value.TrfTimestampMilliseconds is { } trfTimestamp)
+        {
+            writer.WriteNumber("trft", trfTimestamp);
+        }
+
         writer.WriteEndObject();
     }
 }

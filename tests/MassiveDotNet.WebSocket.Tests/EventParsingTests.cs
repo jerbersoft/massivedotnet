@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using System.Text.Json;
 using MassiveDotNet.WebSocket.Events;
@@ -16,6 +17,15 @@ public class EventParsingTests
         reader.Read();  // {
 
         return new StockTradeConverter(new TickerPool(16)).Read(ref reader, typeof(StockTrade), JsonSerializerOptions.Default);
+    }
+
+    private static StockQuote ReadQuote(string json)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockQuoteConverter(new TickerPool(16)).Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
     }
 
     [Fact]
@@ -58,6 +68,20 @@ public class EventParsingTests
         Assert.Null(trade.TrfTimestamp);
     }
 
+    // The converse of the above: a converter that ignored these fields entirely would also pass
+    // "reads as null", so their presence is asserted separately here.
+    [Fact]
+    public void OptionalFieldsPresentInTheMessagePopulate()
+    {
+        StockTrade trade = ReadTrade(
+            """[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"ds":"0.5","trfi":202,"trft":1536036818700}]""");
+
+        Assert.Equal("0.5", trade.DecimalSize);
+        Assert.Equal(202, trade.TrfId);
+        Assert.Equal(1536036818700, trade.TrfTimestampMilliseconds);
+        Assert.Equal(Instant.FromUnixTimeMilliseconds(1536036818700), trade.TrfTimestamp);
+    }
+
     [Fact]
     public void AnUnknownPropertyIsSkippedRatherThanThrowing()
     {
@@ -69,12 +93,7 @@ public class EventParsingTests
     [Fact]
     public void ThePublishedQuoteSampleDeserializes()
     {
-        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(Fixtures.StockQuote));
-        reader.Read();
-        reader.Read();
-
-        StockQuote quote = new StockQuoteConverter(new TickerPool(16))
-            .Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
+        StockQuote quote = ReadQuote(Fixtures.StockQuote);
 
         Assert.Equal("MSFT", quote.Ticker);
         Assert.Equal(4, quote.BidExchangeId);
@@ -119,5 +138,195 @@ public class EventParsingTests
 
         Assert.Equal(10, trade.Conditions.Count);
         Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], trade.Conditions.AsSpan().ToArray());
+    }
+
+    // The spill boundary (F7): 7 and 8 stay inline, 9 spills. 0 covers an empty-but-present array.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    public void ConditionCountsAroundTheSpillBoundaryReadCorrectly(int count)
+    {
+        int[] codes = new int[count];
+
+        for (int i = 0; i < count; i++)
+        {
+            codes[i] = i + 1;
+        }
+
+        string codesJson = string.Join(",", codes);
+        StockTrade trade = ReadTrade(
+            $$"""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":[{{codesJson}}]}]""");
+
+        Assert.Equal(count, trade.Conditions.Count);
+        Assert.Equal(codes, trade.Conditions.AsSpan().ToArray());
+    }
+
+    [Fact]
+    public void ANullConditionsArrayReadsAsEmpty()
+    {
+        StockTrade trade = ReadTrade("""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":null}]""");
+
+        Assert.Equal(0, trade.Conditions.Count);
+    }
+
+    // F1: ConditionSet's [InlineArray] field defeats the runtime's default ValueType equality
+    // outright (NotSupportedException) until IEquatable<ConditionSet> is implemented, which is
+    // what StockTrade's and StockQuote's own record-struct equality (D4) delegates to.
+    [Fact]
+    public void TwoTradesParsedFromIdenticalJsonWithInlineConditionsAreEqual()
+    {
+        StockTrade a = ReadTrade(Fixtures.StockTrade);
+        StockTrade b = ReadTrade(Fixtures.StockTrade);
+
+        Assert.Equal(a, b);
+        Assert.True(a == b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void TwoTradesParsedFromIdenticalJsonWithSpilledConditionsAreEqual()
+    {
+        const string json = """[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":[1,2,3,4,5,6,7,8,9]}]""";
+
+        StockTrade a = ReadTrade(json);
+        StockTrade b = ReadTrade(json);
+
+        Assert.Equal(a, b);
+        Assert.True(a == b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void TradesDifferingInOneConditionCodeAreUnequal()
+    {
+        StockTrade a = ReadTrade("""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":[1,2]}]""");
+        StockTrade b = ReadTrade("""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":[1,99]}]""");
+
+        Assert.NotEqual(a, b);
+        Assert.False(a == b);
+    }
+
+    // The path the reviewer found goes silently wrong rather than throwing: a HashSet/dictionary
+    // lookup depends on Equals and GetHashCode agreeing, not just Equals alone.
+    [Fact]
+    public void ConditionSetWorksAsAHashSetKey()
+    {
+        ConditionSet a = ReadTrade("""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":[1,2,3]}]""").Conditions;
+        ConditionSet b = ReadTrade("""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"c":[1,2,3]}]""").Conditions;
+
+        HashSet<ConditionSet> set = [a];
+
+        Assert.Contains(b, set);
+    }
+
+    // F2: "sym" is read through TickerPool.Intern, which bypasses JsonValueReader for its pooling
+    // fast path, so a malformed value must be checked explicitly or it escapes as the wrong
+    // exception type (InvalidOperationException) instead of the JsonException every other field
+    // throws.
+    [Fact]
+    public void ATradeWithANullSymbolThrowsJsonException()
+    {
+        JsonException exception = Assert.Throws<JsonException>(() =>
+            ReadTrade("""[{"ev":"T","sym":null,"i":"1","p":1,"s":1,"t":1,"q":1}]"""));
+
+        Assert.Contains("sym", exception.Message);
+    }
+
+    [Fact]
+    public void ATradeWithANonStringSymbolThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(() =>
+            ReadTrade("""[{"ev":"T","sym":42,"i":"1","p":1,"s":1,"t":1,"q":1}]"""));
+    }
+
+    [Fact]
+    public void AQuoteWithANullSymbolThrowsJsonException()
+    {
+        JsonException exception = Assert.Throws<JsonException>(() =>
+            ReadQuote("""[{"ev":"Q","sym":null,"bp":1,"bs":1,"ap":1,"as":1,"t":1,"q":1}]"""));
+
+        Assert.Contains("sym", exception.Message);
+    }
+
+    [Fact]
+    public void AQuoteWithANonStringSymbolThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(() =>
+            ReadQuote("""[{"ev":"Q","sym":42,"bp":1,"bs":1,"ap":1,"as":1,"t":1,"q":1}]"""));
+    }
+
+    // F3: Write must round-trip every field a real message can carry, not just the ones the
+    // brief's original Write happened to cover. This depends on ConditionSet equality (F1): the
+    // trades compared here differ in Conditions along with everything else Write must preserve.
+    [Fact]
+    public void ATradeRoundTripsThroughWriteAndRead()
+    {
+        StockTrade original = ReadTrade(
+            """[{"ev":"T","sym":"MSFT","x":4,"i":"12345","z":3,"p":114.125,"s":100,"ds":"0.5","c":[0,12],"t":1536036818784,"pt":1536036818763,"q":3681328,"trfi":202,"trft":1536036818700}]""");
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockTradeConverter(new TickerPool(16)).Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockTrade roundTripped = new StockTradeConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockTrade), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    // Also covers the case Write must NOT emit: an absent optional stays absent rather than
+    // round-tripping to a written null, since this SDK never sends an optional as empty (D19's
+    // rule for request parameters, held to on the response side here too).
+    [Fact]
+    public void ATradeWithNoOptionalFieldsRoundTripsThroughWriteAndRead()
+    {
+        StockTrade original = ReadTrade("""[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1}]""");
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockTradeConverter(new TickerPool(16)).Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockTrade roundTripped = new StockTradeConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockTrade), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+        Assert.Null(roundTripped.DecimalSize);
+        Assert.Null(roundTripped.TrfId);
+        Assert.Null(roundTripped.TrfTimestampMilliseconds);
+    }
+
+    // A swapped bid/ask, or a dropped condition/indicator field, would still pass field-by-field
+    // assertions that happen not to look for the swap; a full-value round trip catches it without
+    // anyone having to think to look.
+    [Fact]
+    public void AQuoteRoundTripsThroughWriteAndRead()
+    {
+        StockQuote original = ReadQuote(Fixtures.StockQuote);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockQuoteConverter(new TickerPool(16)).Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockQuote roundTripped = new StockQuoteConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
     }
 }

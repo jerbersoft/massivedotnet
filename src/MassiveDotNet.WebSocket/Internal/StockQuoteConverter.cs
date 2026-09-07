@@ -41,6 +41,16 @@ internal sealed class StockQuoteConverter(TickerPool tickers) : JsonConverter<St
             if (reader.ValueTextEquals("sym"u8))
             {
                 reader.Read();
+
+                // tickers.Intern bypasses JsonValueReader (it reads the raw UTF-8 bytes directly
+                // for the pooling fast path), so a malformed "sym" is checked here instead: without
+                // this, a null or numeric "sym" would surface as Utf8JsonReader's own
+                // InvalidOperationException rather than the JsonException every other field throws.
+                if (reader.TokenType != JsonTokenType.String)
+                {
+                    throw new JsonException($"Expected a string for {Model}.sym, but found a {reader.TokenType} token.");
+                }
+
                 ticker = tickers.Intern(ref reader);
             }
             else if (reader.ValueTextEquals("bx"u8))
@@ -82,7 +92,7 @@ internal sealed class StockQuoteConverter(TickerPool tickers) : JsonConverter<St
             {
                 reader.Read();
                 // Indicators are the same wire shape as a trade's condition array.
-                indicators = StockTradeConverter.ReadConditions(ref reader, Model, "i");
+                indicators = ConditionSetSerialization.Read(ref reader, Model, "i");
             }
             else if (reader.ValueTextEquals("t"u8))
             {
@@ -127,6 +137,9 @@ internal sealed class StockQuoteConverter(TickerPool tickers) : JsonConverter<St
 
     public override void Write(Utf8JsonWriter writer, StockQuote value, JsonSerializerOptions options)
     {
+        // Every field the reader understands is written back, optional ones only when present
+        // (an absent optional is omitted, never written as null): a round trip that silently
+        // dropped a field would be exactly the data loss this SDK refuses everywhere else.
         writer.WriteStartObject();
         writer.WriteString("ev", "Q");
         writer.WriteString("sym", value.Ticker);
@@ -136,8 +149,21 @@ internal sealed class StockQuoteConverter(TickerPool tickers) : JsonConverter<St
         writer.WriteNumber("ax", value.AskExchangeId);
         writer.WriteNumber("ap", value.AskPrice);
         writer.WriteNumber("as", value.AskSize);
+
+        if (value.Condition is { } condition)
+        {
+            writer.WriteNumber("c", condition);
+        }
+
+        ConditionSetSerialization.Write(writer, "i", value.Indicators);
         writer.WriteNumber("t", value.SipTimestampMilliseconds);
         writer.WriteNumber("q", value.SequenceNumber);
+
+        if (value.Tape is { } tape)
+        {
+            writer.WriteNumber("z", tape);
+        }
+
         writer.WriteEndObject();
     }
 }
