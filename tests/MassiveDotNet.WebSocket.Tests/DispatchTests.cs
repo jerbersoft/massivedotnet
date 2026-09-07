@@ -410,4 +410,22 @@ public class DispatchTests
 
         Assert.Empty(result);
     }
+
+    // A sink registered after disposal would never be completed -- the completion loop has already
+    // run -- so its consumer's `await foreach` would hang forever with nothing left alive to end it.
+    // That is F5's hang arriving through the one door F5 did not close. Refused rather than
+    // completed-on-arrival: subscribing to a disposed connection is a programming error, and the
+    // BCL's answer to that is ObjectDisposedException, not a sequence that ends before it starts.
+    [Fact]
+    public async Task RegisteringASinkAfterDisposalIsRefusedRatherThanLeavingItUncompleted()
+    {
+        await using FakeWebSocket socket = new();
+        MassiveStreamConnection connection = await ConnectAsync(socket);
+
+        await connection.DisposeAsync();
+
+        TopicSink<StockTrade> late = new("T", capacity: 8, new StockTradeConverter(new TickerPool(16)));
+
+        Assert.Throws<ObjectDisposedException>(() => connection.AddSink(late));
+    }
 }

@@ -302,10 +302,19 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 
     /// <summary>Registers where <see cref="Dispatch"/> routes an event carrying this sink's topic code.</summary>
     /// <param name="sink">The sink. Replaces any sink already registered under the same topic code.</param>
+    /// <exception cref="ObjectDisposedException">The connection is disposed.</exception>
     public void AddSink(ITopicSink sink)
     {
         lock (_sinksLock)
         {
+            // Disposal completes every sink it can see and then never runs again, so a sink accepted
+            // after that point would keep a consumer parked on a sequence nothing is left to end.
+            // Checked under the same lock disposal snapshots beneath, which is what makes the pair
+            // exhaustive: a registration that wins the lock first is in disposal's snapshot and gets
+            // completed, and one that loses it sees _disposed and is refused here. Neither order
+            // leaves an orphan.
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
             Dictionary<string, ITopicSink> current = Volatile.Read(ref _sinks);
             Dictionary<string, ITopicSink> updated = new(current, StringComparer.Ordinal) { [sink.TopicCode] = sink };
             Volatile.Write(ref _sinks, updated);
@@ -628,7 +637,22 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         // reading from had been disposed (F5, review round 1). Complete() on an already-completed
         // channel, and TryWrite racing a Complete() from the loop's own last iteration, are both
         // no-ops/false rather than exceptions, so no lock is needed against Dispatch here.
-        foreach (ITopicSink sink in Volatile.Read(ref _sinks).Values)
+        //
+        // The SNAPSHOT is taken under _sinksLock even though the completing is not: an unlocked read
+        // could miss a registration landing concurrently, and that sink would then be completed by
+        // nobody -- disposal has already passed this point -- hanging its consumer for good. Taking
+        // the lock pairs with AddSink's _disposed check so every sink is either in this array or
+        // refused outright. Complete() is called outside the lock because it can run arbitrary
+        // continuations on the consumer's side, which is not work to do while holding a lock the
+        // read loop's dispatch may want.
+        ITopicSink[] pending;
+
+        lock (_sinksLock)
+        {
+            pending = [.. Volatile.Read(ref _sinks).Values];
+        }
+
+        foreach (ITopicSink sink in pending)
         {
             sink.Complete();
         }
