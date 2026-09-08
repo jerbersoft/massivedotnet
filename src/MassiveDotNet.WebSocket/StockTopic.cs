@@ -14,6 +14,12 @@ public enum StockTopic
 
     /// <summary>NBBO quotes, wire code <c>Q</c>.</summary>
     Quotes,
+
+    /// <summary>Second-by-second OHLC aggregate bars, wire code <c>A</c>.</summary>
+    SecondAggregates,
+
+    /// <summary>Minute-by-minute OHLC aggregate bars, wire code <c>AM</c>.</summary>
+    MinuteAggregates,
 }
 
 /// <summary>Extensions for <see cref="StockTopic"/>.</summary>
@@ -27,6 +33,8 @@ internal static class StockTopicExtensions
     {
         StockTopic.Trades => "T",
         StockTopic.Quotes => "Q",
+        StockTopic.SecondAggregates => "A",
+        StockTopic.MinuteAggregates => "AM",
         _ => throw new ArgumentOutOfRangeException(nameof(topic), topic, null),
     };
 }

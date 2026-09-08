@@ -28,6 +28,16 @@ public class EventParsingTests
         return new StockQuoteConverter(new TickerPool(16)).Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
     }
 
+    private static StockAggregate ReadAggregate(string json, string topicCode)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockAggregateConverter(new TickerPool(16), topicCode)
+            .Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
+    }
+
     [Fact]
     public void ThePublishedTradeSampleDeserializes()
     {
@@ -342,6 +352,141 @@ public class EventParsingTests
         reader.Read();
         StockQuote roundTripped = new StockQuoteConverter(new TickerPool(16))
             .Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void ThePublishedSecondAggregateSampleDeserializes()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+
+        Assert.Equal("SPCE", bar.Ticker);
+        Assert.Equal(200, bar.Volume);
+        Assert.Equal(8642007, bar.AccumulatedVolume);
+        Assert.Equal(25.66, bar.OfficialOpenPrice);
+        Assert.Equal(25.3981, bar.VolumeWeightedAveragePrice);
+        Assert.Equal(25.39, bar.Open);
+        Assert.Equal(25.39, bar.Close);
+        Assert.Equal(25.39, bar.High);
+        Assert.Equal(25.39, bar.Low);
+        Assert.Equal(25.3714, bar.DailyVolumeWeightedAveragePrice);
+        Assert.Equal(50, bar.AverageTradeSize);
+    }
+
+    [Fact]
+    public void ThePublishedMinuteAggregateSampleDeserializesThroughTheSameModel()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockMinuteAggregate, "AM");
+
+        Assert.Equal("GTE", bar.Ticker);
+        Assert.Equal(4110, bar.Volume);
+        Assert.Equal(685, bar.AverageTradeSize);
+    }
+
+    // D5, and the unit the A/AM topics document and send: milliseconds, unlike NOI and LULD, which
+    // send nanoseconds for their own timestamp field.
+    [Fact]
+    public void AggregateWindowBoundsAreMillisecondsExposedAsInstants()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+
+        Assert.Equal(1610144868000, bar.StartTimestampMilliseconds);
+        Assert.Equal(1610144869000, bar.EndTimestampMilliseconds);
+        Assert.Equal(Instant.FromUnixTimeMilliseconds(1610144868000), bar.Start);
+        Assert.Equal(Instant.FromUnixTimeMilliseconds(1610144869000), bar.End);
+    }
+
+    // A minute bar spans sixty seconds and a second bar one, which is how a caller tells the two
+    // apart from one model (D-W14).
+    [Fact]
+    public void TheWindowLengthDistinguishesASecondBarFromAMinuteBar()
+    {
+        StockAggregate second = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+        StockAggregate minute = ReadAggregate(Fixtures.StockMinuteAggregate, "AM");
+
+        Assert.Equal(Duration.FromSeconds(1), second.End - second.Start);
+        Assert.Equal(Duration.FromMinutes(1), minute.End - minute.Start);
+    }
+
+    // The published sample omits all three, which is the documentation's own evidence that they
+    // are optional. "otc" is documented as left off when false, so absent reads as false rather
+    // than as an unknown.
+    [Fact]
+    public void AggregateFieldsAbsentFromTheSampleReadAsNullOrFalse()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+
+        Assert.Null(bar.DecimalVolume);
+        Assert.Null(bar.DecimalAccumulatedVolume);
+        Assert.False(bar.Otc);
+    }
+
+    // The live capture exists precisely because the published sample cannot exercise these.
+    [Fact]
+    public void TheLiveAggregateCaptureCarriesTheDecimalVolumesTheSampleOmits()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregateLive, "A");
+
+        Assert.Equal("FCX", bar.Ticker);
+        Assert.Equal("4989.0", bar.DecimalVolume);
+        Assert.Equal("4332125.038360", bar.DecimalAccumulatedVolume);
+    }
+
+    [Fact]
+    public void AnOtcAggregateReadsAsOtc()
+    {
+        StockAggregate bar = ReadAggregate(
+            """[{"ev":"A","sym":"XYZ","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"otc":true}]""",
+            "A");
+
+        Assert.True(bar.Otc);
+    }
+
+    [Fact]
+    public void AnAggregateWithANonStringSymbolThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadAggregate("""[{"ev":"A","sym":123,"v":1}]""", "A"));
+
+        Assert.Contains("StockAggregate.sym", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAggregateCarryingNoSymbolThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadAggregate("""[{"ev":"A","v":1}]""", "A"));
+
+        Assert.Contains("StockAggregate", error.Message, StringComparison.Ordinal);
+    }
+
+    // The topic code the converter was built with is what it writes back, which is the whole reason
+    // one model can serve two topics.
+    [Theory]
+    [InlineData("A")]
+    [InlineData("AM")]
+    public void AnAggregateRoundTripsThroughWriteAndReadUnderEitherTopicCode(string topicCode)
+    {
+        StockAggregate original = ReadAggregate(Fixtures.StockSecondAggregateLive, topicCode);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockAggregateConverter(new TickerPool(16), topicCode)
+                .Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Assert.Contains(
+            $"\"ev\":\"{topicCode}\"",
+            Encoding.UTF8.GetString(buffer.WrittenSpan),
+            StringComparison.Ordinal);
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockAggregate roundTripped = new StockAggregateConverter(new TickerPool(16), topicCode)
+            .Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
 
         Assert.Equal(original, roundTripped);
     }
