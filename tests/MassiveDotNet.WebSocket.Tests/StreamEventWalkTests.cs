@@ -15,10 +15,19 @@ public class StreamEventWalkTests
     // Reads the two known long properties out of one object, ignoring everything else. Whatever
     // sits between "a" and "b" is what each test varies: the walk must leave the reader positioned
     // so that "b" is still found, whatever shape the unrecognised property took.
+    //
+    // Wrapped in a one-element array with a trailing sentinel, matching how the wire actually
+    // delivers events -- one JSON array of objects, walked by System.Text.Json's own array reader,
+    // which resumes from wherever this converter leaves the reader. A bare top-level object has
+    // nothing after its own EndObject: Utf8JsonReader.Read() called past it just returns false
+    // without moving the token (checked against the real reader), so the position assertion below
+    // could never fail against unwrapped input -- exactly the "guard nobody has seen fail" D31
+    // refuses to ship. The sentinel gives an over-read somewhere real to land.
     private static (long A, long B) ReadPair(string json)
     {
-        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
-        reader.Read();
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes($"[{json},0]"));
+        reader.Read(); // StartArray
+        reader.Read(); // the probed object's StartObject
 
         StreamEventWalk walk = new(ref reader, "Probe");
         long a = 0;
@@ -35,6 +44,12 @@ public class StreamEventWalkTests
                 b = walk.Int64(ref reader, "b");
             }
         }
+
+        // A JsonConverter.Read must leave the reader parked on its own EndObject: the wire delivers
+        // a multi-event array, and the enclosing array reader resumes from wherever this walk
+        // stops. One token short or one token past would silently misalign every event after it --
+        // the same class of corruption a missed Skip() causes, one level up.
+        Assert.Equal(JsonTokenType.EndObject, reader.TokenType);
 
         return (a, b);
     }
@@ -130,8 +145,10 @@ public class StreamEventWalkTests
     {
         JsonException error = Assert.Throws<JsonException>(() => ReadPair("""{"a":"not a number"}"""));
 
-        Assert.Contains("Probe", error.Message, StringComparison.Ordinal);
-        Assert.Contains("a", error.Message, StringComparison.Ordinal);
+        // "a" alone is satisfied by the "a" in "Expected a number" or "a String token" -- neither
+        // of which names the property -- so a regression that dropped the property name entirely
+        // would still pass. Only the qualified "Probe.a" actually pins the name into the message.
+        Assert.Contains("Probe.a", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -142,8 +159,9 @@ public class StreamEventWalkTests
             Utf8JsonReader reader = new("[1,2]"u8);
             reader.Read();
 
-            StreamEventWalk walk = new(ref reader, "Probe");
-            _ = walk.NextProperty(ref reader);
+            // The constructor is what rejects a non-object reader -- there is no walk left to
+            // drive once construction has thrown, so NextProperty is never called here.
+            _ = new StreamEventWalk(ref reader, "Probe");
         });
 
         Assert.Contains("Probe", error.Message, StringComparison.Ordinal);

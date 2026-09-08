@@ -25,6 +25,13 @@ namespace MassiveDotNet.WebSocket.Internal;
 /// the reference. A plain struct cannot hold a ref field at all, so there is nothing left to
 /// reject. The cost is <c>ref reader</c> at every call site.
 /// </para>
+/// <para>
+/// Keep an instance in a local, never in a <see langword="readonly"/> field or behind an
+/// <see langword="in"/> or by-value parameter: the compiler defensively copies a mutating call on
+/// any of those, so <see cref="NextProperty"/> would pay its skip against a copy of
+/// <c>_valueConsumed</c> that nothing ever reads back, reinstating the very missed-skip defect this
+/// type exists to make unrepresentable, one level removed.
+/// </para>
 /// </remarks>
 internal struct StreamEventWalk
 {
