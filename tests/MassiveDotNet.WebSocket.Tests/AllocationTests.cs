@@ -211,4 +211,154 @@ public sealed class AllocationTests
             $"Retention grew by {Allocation.Describe(large - small)} between 200 and 20,000 events. "
                 + "A bounded buffer that drops the oldest must cost the same either way.");
     }
+
+    /// <summary>
+    /// An aggregate bar carrying the wire's two decimal-volume strings. Those two are the only
+    /// fields on this model that can allocate: the ticker is pooled, and every other field is a
+    /// number or a bool read straight off the tokens.
+    /// </summary>
+    /// <remarks>
+    /// Regressed on 2026-09-08 by replacing the pooled <c>walk.Ticker(…)</c> call with
+    /// <c>walk.String(…)</c>: measured allocation rose from 64 B to 96 B, the difference being a
+    /// fresh, unpooled "MSFT". Confirmed to fail under the regression before this ceiling was
+    /// committed.
+    /// </remarks>
+    [Fact]
+    public void ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes()
+    {
+        // Measured 64 B on 2026-09-08: two strings, "1.0" and "2.0", for dv and dav.
+        const long Ceiling = 80;
+
+        TickerPool pool = new(16);
+        StockAggregateConverter converter = new(pool, "A");
+        byte[] frame = Encoding.UTF8.GetBytes(
+            """[{"ev":"A","sym":"MSFT","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"dv":"1.0","dav":"2.0"}]""");
+
+        long allocated = Allocation.Measure(() =>
+        {
+            Utf8JsonReader reader = new(frame);
+            reader.Read();
+            reader.Read();
+            _ = converter.Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
+        });
+
+        Assert.True(
+            allocated <= Ceiling,
+            $"Parsing one aggregate allocated {Allocation.Describe(allocated)}, over its "
+                + $"{Allocation.Describe(Ceiling)} ceiling. The ticker is pooled, so only the two "
+                + "decimal-volume strings should remain.");
+    }
+
+    /// <summary>
+    /// The same bar without <c>dv</c> and <c>dav</c>, which is the shape the published sample and
+    /// most live frames carry. Nothing on it can allocate at all.
+    /// </summary>
+    /// <remarks>
+    /// Regressed on 2026-09-08 by the same unpooled-ticker change as above, which takes this path
+    /// from 0 B to 32 B. Confirmed to fail under the regression before this was committed.
+    /// </remarks>
+    [Fact]
+    public void ParsingAnAggregateWithoutDecimalVolumesAllocatesNothing()
+    {
+        TickerPool pool = new(16);
+        StockAggregateConverter converter = new(pool, "A");
+        byte[] frame = Encoding.UTF8.GetBytes(
+            """[{"ev":"A","sym":"MSFT","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2}]""");
+
+        Utf8JsonReader warm = new(frame);
+        warm.Read();
+        warm.Read();
+        _ = converter.Read(ref warm, typeof(StockAggregate), JsonSerializerOptions.Default);
+
+        long allocated = Allocation.Measure(() =>
+        {
+            Utf8JsonReader reader = new(frame);
+            reader.Read();
+            reader.Read();
+            _ = converter.Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
+        });
+
+        // Strict equality, not a ceiling: "allocates nothing" is the claim, and headroom on a zero
+        // would defeat the point (D31).
+        Assert.True(
+            allocated == 0,
+            $"Parsing one aggregate without decimal volumes allocated {Allocation.Describe(allocated)}, "
+                + "and every field on that shape is a pooled ticker or a number.");
+    }
+
+    /// <summary>
+    /// A limit up-limit down band. Its ticker is pooled and its indicators fit inline, so nothing
+    /// on the hot path touches the heap — the strongest claim of the three new topics.
+    /// </summary>
+    /// <remarks>
+    /// Regressed on 2026-09-08 by forcing <c>ConditionSetSerialization.Read</c> to spill instead of
+    /// using the inline buffer: this path went from 0 B to 144 B, a <c>List&lt;int&gt;</c>
+    /// and its backing array. Confirmed to fail under the regression before this was committed.
+    /// </remarks>
+    [Fact]
+    public void ParsingALimitUpLimitDownBandAllocatesNothing()
+    {
+        TickerPool pool = new(16);
+        StockLimitUpLimitDownConverter converter = new(pool);
+        byte[] frame = Encoding.UTF8.GetBytes(
+            """[{"ev":"LULD","T":"MSFT","h":1.0,"l":0.5,"i":[16],"z":3,"t":1,"q":1}]""");
+
+        Utf8JsonReader warm = new(frame);
+        warm.Read();
+        warm.Read();
+        _ = converter.Read(ref warm, typeof(StockLimitUpLimitDown), JsonSerializerOptions.Default);
+
+        long allocated = Allocation.Measure(() =>
+        {
+            Utf8JsonReader reader = new(frame);
+            reader.Read();
+            reader.Read();
+            _ = converter.Read(ref reader, typeof(StockLimitUpLimitDown), JsonSerializerOptions.Default);
+        });
+
+        Assert.True(
+            allocated == 0,
+            $"Parsing one limit up-limit down band allocated {Allocation.Describe(allocated)}, and its "
+                + "ticker is pooled while its indicators fit inline.");
+    }
+
+    /// <summary>
+    /// An imbalance. Its one-character auction type is the only field that can allocate — the
+    /// ticker is pooled and everything else is a number.
+    /// </summary>
+    /// <remarks>
+    /// Regressed on 2026-09-08 by replacing the pooled <c>walk.Ticker(…)</c> call with
+    /// <c>walk.String(…)</c>: measured allocation rose from 24 B to 56 B.
+    /// Confirmed to fail under the regression before this ceiling was committed.
+    /// </remarks>
+    [Fact]
+    public void ParsingAnImbalanceAllocatesNothingBeyondItsAuctionType()
+    {
+        // Measured 24 B on 2026-09-08: one string, "M", for the auction type.
+        const long Ceiling = 32;
+
+        TickerPool pool = new(16);
+        StockImbalanceConverter converter = new(pool);
+        byte[] frame = Encoding.UTF8.GetBytes(
+            """[{"ev":"NOI","T":"MSFT","t":1,"at":930,"a":"M","i":1,"x":10,"o":480,"p":440,"b":25.03}]""");
+
+        Utf8JsonReader warm = new(frame);
+        warm.Read();
+        warm.Read();
+        _ = converter.Read(ref warm, typeof(StockImbalance), JsonSerializerOptions.Default);
+
+        long allocated = Allocation.Measure(() =>
+        {
+            Utf8JsonReader reader = new(frame);
+            reader.Read();
+            reader.Read();
+            _ = converter.Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
+        });
+
+        Assert.True(
+            allocated <= Ceiling,
+            $"Parsing one imbalance allocated {Allocation.Describe(allocated)}, over its "
+                + $"{Allocation.Describe(Ceiling)} ceiling. The ticker is pooled, so only the "
+                + "auction-type string should remain.");
+    }
 }

@@ -39,6 +39,10 @@ ships with.
 | `TheTickerCostsNothingAfterTheFirstEvent` | 1,000 repeat interns of a pooled ticker | 0 B | exactly 0 | alternate lookup → `_pool.TryGetValue(new string(ticker), …)`: 32,000 B |
 | `ConditionsWithinTheInlineCapacityAllocateNothing` | Read a 3-code condition array (inline capacity is 8) | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 320 B |
 | `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, 200 vs. 20,000 events written | ~92,000-111,000 B | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 7,007,240 B |
+| `ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes` | Parse one `A`/`AM` aggregate carrying `dv`/`dav`, ticker pooled | 64 B | 80 B | `walk.Ticker(…)` → `walk.String(…)`: 96 B |
+| `ParsingAnAggregateWithoutDecimalVolumesAllocatesNothing` | Parse the same bar without `dv`/`dav` | 0 B | exactly 0 | same unpooled-ticker change: 32 B |
+| `ParsingALimitUpLimitDownBandAllocatesNothing` | Parse one `LULD` band, ticker pooled, indicators inline | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 144 B |
+| `ParsingAnImbalanceAllocatesNothingBeyondItsAuctionType` | Parse one `NOI` imbalance, ticker pooled | 24 B | 32 B | `walk.Ticker(…)` → `walk.String(…)`: 56 B |
 
 The first three are `GC.GetAllocatedBytesForCurrentThread` deltas, byte-exact on every run — the
 same instrument `MassiveDotNet.Rest.Tests.Allocation` uses, linked rather than copied (see the
@@ -47,6 +51,19 @@ the two exactly-zero claims are asserted with strict equality, because headroom 
 the point. `ParsingATradeAllocatesNothingBeyondItsTradeId`'s 40 B ceiling is 25%, not 20%, over its
 32 B measured figure: 20% of 32 B (6.4 B) is under one allocator size-class step, so a flat
 percentage would have rounded down to nothing.
+
+The last four rows were measured on 2026-09-08 alongside issue #21, gating the three new parse
+paths (`StockAggregate`, `StockImbalance`, `StockLimitUpLimitDown`) the same way. Both exactly-zero
+claims — the aggregate without `dv`/`dav`, and the limit up-limit down band — are asserted with
+strict equality for the same reason the two pre-existing zero claims above are: headroom on a zero
+would defeat the point (D31). The two ceilings carry roughly 20% headroom rounded up to the next
+multiple of 8: 64 B → 80 B for the aggregate's two decimal-volume strings, and 24 B → 32 B for the
+imbalance's one-character auction type. Each of the four was watched failing under its own
+regression before being committed, one at a time, restoring in between; the same
+`ConditionSetSerialization.Read` regression used for `ConditionsWithinTheInlineCapacityAllocateNothing`
+also reddens `ParsingALimitUpLimitDownBandAllocatesNothing`, since one implementation serves the
+trade, quote, and limit up-limit down converters alike (see `ConditionSetSerialization`'s own
+remarks) — expected, not a sign the ceiling measures the wrong thing.
 
 The fourth is `GC.GetTotalMemory`, which is process-wide rather than per-thread, and its ceiling
 follows a different convention — see the next section.
