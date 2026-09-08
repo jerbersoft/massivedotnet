@@ -231,6 +231,54 @@ public class ReconnectTests
         Assert.Equal(1, connection.ReconnectCount);
     }
 
+    // Finding 6's fix (Task 11 review round 1) rebuilt LastReconnected as a raw long written with
+    // Volatile and read back against a NoReconnectYet sentinel, so that a cross-thread reader can
+    // never observe a half-written Instant. None of that machinery was covered: nothing asserted
+    // LastReconnected at all, so an inverted sentinel or the wrong epoch unit would have shipped
+    // silently. An injected FakeClock is what makes the value exact rather than merely non-null,
+    // and it is deliberately set to a NON-zero instant, so that an assertion on the exact value can
+    // catch a write and a read that disagree about the epoch unit. Watched failing both ways before
+    // being committed: writing ToUnixTimeMilliseconds against a FromUnixTimeTicks read fails on the
+    // value, and a getter that never yields null fails on the Assert.Null above. What it does NOT
+    // pin is the sentinel's particular value -- the field is initialised to whatever the sentinel
+    // is, so 0 would pass here too, and only a connection reconnecting at exactly the Unix epoch
+    // would tell them apart. long.MinValue is right because it sits outside any range a live clock
+    // produces; that is an argument, not something this test proves.
+    [Fact]
+    public async Task LastReconnectedIsUnsetUntilAReconnectAndThenReadsTheInjectedClock()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        Instant reconnectedAt = Instant.FromUnixTimeSeconds(1_757_000_000);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(reconnectedAt));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        Assert.Null(connection.LastReconnected);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(reconnectedAt, connection.LastReconnected);
+    }
+
     // G4 (Task 11 review): the brief's TryReconnectAsync raised Faulted for two of the three
     // terminal stops and completed a sink for none of them, so every terminal stop left a
     // consumer's `await foreach` parked forever -- exactly the hang Task 10's F5 closed, arriving
