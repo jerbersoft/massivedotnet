@@ -19,8 +19,12 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private readonly CancellationTokenSource _shutdown = new();
     private bool _disposed;
 
-    // Reset to zero after every message this connection reads and after every successful
-    // reconnect; BackoffFor uses it to size the next reconnect attempt's delay.
+    // Reset to zero after every message this connection successfully reads -- NOT after a
+    // reconnect by itself (Task 11 review round 1, finding 5: a prior comment here claimed the
+    // latter too, but the code never did it). Resetting on connect+auth alone would let a server
+    // that accepts, authenticates, and immediately drops again be hammered at InitialBackoff
+    // forever; resetting only once a message is actually processed is the honest signal that the
+    // connection is working, not merely open. BackoffFor uses this to size the next attempt's delay.
     private int _reconnectAttempt;
 
     // One subscribe (or unsubscribe) in flight at a time: acknowledgements carry no correlation
@@ -119,8 +123,24 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// </remarks>
     public int ReconnectCount { get; private set; }
 
+    // D5's pattern: the raw epoch value is what the read-loop thread writes and a caller polls
+    // from any thread, so it is a single atomic long (Volatile.Read/Write) rather than the
+    // Instant? itself. Instant wraps a Duration (an int days plus a long nanoOfDay), well over a
+    // native word, so writing it directly could let a cross-thread reader observe a HasValue of
+    // true over a half-written value -- a torn, nonsensical timestamp (Task 11 review round 1,
+    // finding 6). NoReconnectYet sits outside any real Unix-tick range a live clock produces.
+    private const long NoReconnectYet = long.MinValue;
+    private long _lastReconnectedTicks = NoReconnectYet;
+
     /// <summary>When the connection was last re-established.</summary>
-    public Instant? LastReconnected { get; private set; }
+    public Instant? LastReconnected
+    {
+        get
+        {
+            long ticks = Volatile.Read(ref _lastReconnectedTicks);
+            return ticks == NoReconnectYet ? null : Instant.FromUnixTimeTicks(ticks);
+        }
+    }
 
     /// <summary>Raised after a successful reconnect, carrying the running count.</summary>
     public event Action<int>? Reconnected;
@@ -186,7 +206,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 // Task 11 review).
                 catch (Exception error) when (error is WebSocketException or MassiveStreamException)
                 {
-                    if (await TryReconnectAsync(error, cancellationToken))
+                    if (await TryReconnectAsync(cancellationToken))
                     {
                         continue;
                     }
@@ -220,13 +240,13 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         }
     }
 
-    private async Task<bool> TryReconnectAsync(Exception cause, CancellationToken cancellationToken)
+    private async Task<bool> TryReconnectAsync(CancellationToken cancellationToken)
     {
         if (_options.Reconnect is not { } reconnect)
         {
             // Faulted is raised by ReadLoopAsync's own outer catch, once, after this returns false
-            // and the caller rethrows `cause` unchanged -- never here, and never with a substitute
-            // exception (G4/G5, Task 11 review).
+            // and the caller's `throw;` rethrows the original drop unchanged -- never here, and
+            // never with a substitute exception (G4/G5, Task 11 review).
             return false;
         }
 
@@ -235,6 +255,32 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             Duration delay = BackoffFor(reconnect, _reconnectAttempt++, Random.Shared.NextDouble() * 2.0 - 1.0);
             // Boundary crossing (produce): the Duration converts here, naming no BCL type.
             await Task.Delay(delay.ToTimeSpan(), cancellationToken);
+
+            // Held only across THIS attempt's connect-and-replay, never around the whole retry
+            // loop's backoff sleeps -- taking it earlier would block a caller's SubscribeAsync/
+            // UnsubscribeAsync across arbitrarily many delays instead of one handshake. Without
+            // this gate, SendActionAsync (the replay below, and every caller send) reached for
+            // _socket with no coordination while this method swapped it underneath it: a caller's
+            // frame could land on a live-but-unauthenticated socket mid-handshake, or on one
+            // ConnectAsync had already disposed, and UnsubscribeAsync -- which waits for no
+            // acknowledgement -- would then remove a pair from the registry the server never
+            // actually dropped (Task 11 review round 1, finding 4). Cancellation-aware so a
+            // shutdown requested while parked here still exits cleanly instead of waiting out the
+            // gate.
+            //
+            // Not a deadlock, and the direction that matters is not the obvious one: the handshake
+            // below reads the socket inline through ConnectAsync/ReadStatusAsync and does not
+            // depend on the read loop pumping, so it needs nothing from the very loop holding this
+            // gate. What DOES matter is a caller who already holds this gate, awaiting an
+            // acknowledgement only the read loop can deliver, while this loop blocks acquiring the
+            // same gate for the replay. Still not a deadlock -- the caller's ack wait is bounded by
+            // HandshakeTimeout, after which it throws MassiveStreamSubscriptionException and
+            // releases the gate in its own finally -- but it does mean a reconnect attempt can be
+            // delayed by up to HandshakeTimeout (10s default) behind an in-flight subscribe.
+            // Accepted: a bounded delay on an already-degraded connection is the better trade
+            // against the state divergence this gate exists to prevent (F-11.3, Task 11 review
+            // round 1).
+            await _subscribeGate.WaitAsync(cancellationToken);
 
             try
             {
@@ -254,45 +300,92 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 }
 
                 ReconnectCount++;
-                LastReconnected = _clock.GetCurrentInstant();
+                // D5's pattern: see the _lastReconnectedTicks field comment for why this is a raw
+                // atomic write rather than assigning LastReconnected directly.
+                Volatile.Write(ref _lastReconnectedTicks, _clock.GetCurrentInstant().ToUnixTimeTicks());
                 Reconnected?.Invoke(ReconnectCount);
 
                 return true;
             }
             catch (MassiveStreamAuthenticationException)
             {
-                // Terminal, and rethrown rather than reported through `cause`: retrying a refused
-                // key hammers the service until the account is limited, and the server closes
-                // abruptly after auth_failed, so every further attempt would reconnect straight
-                // into the same refusal (D-W6). Propagating THIS exception -- not the original drop
-                // -- is what lets ReadLoopAsync's outer catch report the auth failure, not the
-                // transient close that triggered this attempt, as why the stream stopped (G5).
+                // Terminal, and rethrown rather than swallowed here: retrying a refused key hammers
+                // the service until the account is limited, and the server closes abruptly after
+                // auth_failed, so every further attempt would reconnect straight into the same
+                // refusal (D-W6). Propagating THIS exception -- not the drop that triggered the
+                // attempt -- is what lets ReadLoopAsync's outer catch report the auth failure, not
+                // the transient close, as why the stream stopped (G5).
                 throw;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Transient: ConnectAsync's own linked CTS timed the handshake out at
+                // HandshakeTimeout. This is not a caller-requested shutdown -- the filter above
+                // already routes that case elsewhere -- it is the ordinary shape of a partial
+                // outage (a load balancer that accepts TCP while the backend is down answers
+                // exactly this way), and it is more likely than the clean WebSocketException the
+                // rest of this loop is written for. Falling through and backing off again is what
+                // makes this a reconnect rather than a stream that gives up on the first slow
+                // handshake (Task 11 review round 1, finding 3).
             }
             catch (Exception error) when (error is WebSocketException or MassiveStreamException)
             {
                 // Transient: fall through and back off again.
             }
+            finally
+            {
+                _subscribeGate.Release();
+            }
         }
 
+        // Reaching here means the while condition above was false -- cancellation WAS requested;
+        // that is the only way out of the loop besides the `return true` inside it. Throwing here
+        // rather than returning false keeps this a caller-requested exit rather than a spurious
+        // terminal stop: without it, a transient catch above landing in the narrow window right
+        // before this re-check would let ReadLoopAsync's `throw;` rethrow the original drop, which
+        // its outer OCE filter does not match (it is not itself an OperationCanceledException), so
+        // Faulted would fire on what was really just a shutdown (Task 11 review round 1, finding 8).
+        cancellationToken.ThrowIfCancellationRequested();
         return false;
     }
 
     // The single place that ends a connection for good, called from ReadLoopAsync's outer catch.
-    // Three terminal stops reach it: reconnect declined (disabled, or the drop's own retry loop
-    // exhausted), an authentication failure surfacing during a reconnect attempt, and a fault the
-    // reconnect filter never treats as transient at all (a JsonException out of Dispatch, G3).
-    // Faulted is raised first, then every sink is completed -- both before the exception leaves the
-    // loop. Completing sinks here matters as much as raising Faulted does: without it, every one of
-    // those three stops leaves a consumer's `await foreach` parked on a sequence nothing is left
-    // alive to end, which is exactly the hang Task 10's F5 closed, arriving through a third door
-    // (G4, Task 11 review). This is deliberately NOT called for a transient fault that reconnects
-    // successfully -- F5's rule ("never complete on a transient read-loop fault") is unchanged by
-    // this: the distinction that matters is terminal vs transient, not fault vs dispose, and a
-    // transient drop's sequence must survive the reconnect that resumes it.
+    // Three terminal stops reach it: reconnect declined (disabled, or a caller-requested shutdown
+    // during a retry attempt), an authentication failure surfacing during a reconnect attempt, and
+    // a fault the reconnect filter never treats as transient at all (a JsonException out of
+    // Dispatch, G3). Faulted is notified first, then every sink is completed -- a consumer learns
+    // WHY the stream stopped before its sequences end, which is the more useful order -- but the
+    // ordering is not what guarantees CompleteAllSinks() below always runs; the per-handler
+    // try/catch is (Task 11 review round 1, finding 2, F-11.4). Completing sinks here matters as
+    // much as raising Faulted does: without it, every one of the three stops leaves a consumer's
+    // `await foreach` parked on a sequence nothing is left alive to end, which is exactly the hang
+    // Task 10's F5 closed, arriving through a third door (G4, Task 11 review). This is deliberately
+    // NOT called for a transient fault that reconnects successfully -- F5's rule ("never complete on
+    // a transient read-loop fault") is unchanged by this: the distinction that matters is terminal
+    // vs transient, not fault vs dispose, and a transient drop's sequence must survive the reconnect
+    // that resumes it.
     private void StopPermanently(Exception cause)
     {
-        Faulted?.Invoke(cause);
+        // Faulted is a multicast delegate, and .NET stops calling subscribers the instant one
+        // throws -- so a single `Faulted?.Invoke(cause)` inside one try/catch would still starve
+        // every handler registered after the one that throws, on top of replacing `cause` on its
+        // way out and skipping CompleteAllSinks() entirely (finding 2's original repro). Each
+        // subscriber therefore gets its own try/catch: one bad handler loses only its own
+        // notification, never its neighbours', and never sink completion below. Swallowed rather
+        // than logged because core has no logger to hand it to -- the ILogger bridge is Task 12's,
+        // in the DI package -- so there is nowhere honest to report a misbehaving handler from here.
+        foreach (Delegate handler in Faulted?.GetInvocationList() ?? [])
+        {
+            try
+            {
+                ((Action<Exception>)handler)(cause);
+            }
+            catch
+            {
+                // A consumer's handler throwing is not this loop's problem -- see above.
+            }
+        }
+
         CompleteAllSinks();
     }
 

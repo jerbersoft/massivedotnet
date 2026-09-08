@@ -105,11 +105,35 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
             CloseStatus: null,
             CloseStatusDescription: null));
 
-    public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
+    private TaskCompletionSource? _connectGate;
+
+    /// <summary>
+    /// Makes the NEXT <see cref="ConnectAsync"/> call wait until <see cref="ReleaseConnect"/> is
+    /// called. Real thread scheduling cannot be trusted to land a test's own assertions inside a
+    /// handshake that otherwise completes synchronously (nothing on this fake actually awaits
+    /// anything), so this gives a test a deterministic window to observe what a caller does while a
+    /// reconnect attempt is still in flight.
+    /// </summary>
+    public void GateNextConnect() => _connectGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Releases a connect gated by <see cref="GateNextConnect"/>. A no-op if none is gated.</summary>
+    public void ReleaseConnect() => _connectGate?.TrySetResult();
+
+    public async Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
     {
+        // The field is deliberately NOT cleared here before awaiting: ReleaseConnect reads the
+        // same field, so clearing it first would race a test calling ReleaseConnect after this
+        // await has already started but before it reassigns anything -- ReleaseConnect would then
+        // find null and silently no-op forever, hanging until cancellationToken's own much longer
+        // bound. Leaving the field set means ReleaseConnect can always find the gate it needs to
+        // complete; awaiting an already-completed Task on a later call is harmless.
+        if (_connectGate is { } gate)
+        {
+            await gate.Task.WaitAsync(cancellationToken);
+        }
+
         ConnectCount++;
         State = WebSocketState.Open;
-        return Task.CompletedTask;
     }
 
     public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)

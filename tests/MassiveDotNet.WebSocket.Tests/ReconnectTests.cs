@@ -340,4 +340,152 @@ public class ReconnectTests
         Assert.True(moved);
         Assert.Equal("AAPL", enumerator.Current.Ticker);
     }
+
+    // Finding 2 (Task 11 review round 1): Faulted is a multicast delegate that runs consumer code
+    // synchronously on the read-loop thread. Before the fix, one throwing handler propagated out of
+    // StopPermanently, replaced the original cause, and skipped CompleteAllSinks() entirely --
+    // reintroducing the exact G4 hang for every registered sink AND silently starving every other
+    // Faulted subscriber. Two handlers here: the first always throws, the second records what it saw.
+    [Fact]
+    public async Task AThrowingFaultedHandlerDoesNotPreventSinkCompletionOrOtherHandlers()
+    {
+        FakeWebSocket socket = new();
+        socket.EnqueueText(Connected);
+        socket.EnqueueText(AuthSuccess);
+
+        MassiveStreamOptions options = new() { ApiKey = "k", Reconnect = null };
+
+        await using MassiveStreamConnection connection = new(
+            options, MassiveMarket.Stocks, () => socket, new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+
+        TopicSink<StockTrade> sink = CreateSink();
+        connection.AddSink(sink);
+        connection.StartReading();
+
+        TaskCompletionSource<Exception> secondHandlerSaw = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Faulted += _ => throw new InvalidOperationException("handler blew up");
+        connection.Faulted += error => secondHandlerSaw.TrySetResult(error);
+
+        socket.AbortNext();
+
+        Exception seen = await secondHandlerSaw.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+        Assert.IsType<WebSocketException>(seen);
+
+        List<StockTrade> received = await ReadAllAsync(sink, TestContext.Current.CancellationToken);
+        Assert.Empty(received);
+    }
+
+    // Finding 3 (Task 11 review round 1): ConnectAsync bounds its handshake with a linked CTS at
+    // HandshakeTimeout. Before the fix, that timeout firing during a reconnect attempt produced an
+    // OperationCanceledException matching neither TryReconnectAsync's transient filter nor
+    // ReadLoopAsync's outer OCE filter (the SHUTDOWN token was never cancelled), so one slow
+    // handshake killed the stream for good -- exactly the ordinary shape of a partial outage, when
+    // reconnect matters most. second never sends "connected", so its handshake times out; third
+    // completes it. Reconnected firing at all -- rather than Faulted -- is the proof.
+    [Fact]
+    public async Task AHandshakeTimeoutDuringReconnectIsTransientNotTerminal()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        FakeWebSocket third = new();
+        FakeWebSocket[] sockets = [first, second, third];
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        third.EnqueueText(Connected);
+        third.EnqueueText(AuthSuccess);
+
+        MassiveStreamOptions options = new()
+        {
+            ApiKey = "k",
+            HandshakeTimeout = Duration.FromMilliseconds(100),
+            Reconnect = new MassiveStreamReconnectOptions
+            {
+                InitialBackoff = Duration.FromMilliseconds(1),
+                MaxBackoff = Duration.FromMilliseconds(5),
+                Jitter = 0,
+            },
+        };
+
+        await using MassiveStreamConnection connection = new(
+            options, MassiveMarket.Stocks, () => sockets[created++], new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        TaskCompletionSource<Exception> faulted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Faulted += error => faulted.TrySetResult(error);
+
+        first.AbortNext();
+
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, created);
+        Assert.Equal(1, connection.ReconnectCount);
+        Assert.False(faulted.Task.IsCompleted);
+    }
+
+    // Finding 4 (Task 11 review round 1): SendActionAsync reached for _socket with no coordination
+    // while TryReconnectAsync swapped it -- ConnectAsync assigns _socket at its first statement and
+    // only then connects and authenticates, so a caller's frame could land on a live-but-
+    // unauthenticated socket ahead of the auth frame, and UnsubscribeAsync (which waits for no
+    // acknowledgement) would still remove the pair from the registry regardless. Gating the
+    // reconnect's own handshake makes this deterministic: a concurrent UnsubscribeAsync must not
+    // reach the socket until the reconnect's auth-and-replay has finished.
+    [Fact]
+    public async Task AConcurrentUnsubscribeDuringReconnectWaitsForTheHandshakeToFinish()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        // Gate the reconnect's handshake so this test can deterministically observe what a
+        // concurrent caller does while it is still in flight, rather than racing real thread
+        // scheduling against a handshake that otherwise completes synchronously.
+        second.GateNextConnect();
+        first.AbortNext();
+
+        // Give the read loop a moment to actually reach the gate (it runs on a background
+        // Task.Run), so this exercises the PENDING case rather than a call that has not started yet.
+        await Task.Delay(Duration.FromMilliseconds(50).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Task unsubscribeTask = connection.UnsubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        // The gate is still held, so the unsubscribe must not have reached the socket yet: it is
+        // parked on _subscribeGate behind the in-flight reconnect attempt.
+        await Task.Delay(Duration.FromMilliseconds(50).ToTimeSpan(), TestContext.Current.CancellationToken);
+        Assert.Empty(second.Sent);
+
+        second.ReleaseConnect();
+
+        await unsubscribeTask.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // The reconnect's own auth frame landed on the new socket first -- never mid-handshake
+        // ahead of it.
+        Assert.Equal("""{"action":"auth","params":"k"}""", second.Sent[0]);
+        Assert.Equal("""{"action":"unsubscribe","params":"T.AAPL"}""", second.Sent[1]);
+    }
 }
