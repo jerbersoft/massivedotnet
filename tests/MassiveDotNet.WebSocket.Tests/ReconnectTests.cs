@@ -279,6 +279,54 @@ public class ReconnectTests
         Assert.Equal(reconnectedAt, connection.LastReconnected);
     }
 
+    // The FOURTH appearance of one shape on this branch: a consumer's event handler throwing, on a
+    // thread that treats an escaping exception as fatal. Task 11 fixed it for Faulted, Task 12's
+    // review round 1 fixed it for DropObserved -- and Reconnected, raised twenty lines from
+    // Faulted's own guard, was still a bare Invoke inside TryReconnectAsync's try. None of that
+    // try's catches (auth, OCE, WebSocketException-or-MassiveStreamException) match an arbitrary
+    // handler exception, so it escaped to ReadLoopAsync's outer catch and killed the stream through
+    // StopPermanently -- immediately after a reconnect that had just SUCCEEDED, which is the worst
+    // possible moment to discard a healthy connection.
+    [Fact]
+    public async Task AThrowingReconnectedHandlerNeitherKillsTheStreamNorStarvesOtherHandlers()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        List<Exception> faults = [];
+        connection.Faulted += faults.Add;
+
+        // Registered BEFORE the good handler on purpose: a multicast delegate stops at the first
+        // throwing subscriber, so the reverse order would pass even with no guard at all.
+        connection.Reconnected += _ => throw new InvalidOperationException("handler blew up");
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, connection.ReconnectCount);
+        Assert.Empty(faults);
+        Assert.False(connection.ReadLoopTask.IsFaulted);
+    }
+
     // G4 (Task 11 review): the brief's TryReconnectAsync raised Faulted for two of the three
     // terminal stops and completed a sink for none of them, so every terminal stop left a
     // consumer's `await foreach` parked forever -- exactly the hang Task 10's F5 closed, arriving

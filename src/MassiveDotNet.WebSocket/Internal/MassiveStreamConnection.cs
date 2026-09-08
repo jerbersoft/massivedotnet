@@ -303,7 +303,10 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 // D5's pattern: see the _lastReconnectedTicks field comment for why this is a raw
                 // atomic write rather than assigning LastReconnected directly.
                 Volatile.Write(ref _lastReconnectedTicks, _clock.GetCurrentInstant().ToUnixTimeTicks());
-                Reconnected?.Invoke(ReconnectCount);
+                // Guarded like Faulted below: a throwing handler here escaped every filter
+                // in this try and killed the stream through StopPermanently -- right after a
+                // reconnect that had just succeeded (see EventRaiser).
+                EventRaiser.Raise(Reconnected, ReconnectCount);
 
                 return true;
             }
@@ -366,25 +369,10 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     // that resumes it.
     private void StopPermanently(Exception cause)
     {
-        // Faulted is a multicast delegate, and .NET stops calling subscribers the instant one
-        // throws -- so a single `Faulted?.Invoke(cause)` inside one try/catch would still starve
-        // every handler registered after the one that throws, on top of replacing `cause` on its
-        // way out and skipping CompleteAllSinks() entirely (finding 2's original repro). Each
-        // subscriber therefore gets its own try/catch: one bad handler loses only its own
-        // notification, never its neighbours', and never sink completion below. Swallowed rather
-        // than logged because core has no logger to hand it to -- the ILogger bridge is Task 12's,
-        // in the DI package -- so there is nowhere honest to report a misbehaving handler from here.
-        foreach (Delegate handler in Faulted?.GetInvocationList() ?? [])
-        {
-            try
-            {
-                ((Action<Exception>)handler)(cause);
-            }
-            catch
-            {
-                // A consumer's handler throwing is not this loop's problem -- see above.
-            }
-        }
+        // Through EventRaiser, so one throwing subscriber loses only its own notification -- never
+        // its neighbours', and never CompleteAllSinks() below, which is what a bare Invoke here
+        // skipped when a handler threw (finding 2's original repro).
+        EventRaiser.Raise(Faulted, cause);
 
         CompleteAllSinks();
     }

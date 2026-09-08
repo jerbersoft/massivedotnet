@@ -231,36 +231,7 @@ public sealed class MassiveStockStream : IAsyncDisposable
             _lastDropObservedAt = now;
         }
 
-        RaiseSafely(DropObserved, topicCode, droppedCount);
-    }
-
-    // F1 (Task 12 review round 1, CRITICAL): a throwing DropObserved handler used to propagate
-    // straight into the read loop -- OnItemDropped runs on that thread, called from
-    // TopicSink.Write -> TryWrite -> the channel's itemDropped callback -> ItemDropped?.Invoke().
-    // The exception landed in ReadLoopAsync's own outer catch, which treats it as a terminal fault:
-    // StopPermanently ran, Faulted fired with the HANDLER's exception, and every sink completed --
-    // so a notification that some events were merely dropped took down the entire live feed,
-    // strictly worse than the drop it was reporting. This is exactly the defect Task 11 fixed for
-    // MassiveStreamConnection.Faulted (see StopPermanently's own remarks, twenty lines from that
-    // one): a multicast delegate stops calling subscribers the instant one throws, so each
-    // subscriber needs its own try/catch, not one wrapped around the whole invocation. A single
-    // small helper rather than inlining this at the raise site, so a third event added to this
-    // class later reuses it instead of repeating the dance a third time. Swallowed rather than
-    // logged -- core has no logger to hand it to; the ILogger bridge is the DI package's job.
-    private static void RaiseSafely<T1, T2>(Action<T1, T2>? handlers, T1 argument1, T2 argument2)
-    {
-        foreach (Delegate handler in handlers?.GetInvocationList() ?? [])
-        {
-            try
-            {
-                ((Action<T1, T2>)handler)(argument1, argument2);
-            }
-            catch
-            {
-                // See the remarks above: a consumer's handler throwing is not this stream's
-                // problem, and must never end the stream for every OTHER consumer too.
-            }
-        }
+        EventRaiser.Raise(DropObserved, topicCode, droppedCount);
     }
 
     /// <summary>Stops receiving a topic for the given symbols.</summary>
