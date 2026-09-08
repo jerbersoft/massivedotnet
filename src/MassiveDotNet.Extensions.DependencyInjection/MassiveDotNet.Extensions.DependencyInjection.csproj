@@ -15,10 +15,12 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
+    <ProjectReference Include="../MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
   </ItemGroup>
 
 </Project>

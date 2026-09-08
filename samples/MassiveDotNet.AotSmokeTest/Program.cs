@@ -1,9 +1,13 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using MassiveDotNet;
 using MassiveDotNet.Http;
 using MassiveDotNet.Rest;
 using MassiveDotNet.Rest.Models;
+using MassiveDotNet.WebSocket;
+using MassiveDotNet.WebSocket.Events;
+using MassiveDotNet.WebSocket.Internal;
 using NodaTime;
 using NodaTime.Text;
 
@@ -478,8 +482,107 @@ if (flaky.SentQueries.Any(query => query.Split("apiKey=", StringSplitOptions.Non
     return 1;
 }
 
+// L3 (Task 14 ruling): this project referenced only .Rest through Task 13, so every "AOT publish
+// clean" claim made while building the streaming package proved nothing about it. The client is
+// constructed and disposed without connecting -- this project publishes in CI, which has no key
+// and no network (rule 13) -- and both hand-written event converters are built and read against a
+// literal frame each, so ILC roots them and the ConditionSet InlineArray rather than trimming
+// instantiations nothing here would otherwise reach.
+Console.WriteLine("\nstreaming: rooting MassiveStreamClient, the event converters, and ConditionSet:");
+
+MassiveStreamOptions streamOptions = new() { ApiKey = "aot-smoke-test-key" };
+
+await using (MassiveStreamClient streamClient = new(streamOptions))
+{
+    Console.WriteLine($"  client constructed for feed {streamOptions.Feed}, not connected");
+}
+
+const string StreamTradeFrame =
+    """[{"ev":"T","sym":"MSFT","x":4,"i":"12345","z":3,"p":114.125,"s":100,"c":[0,12],"t":1536036818784,"pt":1536036818763,"q":3681328}]""";
+const string StreamQuoteFrame =
+    """[{"ev":"Q","sym":"MSFT","bx":4,"bp":114.125,"bs":100,"ax":7,"ap":114.128,"as":160,"c":0,"i":[604],"t":1536036818784,"q":50385480,"z":3}]""";
+
+TickerPool streamTickers = new(16);
+
+// Matches TopicSink<T>'s own EmptyOptions: JsonSerializerOptions.Default is annotated
+// RequiresUnreferencedCode/RequiresDynamicCode, which would fail this very publish (rule 3) --
+// and neither converter's Read ever consults its options parameter regardless.
+JsonSerializerOptions streamJsonOptions = new();
+
+Utf8JsonReader tradeReader = new(Encoding.UTF8.GetBytes(StreamTradeFrame));
+tradeReader.Read();  // [
+tradeReader.Read();  // {
+StockTrade streamTrade = new StockTradeConverter(streamTickers)
+    .Read(ref tradeReader, typeof(StockTrade), streamJsonOptions);
+
+Utf8JsonReader quoteReader = new(Encoding.UTF8.GetBytes(StreamQuoteFrame));
+quoteReader.Read();  // [
+quoteReader.Read();  // {
+StockQuote streamQuote = new StockQuoteConverter(streamTickers)
+    .Read(ref quoteReader, typeof(StockQuote), streamJsonOptions);
+
+Console.WriteLine(
+    $"  trade   : {streamTrade.Ticker} {streamTrade.Price:F3} x {streamTrade.Size}  "
+    + $"conditions [{string.Join(",", streamTrade.Conditions.AsSpan().ToArray())}]");
+Console.WriteLine(
+    $"  quote   : {streamQuote.Ticker} bid {streamQuote.BidPrice:F3} x {streamQuote.BidSize}  "
+    + $"ask {streamQuote.AskPrice:F3} x {streamQuote.AskSize}  "
+    + $"indicators [{string.Join(",", streamQuote.Indicators.AsSpan().ToArray())}]");
+
+if (streamTrade.Ticker != "MSFT" || streamTrade.Conditions.AsSpan().ToArray() is not [0, 12])
+{
+    Console.Error.WriteLine("FAIL: expected the streamed MSFT trade with conditions [0, 12].");
+    return 1;
+}
+
+if (streamQuote.Ticker != "MSFT" || streamQuote.Indicators.AsSpan().ToArray() is not [604])
+{
+    Console.Error.WriteLine("FAIL: expected the streamed MSFT quote with indicator [604].");
+    return 1;
+}
+
+// Rooted deliberately, never entered. Executing the two converters above proves THEY survive Native
+// AOT, but it leaves the machinery a real consumer actually goes through -- MassiveStockStream,
+// TopicSink<T>'s bounded Channel<T>, MassiveTopicSubscription<T>'s compiler-generated async
+// enumerator, EventRaiser's GetInvocationList casts, and the reconnect loop -- unreachable, so ILC
+// never analyses it and rules 3 and 4 say nothing about it. Reaching it from a branch guarded on
+// args, which ILC cannot fold away, roots the whole graph for analysis while guaranteeing it never
+// runs: CI has no key and no network (rule 13), and nothing passes this flag.
+if (args.Length > 0 && args[0] == "--rooting-only-never-passed")
+{
+    await RootPublicStreamingSurfaceAsync(streamOptions);
+}
+
 Console.WriteLine("\nAOT smoke test passed.");
 return 0;
+
+static async Task RootPublicStreamingSurfaceAsync(MassiveStreamOptions options)
+{
+    await using MassiveStreamClient client = new(options);
+    await using MassiveStockStream stream = await client.ConnectStocksAsync();
+
+    stream.Reconnected += count => Console.WriteLine(count);
+    stream.Faulted += error => Console.WriteLine(error.Message);
+    stream.DropObserved += (topicCode, dropped) => Console.WriteLine($"{topicCode} {dropped}");
+
+    MassiveTopicSubscription<StockTrade> trades = await stream.SubscribeTradesAsync(["MSFT"]);
+    MassiveTopicSubscription<StockQuote> quotes = await stream.SubscribeQuotesAsync(["MSFT"]);
+
+    await foreach (StockTrade trade in trades)
+    {
+        Console.WriteLine(trade.Ticker);
+        break;
+    }
+
+    await foreach (StockQuote quote in quotes)
+    {
+        Console.WriteLine(quote.Ticker);
+        break;
+    }
+
+    Console.WriteLine($"{stream.ReconnectCount} {stream.LastReconnected}");
+    await stream.UnsubscribeAsync(StockTopic.Trades, ["MSFT"]);
+}
 
 static string Describe(Agg bar) =>
     $"  {LocalDatePattern.Iso.Format(bar.Timestamp.InUtc().Date)}  O {bar.Open,9:F4}  H {bar.High,9:F4}  "

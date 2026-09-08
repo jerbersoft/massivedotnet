@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- AllocationTests in Task 13 asserts byte counts, and tiered compilation makes them vary
+         between runs of the same binary. Same reasoning as the Rest test project (D31). -->
+    <TieredCompilation>false</TieredCompilation>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MassiveDotNet.WebSocket.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- FakeClock for the handshake tests; test-only, never referenced from src (rule 7). -->
+    <PackageReference Include="NodaTime.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Allocation is internal to MassiveDotNet.Rest.Tests; linked rather than copied so the two
+         projects share one measurement harness instead of two that can silently drift (Task 13). -->
+    <Compile Include="../MassiveDotNet.Rest.Tests/Allocation.cs" Link="Allocation.cs" />
+  </ItemGroup>
+
+</Project>

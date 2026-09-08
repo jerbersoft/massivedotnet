@@ -50,14 +50,32 @@ public sealed partial class TemporalTypeTests
         typeof(MassiveClientOptions).Assembly,
         typeof(MassiveRestClient).Assembly,
         typeof(MassiveServiceCollectionExtensions).Assembly,
+        typeof(MassiveDotNet.WebSocket.MassiveFeeds).Assembly,
     ];
 
     [Fact]
     public void EveryShippedLibraryIsInspected()
     {
-        string[] projects = Directory.GetDirectories(Path.Combine(RepositoryRoot, "src"));
+        // Compared by name rather than by count: a count is satisfied by listing one assembly
+        // twice, which is exactly the mistake this guard exists to catch.
+        string[] projects =
+        [
+            .. Directory
+                .GetDirectories(Path.Combine(RepositoryRoot, "src"))
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Order(StringComparer.Ordinal)
+        ];
 
-        Assert.Equal(projects.Length, ShippedAssemblies.Length);
+        string[] inspected =
+        [
+            .. ShippedAssemblies
+                .Select(assembly => assembly.GetName().Name)
+                .OfType<string>()
+                .Order(StringComparer.Ordinal)
+        ];
+
+        Assert.Equal(projects, inspected);
     }
 
     /// <summary>
