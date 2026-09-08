@@ -681,22 +681,33 @@ public class StockStreamTests
 
         ValueTask disposeTask = stream.DisposeAsync();
 
-        await using IAsyncEnumerator<StockAggregate> barEnumerator =
-            bars.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        // try/finally: a failure below would otherwise leave the read loop parked in the
+        // uncancellable gate forever (this test's own bounded WaitAsync calls guard against a
+        // hang IN this method, not against the gate outliving it) and disposeTask abandoned
+        // incomplete. Releasing unconditionally is what keeps a future assertion inserted above
+        // from producing a wedged read loop on top of whatever it was reporting.
+        try
+        {
+            await using IAsyncEnumerator<StockAggregate> barEnumerator =
+                bars.GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
-        bool moved = await barEnumerator.MoveNextAsync()
-            .AsTask()
-            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+            bool moved = await barEnumerator.MoveNextAsync()
+                .AsTask()
+                .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
 
-        Assert.False(moved);
+            Assert.False(moved);
 
-        // The read loop has not been drained yet -- proven structurally, not by timing: nothing
-        // can complete MassiveStreamConnection.DisposeAsync's own await of ReadLoopTask until the
-        // gate above is released, which has not happened yet at this line, and the read loop was
-        // confirmed to already be blocked on it before disposal ran.
-        Assert.False(disposeTask.IsCompleted);
-
-        socket.ReleaseReceive();
+            // The read loop has not been drained yet -- proven structurally, not by timing:
+            // nothing can complete MassiveStreamConnection.DisposeAsync's own await of
+            // ReadLoopTask until the gate above is released, which has not happened yet at this
+            // line, and the read loop was confirmed to already be blocked on it before disposal
+            // ran.
+            Assert.False(disposeTask.IsCompleted);
+        }
+        finally
+        {
+            socket.ReleaseReceive();
+        }
 
         await disposeTask.AsTask().WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
     }

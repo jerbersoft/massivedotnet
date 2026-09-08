@@ -279,9 +279,15 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
             // TryRead first, rather than going straight to the awaiting ReadAsync below: it is
             // what lets GateReceiveAfter be armed before a single frame is queued and still let
             // every already-buffered frame through untouched -- only a genuinely empty queue
-            // reaches the gate check. Behaviourally equivalent to the unconditional ReadAsync
-            // this replaces when nothing is gated, since a Channel<T> read the data is already
-            // waiting for resolves without a real suspension either way.
+            // reaches the gate check. Equivalent to the unconditional ReadAsync this replaces ONLY
+            // when nothing is gated AND cancellationToken is not already cancelled: TryRead does
+            // not check the token before dequeuing, ReadAsync does (verified: an unbounded channel
+            // holding one item, read with an already-cancelled token, throws via ReadAsync but
+            // returns the item via TryRead). So with the shutdown token cancelled while a frame is
+            // still queued, this delivers that frame instead of throwing at once, deferring the
+            // exit to the read loop's own `while (!cancellationToken.IsCancellationRequested)`
+            // check on its next iteration -- at most one extra message, not "nothing is delivered
+            // after dispose".
             if (!_inbound.Reader.TryRead(out frame))
             {
                 if (_receiveGate is { } gate && _framesDelivered >= _gateAfterFrameCount)
