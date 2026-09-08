@@ -165,14 +165,14 @@ public sealed class AllocationTests
     /// red under an unbounded channel before being committed.
     /// </para>
     /// <para>
-    /// The 512 KB bound is deliberately loose, the same reasoning
+    /// The 256 KB bound is deliberately loose, the same reasoning
     /// <c>CursorTraversalTests.RetainsNoMemoryProportionalToThePagesTraversed</c> uses for its own
     /// 8 MB bound: <see cref="GC.GetTotalMemory(bool)"/> is process-wide, not a per-thread
     /// allocation delta, so it carries noise from whatever else lives on the heap. Measured on
     /// 2026-09-08, the correct bounded-channel implementation grew by roughly 92,000-111,000 B
     /// between the small and large pass depending on what else was resident; regressed to an
     /// unbounded channel (<c>Channel.CreateUnbounded&lt;T&gt;()</c>), the same test grew by
-    /// 7,007,240 B — over 60x the bound. The gap between "genuine, bounded growth" and "unbounded
+    /// 7,007,240 B — over 27x the bound. The gap between "genuine, bounded growth" and "unbounded
     /// accumulation" is wide enough that a loose bound is still a meaningful one.
     /// </para>
     /// </remarks>
@@ -207,7 +207,7 @@ public sealed class AllocationTests
         long large = Retained(1_000);
 
         Assert.True(
-            large - small < 512 * 1024,
+            large - small < 256 * 1024,
             $"Retention grew by {Allocation.Describe(large - small)} between 200 and 20,000 events. "
                 + "A bounded buffer that drops the oldest must cost the same either way.");
     }
