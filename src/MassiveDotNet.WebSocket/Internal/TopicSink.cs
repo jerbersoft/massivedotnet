@@ -40,7 +40,17 @@ internal sealed class TopicSink<T> : ITopicSink
                 SingleReader = true,
                 SingleWriter = true,
             },
-            itemDropped: _ => subscription!.RecordDrop());
+            itemDropped: _ =>
+            {
+                subscription!.RecordDrop();
+
+                // A second, independent notification alongside RecordDrop above, not instead of
+                // it: RecordDrop is what makes Subscription.DroppedCount exact, and this is a
+                // separate seam an owner (MassiveStockStream, Task 12) can subscribe to without
+                // polling that count. Left wired exactly where RecordDrop already runs so a drop
+                // can never update one and not the other.
+                ItemDropped?.Invoke();
+            });
 
         subscription = new MassiveTopicSubscription<T>(_channel.Reader);
         Subscription = subscription;
@@ -50,6 +60,9 @@ internal sealed class TopicSink<T> : ITopicSink
 
     /// <summary>The caller-facing sequence.</summary>
     public MassiveTopicSubscription<T> Subscription { get; }
+
+    /// <summary>Raised every time a write drops the oldest buffered event.</summary>
+    public event Action? ItemDropped;
 
     public void Write(ref Utf8JsonReader reader)
     {

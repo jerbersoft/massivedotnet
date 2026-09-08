@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/MassiveDotNet.Extensions.DependencyInjection/MassiveDotNet.Extensions.DependencyInjection.csproj" />
+    <ProjectReference Include="../../src/MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
   </ItemGroup>
 
 </Project>
