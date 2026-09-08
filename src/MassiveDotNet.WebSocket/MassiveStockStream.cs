@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 using MassiveDotNet.WebSocket.Events;
 using MassiveDotNet.WebSocket.Internal;
 using NodaTime;
@@ -57,7 +58,18 @@ public sealed class MassiveStockStream : IAsyncDisposable
     private readonly object _sinkLock = new();
     private TopicSink<StockTrade>? _trades;
     private TopicSink<StockQuote>? _quotes;
+    private TopicSink<StockAggregate>? _secondAggregates;
+    private TopicSink<StockAggregate>? _minuteAggregates;
+    private TopicSink<StockImbalance>? _imbalances;
+    private TopicSink<StockLimitUpLimitDown>? _limitUpLimitDown;
     private bool _disposed;
+
+    // Every sink this stream has created, in creation order, so disposal ends every sequence
+    // without naming each topic. Naming them one by one is how a topic gets left out of DisposeAsync
+    // and its consumer's `await foreach` parks forever -- and with six topics here and five more
+    // markets to come, that list would be copied twenty-four more times. Guarded by _sinkLock, the
+    // same lock that guards the fields above and _disposed.
+    private readonly List<ITopicSink> _createdSinks = [];
 
     private readonly object _dropThrottleLock = new();
     private Instant? _lastDropObservedAt;
@@ -170,28 +182,8 @@ public sealed class MassiveStockStream : IAsyncDisposable
         return sink.Subscription;
     }
 
-    private TopicSink<StockTrade> GetOrCreateTradeSink()
-    {
-        lock (_sinkLock)
-        {
-            // F5 (Task 12 review round 1): checked before minting anything, so a disposed stream
-            // never does work it is about to throw away, and the exception names THIS type rather
-            // than the internal connection a consumer cannot name or act on.
-            ObjectDisposedException.ThrowIf(_disposed, this);
-
-            if (_trades is null)
-            {
-                string topicCode = StockTopic.Trades.ToCode();
-                TopicSink<StockTrade> sink = new(topicCode, _options.TopicBufferCapacity, new StockTradeConverter(_tickers));
-
-                sink.ItemDropped += () => OnItemDropped(topicCode, sink.Subscription.DroppedCount);
-                _connection.AddSink(sink);
-                _trades = sink;
-            }
-
-            return _trades;
-        }
-    }
+    private TopicSink<StockTrade> GetOrCreateTradeSink() =>
+        GetOrCreateSink(ref _trades, StockTopic.Trades, new StockTradeConverter(_tickers));
 
     /// <summary>Subscribes to NBBO quotes.</summary>
     /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
@@ -212,24 +204,131 @@ public sealed class MassiveStockStream : IAsyncDisposable
         return sink.Subscription;
     }
 
-    private TopicSink<StockQuote> GetOrCreateQuoteSink()
+    private TopicSink<StockQuote> GetOrCreateQuoteSink() =>
+        GetOrCreateSink(ref _quotes, StockTopic.Quotes, new StockQuoteConverter(_tickers));
+
+    // One creator for every topic. Holds the check-create-register sequence, the disposal refusal,
+    // and the drop wiring in one place, so a new topic is a field and a call rather than another
+    // copy of this body. The locking argument is unchanged and is documented on _sinkLock above:
+    // the sink returned is the LOCAL value this lock resolved, never a re-read of the field after
+    // the round trip, which is what let two concurrent first callers observe different winners.
+    //
+    // The converter is constructed by the caller even when the sink already exists, so a repeat
+    // subscribe allocates one converter it discards. Subscribing is a network round trip that
+    // happens once or twice per topic per process; the alternative is a factory delegate, which
+    // allocates a closure on every call instead.
+    private TopicSink<T> GetOrCreateSink<T>(
+        ref TopicSink<T>? field, StockTopic topic, JsonConverter<T> converter)
     {
         lock (_sinkLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_quotes is null)
+            if (field is null)
             {
-                string topicCode = StockTopic.Quotes.ToCode();
-                TopicSink<StockQuote> sink = new(topicCode, _options.TopicBufferCapacity, new StockQuoteConverter(_tickers));
+                string topicCode = topic.ToCode();
+                TopicSink<T> sink = new(topicCode, _options.TopicBufferCapacity, converter);
 
                 sink.ItemDropped += () => OnItemDropped(topicCode, sink.Subscription.DroppedCount);
                 _connection.AddSink(sink);
-                _quotes = sink;
+                _createdSinks.Add(sink);
+                field = sink;
             }
 
-            return _quotes;
+            return field;
         }
+    }
+
+    /// <summary>Subscribes to second-by-second aggregate bars.</summary>
+    /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
+    /// <param name="cancellationToken">Cancels the subscribe.</param>
+    /// <returns>
+    /// This stream's second-bar sequence. Calling again widens the ticker set and returns the same
+    /// sequence, so a topic has one buffer and one consumer however many times it is called.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">The stream has been disposed.</exception>
+    /// <exception cref="MassiveStreamSubscriptionException">
+    /// The server acknowledged fewer subscriptions than were requested.
+    /// </exception>
+    public async Task<MassiveTopicSubscription<StockAggregate>> SubscribeSecondAggregatesAsync(
+        IReadOnlyCollection<string> tickers,
+        CancellationToken cancellationToken = default)
+    {
+        TopicSink<StockAggregate> sink = GetOrCreateSink(
+            ref _secondAggregates,
+            StockTopic.SecondAggregates,
+            new StockAggregateConverter(_tickers, StockTopic.SecondAggregates.ToCode()));
+
+        await _connection.SubscribeAsync(StockTopic.SecondAggregates.ToCode(), tickers, cancellationToken);
+
+        return sink.Subscription;
+    }
+
+    /// <summary>Subscribes to minute-by-minute aggregate bars.</summary>
+    /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
+    /// <param name="cancellationToken">Cancels the subscribe.</param>
+    /// <returns>
+    /// This stream's minute-bar sequence, separate from the second-bar sequence even though both
+    /// carry <see cref="StockAggregate"/>: sinks are keyed by wire code, not by type.
+    /// </returns>
+    /// <exception cref="ObjectDisposedException">The stream has been disposed.</exception>
+    /// <exception cref="MassiveStreamSubscriptionException">
+    /// The server acknowledged fewer subscriptions than were requested.
+    /// </exception>
+    public async Task<MassiveTopicSubscription<StockAggregate>> SubscribeMinuteAggregatesAsync(
+        IReadOnlyCollection<string> tickers,
+        CancellationToken cancellationToken = default)
+    {
+        TopicSink<StockAggregate> sink = GetOrCreateSink(
+            ref _minuteAggregates,
+            StockTopic.MinuteAggregates,
+            new StockAggregateConverter(_tickers, StockTopic.MinuteAggregates.ToCode()));
+
+        await _connection.SubscribeAsync(StockTopic.MinuteAggregates.ToCode(), tickers, cancellationToken);
+
+        return sink.Subscription;
+    }
+
+    /// <summary>Subscribes to net order imbalance auction events.</summary>
+    /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
+    /// <param name="cancellationToken">Cancels the subscribe.</param>
+    /// <returns>This stream's imbalance sequence, on the same terms as the other topics.</returns>
+    /// <exception cref="ObjectDisposedException">The stream has been disposed.</exception>
+    /// <exception cref="MassiveStreamSubscriptionException">
+    /// The server acknowledged fewer subscriptions than were requested -- including every pair when
+    /// the account's plan does not cover this topic, which the server refuses rather than ignores
+    /// (issue #60).
+    /// </exception>
+    public async Task<MassiveTopicSubscription<StockImbalance>> SubscribeImbalancesAsync(
+        IReadOnlyCollection<string> tickers,
+        CancellationToken cancellationToken = default)
+    {
+        TopicSink<StockImbalance> sink = GetOrCreateSink(
+            ref _imbalances, StockTopic.Imbalances, new StockImbalanceConverter(_tickers));
+
+        await _connection.SubscribeAsync(StockTopic.Imbalances.ToCode(), tickers, cancellationToken);
+
+        return sink.Subscription;
+    }
+
+    /// <summary>Subscribes to limit up-limit down price band events.</summary>
+    /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
+    /// <param name="cancellationToken">Cancels the subscribe.</param>
+    /// <returns>This stream's band sequence, on the same terms as the other topics.</returns>
+    /// <exception cref="ObjectDisposedException">The stream has been disposed.</exception>
+    /// <exception cref="MassiveStreamSubscriptionException">
+    /// The server acknowledged fewer subscriptions than were requested.
+    /// </exception>
+    public async Task<MassiveTopicSubscription<StockLimitUpLimitDown>> SubscribeLimitUpLimitDownAsync(
+        IReadOnlyCollection<string> tickers,
+        CancellationToken cancellationToken = default)
+    {
+        TopicSink<StockLimitUpLimitDown> sink = GetOrCreateSink(
+            ref _limitUpLimitDown, StockTopic.LimitUpLimitDown, new StockLimitUpLimitDownConverter(_tickers));
+
+        await _connection.SubscribeAsync(StockTopic.LimitUpLimitDown.ToCode(), tickers, cancellationToken);
+
+        return sink.Subscription;
     }
 
     // The count carried is the subscription's own running total AT THE MOMENT of the drop that
@@ -299,6 +398,8 @@ public sealed class MassiveStockStream : IAsyncDisposable
     /// <summary>Closes the stream and ends every topic sequence.</summary>
     public async ValueTask DisposeAsync()
     {
+        ITopicSink[] created;
+
         lock (_sinkLock)
         {
             if (_disposed)
@@ -307,10 +408,17 @@ public sealed class MassiveStockStream : IAsyncDisposable
             }
 
             _disposed = true;
+            created = [.. _createdSinks];
         }
 
-        _trades?.Complete();
-        _quotes?.Complete();
+        // Completed here rather than left to the connection's own CompleteAllSinks: that runs only
+        // after the read loop has been awaited, so relying on it would delay every consumer's
+        // `await foreach` ending by the length of that drain. Complete() is TryComplete()
+        // underneath, so the connection completing them again below is a no-op.
+        foreach (ITopicSink sink in created)
+        {
+            sink.Complete();
+        }
 
         await _connection.DisposeAsync();
 

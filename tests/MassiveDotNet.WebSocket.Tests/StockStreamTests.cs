@@ -508,4 +508,134 @@ public class StockStreamTests
             await enumerator.DisposeAsync();
         }
     }
+
+    [Fact]
+    public async Task EachTopicSubscribesUnderItsOwnWireCode()
+    {
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync();
+        await using MassiveStockStream _ = stream;
+
+        socket.AutoAcknowledgeSubscribes = true;
+
+        await stream.SubscribeSecondAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        await stream.SubscribeMinuteAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        await stream.SubscribeImbalancesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        await stream.SubscribeLimitUpLimitDownAsync(["AAPL"], TestContext.Current.CancellationToken);
+
+        Assert.Contains(socket.Sent, frame => frame.Contains("\"params\":\"A.AAPL\"", StringComparison.Ordinal));
+        Assert.Contains(socket.Sent, frame => frame.Contains("\"params\":\"AM.AAPL\"", StringComparison.Ordinal));
+        Assert.Contains(socket.Sent, frame => frame.Contains("\"params\":\"NOI.AAPL\"", StringComparison.Ordinal));
+        Assert.Contains(socket.Sent, frame => frame.Contains("\"params\":\"LULD.AAPL\"", StringComparison.Ordinal));
+    }
+
+    // Two topics over ONE model type. Sinks are keyed by wire code, not by CLR type, so this needs
+    // nothing special from the dispatcher -- but it is the assumption D-W14 rests on, so it is
+    // pinned rather than assumed.
+    [Fact]
+    public async Task TheTwoAggregateTopicsAreSeparateSequencesDespiteSharingAModel()
+    {
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync();
+        await using MassiveStockStream _ = stream;
+
+        socket.AutoAcknowledgeSubscribes = true;
+
+        MassiveTopicSubscription<StockAggregate> second =
+            await stream.SubscribeSecondAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        MassiveTopicSubscription<StockAggregate> minute =
+            await stream.SubscribeMinuteAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken);
+
+        Assert.NotSame(second, minute);
+
+        socket.EnqueueText(
+            """[{"ev":"A","sym":"AAPL","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1000,"e":2000}]""");
+        socket.EnqueueText(
+            """[{"ev":"AM","sym":"AAPL","v":9,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1000,"e":61000}]""");
+
+        await using IAsyncEnumerator<StockAggregate> secondBars =
+            second.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        await using IAsyncEnumerator<StockAggregate> minuteBars =
+            minute.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await secondBars.MoveNextAsync());
+        Assert.True(await minuteBars.MoveNextAsync());
+        Assert.Equal(1, secondBars.Current.Volume);
+        Assert.Equal(9, minuteBars.Current.Volume);
+    }
+
+    [Fact]
+    public async Task SubscribingToATopicTwiceReturnsTheSameSequence()
+    {
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync();
+        await using MassiveStockStream _ = stream;
+
+        socket.AutoAcknowledgeSubscribes = true;
+
+        MassiveTopicSubscription<StockLimitUpLimitDown> first =
+            await stream.SubscribeLimitUpLimitDownAsync(["AAPL"], TestContext.Current.CancellationToken);
+        MassiveTopicSubscription<StockLimitUpLimitDown> second =
+            await stream.SubscribeLimitUpLimitDownAsync(["MSFT"], TestContext.Current.CancellationToken);
+
+        Assert.Same(first, second);
+    }
+
+    // The reason disposal iterates the created sinks rather than naming each field: a topic added
+    // after the first must still have its sequence ended, or its consumer's await foreach parks
+    // forever. Naming fields one by one is exactly how a topic gets left out.
+    [Fact]
+    public async Task DisposalEndsEverySequenceIncludingTopicsAddedAfterTheFirst()
+    {
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync();
+
+        socket.AutoAcknowledgeSubscribes = true;
+
+        MassiveTopicSubscription<StockTrade> trades =
+            await stream.SubscribeTradesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        MassiveTopicSubscription<StockAggregate> bars =
+            await stream.SubscribeSecondAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        MassiveTopicSubscription<StockImbalance> imbalances =
+            await stream.SubscribeImbalancesAsync(["AAPL"], TestContext.Current.CancellationToken);
+
+        await stream.DisposeAsync();
+
+        await using IAsyncEnumerator<StockTrade> tradeEnumerator =
+            trades.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        await using IAsyncEnumerator<StockAggregate> barEnumerator =
+            bars.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        await using IAsyncEnumerator<StockImbalance> imbalanceEnumerator =
+            imbalances.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.False(await tradeEnumerator.MoveNextAsync());
+        Assert.False(await barEnumerator.MoveNextAsync());
+        Assert.False(await imbalanceEnumerator.MoveNextAsync());
+    }
+
+    [Fact]
+    public async Task ADisposedStreamRefusesEveryNewTopicByName()
+    {
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync();
+
+        socket.AutoAcknowledgeSubscribes = true;
+        await stream.DisposeAsync();
+
+        ObjectDisposedException error = await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            stream.SubscribeMinuteAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken));
+
+        Assert.Contains(nameof(MassiveStockStream), error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnsubscribingFromANewTopicSendsItsWireCode()
+    {
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync();
+        await using MassiveStockStream _ = stream;
+
+        socket.AutoAcknowledgeSubscribes = true;
+        await stream.SubscribeImbalancesAsync(["AAPL"], TestContext.Current.CancellationToken);
+        await stream.UnsubscribeAsync(StockTopic.Imbalances, ["AAPL"], TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            socket.Sent,
+            frame => frame.Contains("\"action\":\"unsubscribe\"", StringComparison.Ordinal)
+                && frame.Contains("\"params\":\"NOI.AAPL\"", StringComparison.Ordinal));
+    }
 }
