@@ -172,7 +172,7 @@ public sealed class AllocationTests
     /// 2026-09-08, the correct bounded-channel implementation grew by roughly 92,000-111,000 B
     /// between the small and large pass depending on what else was resident; regressed to an
     /// unbounded channel (<c>Channel.CreateUnbounded&lt;T&gt;()</c>), the same test grew by
-    /// 7,007,240 B — over 27x the bound. The gap between "genuine, bounded growth" and "unbounded
+    /// 7,007,240 B — 26.7x the bound. The gap between "genuine, bounded growth" and "unbounded
     /// accumulation" is wide enough that a loose bound is still a meaningful one.
     /// </para>
     /// </remarks>
