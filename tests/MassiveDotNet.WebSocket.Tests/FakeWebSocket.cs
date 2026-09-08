@@ -212,7 +212,26 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
     public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
     {
         string text = Encoding.UTF8.GetString(buffer.Span);
-        Sent.Add(text);
+
+        // Recording the send and completing whoever is waiting for it are one critical section,
+        // not two: a waiter registered between the Add and the scan would miss the very send it
+        // registered for, and then wait out its own timeout on a frame that had already gone.
+        lock (_sendLock)
+        {
+            Sent.Add(text);
+
+            for (int i = _sendWaiters.Count - 1; i >= 0; i--)
+            {
+                (string frame, int count, TaskCompletionSource completion) = _sendWaiters[i];
+
+                if (string.Equals(frame, text, StringComparison.Ordinal) && CountSent(frame) >= count)
+                {
+                    _sendWaiters.RemoveAt(i);
+                    completion.TrySetResult();
+                }
+            }
+        }
+
         SentSignal.TrySetResult();
         SentSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -222,6 +241,62 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    // Guarded together with Sent by _sendLock; see SendAsync for why registering and completing
+    // cannot be two separate atomic steps.
+    private readonly object _sendLock = new();
+    private readonly List<(string Frame, int Count, TaskCompletionSource Completion)> _sendWaiters = [];
+
+    /// <summary>
+    /// Completes once <paramref name="frame"/> has been sent at least <paramref name="count"/>
+    /// times, counting sends that already happened before this call.
+    /// </summary>
+    /// <remarks>
+    /// A real server cannot answer a frame before it has received it, and this fake can: an
+    /// acknowledgement enqueued before the send it answers is taken by the already-parked read
+    /// loop first, finds nothing tracking it yet, and is ignored -- which surfaces as a shortfall
+    /// reported against a test that did in fact answer. Awaiting this before enqueuing is what
+    /// keeps the causality honest.
+    /// <para>
+    /// Counted rather than merely present, because the frame a test waits for is often not the
+    /// first of its text: a reconnect replays <c>T.AAPL</c> and a caller re-subscribing to the
+    /// same pair sends byte-identical text, and only the SECOND of those publishes the state the
+    /// test is about to exercise. <see cref="SentSignal"/> cannot express that -- it fires on any
+    /// send and is replaced immediately, so which send it announced is unrecoverable.
+    /// </para>
+    /// </remarks>
+    public Task WaitForSendAsync(string frame, int count = 1)
+    {
+        TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (_sendLock)
+        {
+            if (CountSent(frame) >= count)
+            {
+                return Task.CompletedTask;
+            }
+
+            _sendWaiters.Add((frame, count, completion));
+        }
+
+        return completion.Task;
+    }
+
+    // Caller holds _sendLock.
+    private int CountSent(string frame)
+    {
+        int matches = 0;
+
+        foreach (string sent in Sent)
+        {
+            if (string.Equals(sent, frame, StringComparison.Ordinal))
+            {
+                matches++;
+            }
+        }
+
+        return matches;
     }
 
     // Parses exactly the shape MassiveStreamConnection.SendActionAsync produces --

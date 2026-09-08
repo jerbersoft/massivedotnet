@@ -227,20 +227,27 @@ public class ReplayVerificationTests
         Assert.Contains("""{"action":"subscribe","params":"T.AAPL"}""", third.Sent);
     }
 
-    // The reason the replay gets its own acknowledgement slot rather than sharing SubscribeAsync's.
-    // A caller subscribing inside the verification window assigns over _pendingAcks; if the replay
-    // lived there too, its tracking would be erased and it would report a loss on a server that had
-    // answered -- a false alarm on the one signal that has to be trustworthy.
+    // Issue #62. One acknowledgement credits exactly ONE waiter, and the replay is credited first.
+    // Pinning that needs a genuine collision, which is what the version of this test written for
+    // #52 never produced: with the fake acknowledging every frame as part of the send itself, the
+    // replay's answer is credited while the test is still awaiting Reconnected, so the caller's
+    // slot is never live at the same time and one answer never has to choose between two waiters.
+    // That test passed with the crediting order reversed AND with SubscribeAsync erasing the replay
+    // slot outright -- a guard nobody has seen fail is indistinguishable from a clean tree (D31).
+    // Here the answer is withheld until both slots owe the identical text, and then exactly one
+    // arrives.
     [Fact]
-    public async Task ACallerSubscribingInsideTheWindowNeitherErasesNorStealsTheReplaysAcknowledgements()
+    public async Task ACallerSubscribingToTheSamePairDoesNotStealTheReplaysAcknowledgement()
     {
         FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
-        FakeWebSocket second = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
         int created = 0;
 
         first.EnqueueText(Connected);
         first.EnqueueText(AuthSuccess);
 
+        // Deliberately NOT auto-acknowledging: this test owns the timing of the single answer,
+        // which is the whole point of it.
         second.EnqueueText(Connected);
         second.EnqueueText(AuthSuccess);
 
@@ -264,15 +271,101 @@ public class ReplayVerificationTests
         first.AbortNext();
         await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
 
-        // The same pair the replay is waiting on, so both owe the identical acknowledgement text --
-        // the collision the two slots and OnStatus's replay-first crediting exist to resolve. The
-        // caller's own subscribe must still be acknowledged rather than starved by the replay.
-        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+        // The same pair the replay is still waiting on, so both slots owe byte-identical
+        // acknowledgement text. Started rather than awaited: only one answer is coming, so exactly
+        // one of the two waiters must go unanswered, and this is the one that should.
+        Task subscribe = connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        // The SECOND send of that frame -- the first was the replay's own, so waiting on mere
+        // presence would return before the caller had published anything to collide with.
+        await second.WaitForSendAsync("""{"action":"subscribe","params":"T.AAPL"}""", count: 2)
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        second.EnqueueText("""[{"ev":"status","status":"success","message":"subscribed to: T.AAPL"}]""");
 
         await connection.ReplayVerification.WaitAsync(
             Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
 
         Assert.Empty(reported);
+
+        // The other half of "exactly one waiter": the answer went to the replay, so the caller is
+        // left short and told so. Crediting both from one message would leave this passing, which
+        // is the shortfall that then never gets reported to anyone.
+        MassiveStreamSubscriptionException starved =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(() => subscribe);
+
+        Assert.Equal(1, starved.Unacknowledged);
+    }
+
+    // Issue #62, the second defect one test could not separate: SubscribeAsync assigns over
+    // _pendingAcks, and had the replay shared that slot, a caller subscribing inside the
+    // verification window would erase what the replay is waiting on.
+    //
+    // The consequence is NOT a false alarm, which is exactly what makes it easy to write a test
+    // that cannot see it -- the first draft of this one asserted a false alarm and passed with the
+    // slot erased. VerifyReplayAsync checks the slot is still the one it armed
+    // (ReferenceEquals(_replayAcks, owed)) and returns SILENTLY when a later reconnect has taken it
+    // over; an erased slot is indistinguishable from that hand-off, so the verification gives up
+    // and tells nobody. A shortfall nobody is told about is the failure D33 exists to prevent,
+    // arriving one level up. So this asserts the loss IS raised with a caller's subscribe landing
+    // mid-window. A DIFFERENT pair isolates it from the crediting order above: the caller's slot
+    // never holds the text the replay owes, so nothing here can be explained by precedence.
+    [Fact]
+    public async Task ACallerSubscribingInsideTheWindowDoesNotSilenceTheReplaysShortfall()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<MassiveStreamSubscriptionException> lost =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += error => lost.TrySetResult(error);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        // T.AAPL is replayed and never answered, so a genuine shortfall is counting down
+        // throughout everything below.
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // A pair the replay is not waiting on, acknowledged in full so the caller's subscribe
+        // completes and its finally clears _pendingAcks -- exactly the assignment that would take
+        // the replay's tracking with it were the two sharing one slot.
+        Task subscribe = connection.SubscribeAsync("T", ["MSFT"], TestContext.Current.CancellationToken);
+
+        await second.WaitForSendAsync("""{"action":"subscribe","params":"T.MSFT"}""")
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        second.EnqueueText("""[{"ev":"status","status":"success","message":"subscribed to: T.MSFT"}]""");
+        await subscribe;
+
+        // The overlap is the whole point, so it is asserted rather than hoped for: had the window
+        // already closed, everything below would pass for the wrong reason.
+        Assert.False(connection.ReplayVerification.IsCompleted);
+
+        MassiveStreamSubscriptionException reported = await lost.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, reported.Unacknowledged);
+        Assert.Contains("T.AAPL", reported.Message, StringComparison.Ordinal);
     }
 
     // Only the pairs that actually went unanswered are named. A shortfall that reported the whole
@@ -309,7 +402,8 @@ public class ReplayVerificationTests
 
         // Answer exactly one of the two replayed pairs. The fake sends one subscribe frame per
         // parameter, so this is the shape a partially-entitled or partially-retired topic set takes.
-        await WaitForSendAsync(second, """{"action":"subscribe","params":"T.MSFT"}""");
+        await second.WaitForSendAsync("""{"action":"subscribe","params":"T.MSFT"}""")
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
         second.EnqueueText("""[{"ev":"status","status":"success","message":"subscribed to: T.MSFT"}]""");
 
         MassiveStreamSubscriptionException reported = await lost.Task.WaitAsync(
@@ -477,22 +571,5 @@ public class ReplayVerificationTests
         }, cancellationToken);
 
         return await consumer.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), cancellationToken);
-    }
-
-    // A real server cannot answer a frame before it has received it, and a FakeWebSocket can: an
-    // acknowledgement enqueued before the send it answers can be consumed by the already-parked
-    // read loop first, racing whatever published what it was waiting for. Polling the recorded
-    // sends keeps the causality honest, the same fix ReconnectTests applies through SentSignal --
-    // used here rather than SentSignal because the frame being waited for is the SECOND of two the
-    // replay sends, which a single signal cannot distinguish.
-    private static async Task WaitForSendAsync(FakeWebSocket socket, string frame)
-    {
-        using CancellationTokenSource timeout = new();
-        timeout.CancelAfter(Duration.FromSeconds(5).ToTimeSpan());
-
-        while (!socket.Sent.Contains(frame, StringComparer.Ordinal))
-        {
-            await Task.Delay(Duration.FromMilliseconds(5).ToTimeSpan(), timeout.Token);
-        }
     }
 }
