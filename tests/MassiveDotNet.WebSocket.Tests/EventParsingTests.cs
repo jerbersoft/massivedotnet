@@ -48,6 +48,16 @@ public class EventParsingTests
             .Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
     }
 
+    private static StockLimitUpLimitDown ReadLimitUpLimitDown(string json)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockLimitUpLimitDownConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockLimitUpLimitDown), JsonSerializerOptions.Default);
+    }
+
     [Fact]
     public void ThePublishedTradeSampleDeserializes()
     {
@@ -619,6 +629,110 @@ public class EventParsingTests
         reader.Read();
         StockImbalance roundTripped = new StockImbalanceConverter(new TickerPool(16))
             .Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void ThePublishedLimitUpLimitDownSampleDeserializes()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDown);
+
+        Assert.Equal("MSFT", band.Ticker);
+        Assert.Equal(492.99, band.HighPrice);
+        Assert.Equal(446.04, band.LowPrice);
+        Assert.Equal([16], band.Indicators.AsSpan().ToArray());
+        Assert.Equal(3, band.Tape);
+        Assert.Equal(5925769, band.SequenceNumber);
+    }
+
+    // Like NOI and unlike every other stock topic, the ticker arrives as "T".
+    [Fact]
+    public void TheLimitUpLimitDownTickerIsReadFromTheCapitalTProperty()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDownLive);
+
+        Assert.Equal("ATHR", band.Ticker);
+    }
+
+    // D-W15. Massive's documentation says this field is milliseconds; its own sample and the live
+    // wire both say nanoseconds. The assertion is on the resulting YEAR rather than on the raw
+    // long, because that is what distinguishes the two readings: as milliseconds these values land
+    // roughly fifty-six million years out, which no equality check on the stored long would catch.
+    [Fact]
+    public void TheLimitUpLimitDownTimestampIsNanosecondsNotTheDocumentedMilliseconds()
+    {
+        StockLimitUpLimitDown published = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDown);
+        StockLimitUpLimitDown live = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDownLive);
+
+        Assert.Equal(1764086430905642800, published.TimestampNanoseconds);
+        Assert.Equal(Epoch.FromNanoseconds(1764086430905642800), published.Timestamp);
+        Assert.Equal(2025, published.Timestamp.InUtc().Year);
+        Assert.Equal(2026, live.Timestamp.InUtc().Year);
+    }
+
+    [Fact]
+    public void LimitUpLimitDownIndicatorsReadAsAConditionSet()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(
+            """[{"ev":"LULD","T":"AAPL","h":1.0,"l":0.5,"i":[9,10,11],"z":1,"t":1,"q":1}]""");
+
+        Assert.Equal([9, 10, 11], band.Indicators.AsSpan().ToArray());
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownWithNoIndicatorsReadsAsAnEmptySet()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(
+            """[{"ev":"LULD","T":"AAPL","h":1.0,"l":0.5,"z":1,"t":1,"q":1}]""");
+
+        Assert.Equal(0, band.Indicators.Count);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownWithoutATapeReadsAsNull()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(
+            """[{"ev":"LULD","T":"AAPL","h":1.0,"l":0.5,"i":[16],"t":1,"q":1}]""");
+
+        Assert.Null(band.Tape);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownWithANonStringTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadLimitUpLimitDown("""[{"ev":"LULD","T":123,"t":1}]"""));
+
+        Assert.Contains("StockLimitUpLimitDown.T", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownCarryingNoTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadLimitUpLimitDown("""[{"ev":"LULD","t":1}]"""));
+
+        Assert.Contains("StockLimitUpLimitDown", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownRoundTripsThroughWriteAndRead()
+    {
+        StockLimitUpLimitDown original = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDownLive);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockLimitUpLimitDownConverter(new TickerPool(16))
+                .Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockLimitUpLimitDown roundTripped = new StockLimitUpLimitDownConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockLimitUpLimitDown), JsonSerializerOptions.Default);
 
         Assert.Equal(original, roundTripped);
     }

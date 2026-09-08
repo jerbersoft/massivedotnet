@@ -61,4 +61,24 @@ internal static class Fixtures
     public const string StockImbalance = """
         [{"ev":"NOI","T":"NTEST.Q","t":1601318039223013600,"at":930,"a":"M","i":44,"x":10,"o":480,"p":440,"b":25.03}]
         """;
+
+    /// <summary>
+    /// The published sample for a limit up-limit down event, the <c>LULD</c> topic, wrapped in the
+    /// array the wire actually delivers. Note <c>t</c>: nineteen digits, which is nanoseconds,
+    /// against the documentation's own prose claiming milliseconds (D-W15).
+    /// </summary>
+    public const string StockLimitUpLimitDown = """
+        [{"ev":"LULD","T":"MSFT","h":492.99,"l":446.04,"i":[16],"z":3,"t":1764086430905642800,"q":5925769}]
+        """;
+
+    /// <summary>
+    /// A limit up-limit down event captured live from <c>wss://socket.massive.com/stocks</c> on
+    /// 2026-09-08 at 09:52 ET. Committed because it is the evidence that settles the timestamp
+    /// unit against the documentation's prose: a fixture drawn from the published sample alone
+    /// would be one contested document arguing with another part of itself. Reviewed before
+    /// committing: it carries no account identifier and no URL.
+    /// </summary>
+    public const string StockLimitUpLimitDownLive = """
+        [{"ev":"LULD","h":3.63,"l":2.97,"i":[15],"z":3,"T":"ATHR","t":1788877046310003385,"q":3209681}]
+        """;
 }
