@@ -45,18 +45,8 @@ public sealed partial class StreamEventWalkUsageTests
     [Fact]
     public void StreamEventWalkNeverAppearsAsAFieldOrAParameter()
     {
-        List<string> violations = [];
-
-        foreach (string file in EnumerateWebSocketSourceFiles())
-        {
-            string code = StripCommentsAndLiterals(File.ReadAllText(file));
-
-            foreach (int index in FindViolations(code))
-            {
-                int line = code.Take(index).Count(c => c == '\n') + 1;
-                violations.Add($"{Path.GetRelativePath(RepositoryRoot, file)}:{line}");
-            }
-        }
+        (List<string> violations, int structDeclarations, int localDeclarations) =
+            ScanDirectory(Path.Combine(RepositoryRoot, "src", "MassiveDotNet.WebSocket"));
 
         Assert.True(
             violations.Count == 0,
@@ -64,6 +54,52 @@ public sealed partial class StreamEventWalkUsageTests
             + "anything else that could defensively copy it and silently lose its skip-debt flag "
             + $"(see {TypeName}'s own <remarks>).{Environment.NewLine}"
             + string.Join(Environment.NewLine, violations.Select(v => $"  {v}")));
+
+        // Guards the guard: zero violations over a directory the type has moved out of, or one
+        // this scan is no longer pointed at, is the same "0 violations" a real, working scan
+        // reports -- silently stops guarding rather than failing loudly. Asserting the scan
+        // actually recognised the struct's own declaration and at least one sanctioned local
+        // usage is what tells the two apart, mirroring
+        // MassiveDotNet.Rest.Tests.TemporalTypeTests.EveryDirectoryHoldingSourceIsScanned's reason
+        // for existing. See TheFoundSignalGuardFailsOverADirectoryThatNeverMentionsTheType below for
+        // proof this actually fires.
+        Assert.True(
+            structDeclarations >= 1,
+            $"The scan found no {TypeName} struct declaration under src/MassiveDotNet.WebSocket -- "
+            + "either the type moved, or this scan is no longer pointed at the right directory, and "
+            + "either way the 0-violations result above is not evidence of anything.");
+
+        Assert.True(
+            localDeclarations >= 1,
+            $"The scan found no sanctioned {TypeName} local-variable usage under "
+            + "src/MassiveDotNet.WebSocket -- either every converter stopped using the type, or this "
+            + "scan is no longer pointed at the right directory, and either way the 0-violations "
+            + "result above is not evidence of anything.");
+    }
+
+    /// <summary>
+    /// Proves the found-signal guard above actually fires rather than being dead code itself: run
+    /// the identical <see cref="ScanDirectory"/> logic over a sibling project's source, which is
+    /// real, existing C# that never mentions <see cref="TypeName"/> at all -- the same shape a
+    /// "moved to another project" regression would leave behind. Both counts must come back zero,
+    /// which is exactly what would fail <see cref="StreamEventWalkNeverAppearsAsAFieldOrAParameter"/>'s
+    /// two assertions above if this were the real scan.
+    /// </summary>
+    [Fact]
+    public void TheFoundSignalGuardFailsOverADirectoryThatNeverMentionsTheType()
+    {
+        (List<string> violations, int structDeclarations, int localDeclarations) =
+            ScanDirectory(Path.Combine(RepositoryRoot, "src", "MassiveDotNet.Extensions.DependencyInjection"));
+
+        // Sanity check on the fixture itself: a directory with no .cs files at all would trivially
+        // report zero of everything, which would prove nothing about the classifier. This one has
+        // real source; it is simply source that never names StreamEventWalk.
+        Assert.NotEmpty(EnumerateSourceFiles(
+            Path.Combine(RepositoryRoot, "src", "MassiveDotNet.Extensions.DependencyInjection")));
+
+        Assert.Empty(violations);
+        Assert.Equal(0, structDeclarations);
+        Assert.Equal(0, localDeclarations);
     }
 
     [Fact]
@@ -166,9 +202,22 @@ public sealed partial class StreamEventWalkUsageTests
     /// the index of each one that is not the struct's own declaration, a constructor declaration or
     /// invocation, or an unqualified local variable declaration.
     /// </summary>
-    private static List<int> FindViolations(string strippedSource)
+    private static List<int> FindViolations(string strippedSource) => Classify(strippedSource).Violations;
+
+    /// <summary>
+    /// Classifies every occurrence of <see cref="TypeName"/> in already-stripped source. Splits out
+    /// from <see cref="FindViolations"/> so <see cref="ScanDirectory"/> can additionally count the
+    /// struct declaration and local-declaration sites it recognised as allowed -- not just the
+    /// violations -- which is what lets the caller tell "found nothing to complain about because
+    /// everything is clean" apart from "found nothing to complain about because there was nothing
+    /// here to look at".
+    /// </summary>
+    private static (List<int> Violations, int StructDeclarations, int LocalDeclarations) Classify(
+        string strippedSource)
     {
         List<int> violations = [];
+        int structDeclarations = 0;
+        int localDeclarations = 0;
 
         foreach (Match occurrence in TypeNameToken().Matches(strippedSource))
         {
@@ -179,6 +228,7 @@ public sealed partial class StreamEventWalkUsageTests
             // Allowed: the struct's own declaration, "struct StreamEventWalk".
             if (PrecededByStruct().IsMatch(before))
             {
+                structDeclarations++;
                 continue;
             }
 
@@ -199,18 +249,54 @@ public sealed partial class StreamEventWalkUsageTests
 
             if (looksLikeADeclarationWithAnIdentifier && !precededByADisqualifyingToken)
             {
+                localDeclarations++;
                 continue;
             }
 
             violations.Add(index);
         }
 
-        return violations;
+        return (violations, structDeclarations, localDeclarations);
     }
 
-    private static IEnumerable<string> EnumerateWebSocketSourceFiles() =>
+    /// <summary>
+    /// Scans every <c>*.cs</c> file under <paramref name="root"/>, aggregating violations alongside
+    /// how many times the struct's own declaration and a sanctioned local declaration were actually
+    /// recognised. The counts are what let <see cref="StreamEventWalkNeverAppearsAsAFieldOrAParameter"/>
+    /// tell a genuinely clean scan apart from a vacuous one: zero violations over zero files scanned,
+    /// or zero files that happen to mention the type at all -- for instance if the type were ever
+    /// moved to another project -- would otherwise report the same "0 violations" pass a real,
+    /// working guard reports. <see cref="TheFoundSignalGuardFailsOverADirectoryThatNeverMentionsTheType"/>
+    /// proves this actually distinguishes the two.
+    /// </summary>
+    private static (List<string> Violations, int StructDeclarations, int LocalDeclarations) ScanDirectory(
+        string root)
+    {
+        List<string> violations = [];
+        int structDeclarations = 0;
+        int localDeclarations = 0;
+
+        foreach (string file in EnumerateSourceFiles(root))
+        {
+            string code = StripCommentsAndLiterals(File.ReadAllText(file));
+            (List<int> fileViolations, int fileStructs, int fileLocals) = Classify(code);
+
+            foreach (int index in fileViolations)
+            {
+                int line = code.Take(index).Count(c => c == '\n') + 1;
+                violations.Add($"{Path.GetRelativePath(RepositoryRoot, file)}:{line}");
+            }
+
+            structDeclarations += fileStructs;
+            localDeclarations += fileLocals;
+        }
+
+        return (violations, structDeclarations, localDeclarations);
+    }
+
+    private static IEnumerable<string> EnumerateSourceFiles(string root) =>
         Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src", "MassiveDotNet.WebSocket"), "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file));
 
     private static bool IsBuildOutput(string path) =>
@@ -375,6 +461,15 @@ public sealed partial class StreamEventWalkUsageTests
     [GeneratedRegex(@"^\s*[A-Za-z_]\w*\s*=(?!=)")]
     private static partial Regex FollowedByIdentifierAndEquals();
 
+    // NOTE: this deliberately flags `ref StreamEventWalk walk` alongside `in StreamEventWalk walk`
+    // and a by-value parameter, even though a `ref` parameter would in fact be safe -- `ref` binds
+    // to the caller's own storage rather than defensively copying it, which is exactly what the
+    // struct's own <remarks> ask for. No `ref StreamEventWalk` parameter exists anywhere today, and
+    // being stricter than strictly necessary is harmless while that stays true, so this list is left
+    // alone rather than special-cased. Whoever first has a legitimate reason to pass this by `ref`
+    // (e.g. a helper the walk is threaded through without becoming a field) should read this comment
+    // before concluding the scanner itself is wrong: dropping `ref` from the token list below is the
+    // correct, sound loosening at that point, not a workaround.
     [GeneratedRegex(@"(?:\b(?:private|internal|public|protected|readonly|static|volatile|ref|in|out|params)\s*|[(,]\s*)$")]
     private static partial Regex PrecededByFieldOrParameterToken();
 }
