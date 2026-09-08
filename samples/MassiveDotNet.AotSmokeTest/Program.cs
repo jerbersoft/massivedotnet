@@ -541,8 +541,48 @@ if (streamQuote.Ticker != "MSFT" || streamQuote.Indicators.AsSpan().ToArray() is
     return 1;
 }
 
+// Rooted deliberately, never entered. Executing the two converters above proves THEY survive Native
+// AOT, but it leaves the machinery a real consumer actually goes through -- MassiveStockStream,
+// TopicSink<T>'s bounded Channel<T>, MassiveTopicSubscription<T>'s compiler-generated async
+// enumerator, EventRaiser's GetInvocationList casts, and the reconnect loop -- unreachable, so ILC
+// never analyses it and rules 3 and 4 say nothing about it. Reaching it from a branch guarded on
+// args, which ILC cannot fold away, roots the whole graph for analysis while guaranteeing it never
+// runs: CI has no key and no network (rule 13), and nothing passes this flag.
+if (args.Length > 0 && args[0] == "--rooting-only-never-passed")
+{
+    await RootPublicStreamingSurfaceAsync(streamOptions);
+}
+
 Console.WriteLine("\nAOT smoke test passed.");
 return 0;
+
+static async Task RootPublicStreamingSurfaceAsync(MassiveStreamOptions options)
+{
+    await using MassiveStreamClient client = new(options);
+    await using MassiveStockStream stream = await client.ConnectStocksAsync();
+
+    stream.Reconnected += count => Console.WriteLine(count);
+    stream.Faulted += error => Console.WriteLine(error.Message);
+    stream.DropObserved += (topicCode, dropped) => Console.WriteLine($"{topicCode} {dropped}");
+
+    MassiveTopicSubscription<StockTrade> trades = await stream.SubscribeTradesAsync(["MSFT"]);
+    MassiveTopicSubscription<StockQuote> quotes = await stream.SubscribeQuotesAsync(["MSFT"]);
+
+    await foreach (StockTrade trade in trades)
+    {
+        Console.WriteLine(trade.Ticker);
+        break;
+    }
+
+    await foreach (StockQuote quote in quotes)
+    {
+        Console.WriteLine(quote.Ticker);
+        break;
+    }
+
+    Console.WriteLine($"{stream.ReconnectCount} {stream.LastReconnected}");
+    await stream.UnsubscribeAsync(StockTopic.Trades, ["MSFT"]);
+}
 
 static string Describe(Agg bar) =>
     $"  {LocalDatePattern.Iso.Format(bar.Timestamp.InUtc().Date)}  O {bar.Open,9:F4}  H {bar.High,9:F4}  "

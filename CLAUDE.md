@@ -235,6 +235,7 @@ Every place the SDK touches a BCL temporal signature. Extend this table when a n
 | `Stopwatch.GetElapsedTime` | consume | pattern match, then `Duration.FromTimeSpan` | `MassiveRetryHandlerTests` |
 | `ClientWebSocketOptions.KeepAliveInterval` | produce | `keepAlive.ToTimeSpan()` | `ClientWebSocketAdapter` ctor |
 | `CancellationTokenSource.CancelAfter` | produce | `cts.CancelAfter(timeout.ToTimeSpan())` | `MassiveStreamConnection.ConnectAsync` |
+| `CancellationTokenSource.CancelAfter` | produce | `cts.CancelAfter(timeout.ToTimeSpan())` | `MassiveStreamConnection.SubscribeAsync` |
 | `Task.Delay` | produce | `Task.Delay(delay.ToTimeSpan(), cancellationToken)` | `MassiveStreamConnection.TryReconnectAsync` |
 | `Task.WaitAsync(TimeSpan)` | produce | `task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), ct)` | WebSocket tests |
 
