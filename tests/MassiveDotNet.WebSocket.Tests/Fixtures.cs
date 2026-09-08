@@ -52,4 +52,13 @@ internal static class Fixtures
     public const string StockSecondAggregateLive = """
         [{"ev":"A","sym":"FCX","v":4989,"av":4332125,"op":75.98,"vw":78.0894,"o":78.1,"c":78.08,"h":78.125,"l":78.07,"a":76.8404,"z":62,"s":1788877043000,"e":1788877044000,"dv":"4989.0","dav":"4332125.038360"}]
         """;
+
+    /// <summary>
+    /// The published sample for a net order imbalance event, the <c>NOI</c> topic, wrapped in the
+    /// array the wire actually delivers. No live capture accompanies it: the topic answered
+    /// <c>not authorized</c> on the available key on 2026-09-08 (issue #60).
+    /// </summary>
+    public const string StockImbalance = """
+        [{"ev":"NOI","T":"NTEST.Q","t":1601318039223013600,"at":930,"a":"M","i":44,"x":10,"o":480,"p":440,"b":25.03}]
+        """;
 }

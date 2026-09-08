@@ -38,6 +38,16 @@ public class EventParsingTests
             .Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
     }
 
+    private static StockImbalance ReadImbalance(string json)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockImbalanceConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
+    }
+
     [Fact]
     public void ThePublishedTradeSampleDeserializes()
     {
@@ -502,6 +512,113 @@ public class EventParsingTests
         reader.Read();
         StockAggregate roundTripped = new StockAggregateConverter(new TickerPool(16), topicCode)
             .Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void ThePublishedImbalanceSampleDeserializes()
+    {
+        StockImbalance imbalance = ReadImbalance(Fixtures.StockImbalance);
+
+        Assert.Equal("NTEST.Q", imbalance.Ticker);
+        Assert.Equal("M", imbalance.AuctionType);
+        Assert.Equal(44, imbalance.SymbolSequence);
+        Assert.Equal(10, imbalance.ExchangeId);
+        Assert.Equal(480, imbalance.ImbalanceQuantity);
+        Assert.Equal(440, imbalance.PairedQuantity);
+        Assert.Equal(25.03, imbalance.BookClearingPrice);
+    }
+
+    // This topic sends the ticker as "T", not "sym" -- the same letter that is the trade topic's
+    // own wire code. A converter that assumed "sym" would find no ticker and throw on every event.
+    [Fact]
+    public void TheImbalanceTickerIsReadFromTheCapitalTProperty()
+    {
+        StockImbalance imbalance = ReadImbalance(Fixtures.StockImbalance);
+
+        Assert.Equal("NTEST.Q", imbalance.Ticker);
+    }
+
+    // Nanoseconds, documented and sampled that way -- unlike the aggregate topics, which send
+    // milliseconds. Read as milliseconds this instant would land roughly fifty million years out.
+    [Fact]
+    public void TheImbalanceTimestampIsNanosecondsExposedAsAnInstant()
+    {
+        StockImbalance imbalance = ReadImbalance(Fixtures.StockImbalance);
+
+        Assert.Equal(1601318039223013600, imbalance.TimestampNanoseconds);
+        Assert.Equal(Epoch.FromNanoseconds(1601318039223013600), imbalance.Timestamp);
+        Assert.Equal(2020, imbalance.Timestamp.InUtc().Year);
+    }
+
+    // D5's shape applied to a wall clock rather than an epoch: the wire's own (hour x 100) + minutes
+    // encoding is stored raw and the NodaTime type computed on read (rule 12's vocabulary).
+    [Theory]
+    [InlineData(930, 9, 30)]
+    [InlineData(1600, 16, 0)]
+    [InlineData(0, 0, 0)]
+    [InlineData(2359, 23, 59)]
+    public void TheAuctionTimeCodeIsExposedAsALocalTime(int code, int hour, int minute)
+    {
+        StockImbalance imbalance = ReadImbalance(
+            $$"""[{"ev":"NOI","T":"AAPL","t":1,"at":{{code}},"a":"M","i":1,"x":1,"o":1,"p":1,"b":1.0}]""");
+
+        Assert.Equal(code, imbalance.AuctionTimeCode);
+        Assert.Equal(new LocalTime(hour, minute), imbalance.AuctionTime);
+    }
+
+    // A computed property must not throw on a value the server chose, so a code that is not a wall
+    // clock reads as null and the raw code stays available.
+    [Theory]
+    [InlineData(2400)]
+    [InlineData(999)]
+    [InlineData(-1)]
+    [InlineData(1275)]
+    public void AnAuctionTimeCodeThatIsNotAWallClockReadsAsNull(int code)
+    {
+        StockImbalance imbalance = ReadImbalance(
+            $$"""[{"ev":"NOI","T":"AAPL","t":1,"at":{{code}},"a":"M","i":1,"x":1,"o":1,"p":1,"b":1.0}]""");
+
+        Assert.Null(imbalance.AuctionTime);
+        Assert.Equal(code, imbalance.AuctionTimeCode);
+    }
+
+    [Fact]
+    public void AnImbalanceWithANonStringTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadImbalance("""[{"ev":"NOI","T":123,"t":1}]"""));
+
+        Assert.Contains("StockImbalance.T", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnImbalanceCarryingNoTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadImbalance("""[{"ev":"NOI","t":1}]"""));
+
+        Assert.Contains("StockImbalance", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnImbalanceRoundTripsThroughWriteAndRead()
+    {
+        StockImbalance original = ReadImbalance(Fixtures.StockImbalance);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockImbalanceConverter(new TickerPool(16))
+                .Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockImbalance roundTripped = new StockImbalanceConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
 
         Assert.Equal(original, roundTripped);
     }
