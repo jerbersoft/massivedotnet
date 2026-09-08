@@ -94,4 +94,54 @@ public sealed class LogStreamHealthTests
         // message, no scope, no state value.
         Assert.DoesNotContain(SentinelApiKey, captured, StringComparison.Ordinal);
     }
+
+    // F7 (Task 12 review round 1) moved the drop count onto the event so one LogStreamHealth call
+    // covers every topic. That made the "how much is new since I last logged" delta a PER-TOPIC
+    // question, and the fix is a Dictionary keyed by topic code. Nothing pinned it: the re-review
+    // broke the dictionary back to a single scalar and all 796 tests stayed green, so the bug this
+    // test describes could have returned unnoticed.
+    //
+    // With one shared scalar, the second topic's drop is measured against the FIRST topic's running
+    // total, so `droppedCount > previouslyReported` is false and the quotes warning is silently
+    // never logged -- a consumer watching the log would conclude quotes were keeping up while they
+    // were being dropped. The clock is advanced between the two because DropObserved's throttle is
+    // stream-wide, not per topic, so without it the quotes drop is suppressed for a reason that has
+    // nothing to do with what this test is about.
+    [Fact]
+    public async Task DropsOnTwoTopicsAreCountedSeparatelyRatherThanContinuingEachOther()
+    {
+        FakeClock clock = new(Instant.FromUnixTimeSeconds(0));
+        (MassiveStockStream stream, FakeWebSocket first, FakeWebSocket _) = await ConnectAsync(clock);
+        await using MassiveStockStream owned = stream;
+
+        CapturingLoggerProvider capture = new();
+        using ILoggerFactory factory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(capture);
+        });
+
+        stream.LogStreamHealth(factory.CreateLogger("stream-health-test"));
+
+        await stream.SubscribeTradesAsync(["AAPL"], Ct);
+        await stream.SubscribeQuotesAsync(["AAPL"], Ct);
+
+        // Capacity 1 with nobody reading: two trades evict one.
+        first.EnqueueText(
+            """[{"ev":"T","sym":"AAPL","i":"1","p":1,"s":1,"t":1,"q":1},{"ev":"T","sym":"AAPL","i":"2","p":2,"s":1,"t":2,"q":2}]""");
+        await stream.SubscribeTradesAsync(["MSFT"], Ct);
+
+        // Past the stream-wide throttle window, so the quotes drop below is reported on its own
+        // merits rather than being swallowed as a repeat of the trades one.
+        clock.Advance(Duration.FromSeconds(2));
+
+        first.EnqueueText(
+            """[{"ev":"Q","sym":"AAPL","bp":9,"ap":11,"t":1,"q":1},{"ev":"Q","sym":"AAPL","bp":8,"ap":12,"t":2,"q":2}]""");
+        await stream.SubscribeQuotesAsync(["MSFT"], Ct);
+
+        string captured = capture.Text;
+
+        Assert.Contains("dropped 1 events on topic T", captured, StringComparison.Ordinal);
+        Assert.Contains("dropped 1 events on topic Q", captured, StringComparison.Ordinal);
+    }
 }
