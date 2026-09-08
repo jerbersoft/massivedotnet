@@ -23,7 +23,7 @@ public enum MassiveMarket
 }
 
 /// <summary>Extensions for <see cref="MassiveMarket"/>.</summary>
-public static class MassiveMarketExtensions
+internal static class MassiveMarketExtensions
 {
     /// <summary>Renders the market as the lowercase path segment a feed host expects.</summary>
     /// <param name="market">The market.</param>

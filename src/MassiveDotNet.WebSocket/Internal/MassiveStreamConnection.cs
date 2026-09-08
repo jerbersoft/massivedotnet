@@ -121,7 +121,14 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     /// cursor, so the gap cannot be repaired -- only reported, which is why this counter exists
     /// beside <see cref="MassiveTopicSubscription{T}.DroppedCount"/> (D-W7).
     /// </remarks>
-    public int ReconnectCount { get; private set; }
+    public int ReconnectCount => Volatile.Read(ref _reconnectCount);
+
+    // Written by the read-loop thread, polled by a caller on any thread. An int cannot tear, so
+    // this is about VISIBILITY, not atomicity -- but that is the same reason _lastReconnectedTicks
+    // beside it is volatile, and a plain auto-property here let a caller read a stale count
+    // indefinitely. Final review, F3: the sibling got the treatment and this did not, twenty lines
+    // apart, which is this branch's own "the fix landed on a member, not the shape" pattern.
+    private int _reconnectCount;
 
     // D5's pattern: the raw epoch value is what the read-loop thread writes and a caller polls
     // from any thread, so it is a single atomic long (Volatile.Read/Write) rather than the
@@ -299,7 +306,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                     await SendActionAsync("subscribe", parameters, cancellationToken);
                 }
 
-                ReconnectCount++;
+                Volatile.Write(ref _reconnectCount, _reconnectCount + 1);
                 // D5's pattern: see the _lastReconnectedTicks field comment for why this is a raw
                 // atomic write rather than assigning LastReconnected directly.
                 Volatile.Write(ref _lastReconnectedTicks, _clock.GetCurrentInstant().ToUnixTimeTicks());

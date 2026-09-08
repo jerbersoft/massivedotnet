@@ -90,6 +90,36 @@ public class BackpressureTests
         Assert.Equal(999, sink.Subscription.DroppedCount);
     }
 
+    // Final review, F2: the guard used to be a one-way latch, so a consumer whose `await foreach`
+    // was cancelled -- a timeout, a shutdown, a caller taking a break -- permanently burned that
+    // topic's only sequence. Re-subscribing hands back this same object (D-W3 gives a topic one
+    // buffer however many times it is subscribed), so the next consumer got an
+    // InvalidOperationException claiming the sequence was "already being enumerated" when nobody
+    // was, with no recovery short of tearing down the whole stream. D-W3's argument is about two
+    // loops stealing from each other CONCURRENTLY, which ASecondEnumerationThrows below still pins.
+    [Fact]
+    public async Task ACancelledEnumerationReleasesTheSequenceForTheNextConsumer()
+    {
+        TopicSink<StockTrade> sink = CreateSink(capacity: 4);
+        Feed(sink, 1);
+
+        using CancellationTokenSource cts = new();
+
+        await foreach (StockTrade _ in sink.Subscription.WithCancellation(cts.Token))
+        {
+            await cts.CancelAsync();
+            break;
+        }
+
+        Feed(sink, 2);
+
+        // The whole point: this must not throw. Before the fix it threw InvalidOperationException.
+        await using IAsyncEnumerator<StockTrade> second =
+            sink.Subscription.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await second.MoveNextAsync());
+    }
+
     // SingleReader is a performance contract the runtime does not police, so the guard is ours.
     [Fact]
     public void ASecondEnumerationThrows()

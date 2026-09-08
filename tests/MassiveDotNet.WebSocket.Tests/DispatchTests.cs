@@ -396,13 +396,13 @@ public class DispatchTests
         // Not required for correctness -- Complete() unblocks the consumer whenever it started --
         // but gives it a moment to actually be parked on the empty channel, so this exercises the
         // PENDING case the fix is about rather than a foreach that has not started yet.
-        await Task.Delay(20, TestContext.Current.CancellationToken);
+        await Task.Delay(Duration.FromMilliseconds(20).ToTimeSpan(), TestContext.Current.CancellationToken);
 
         await connection.DisposeAsync();
 
         using CancellationTokenSource cts =
             CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cts.CancelAfter(5000);
+        cts.CancelAfter(Duration.FromSeconds(5).ToTimeSpan());
 
         // Bounded rather than awaited directly: if Complete() were never wired, this would hang
         // until the test runner's own much longer timeout instead of failing fast and readably.
