@@ -478,6 +478,23 @@ public class EventParsingTests
         Assert.True(bar.Otc);
     }
 
+    // #23's whole-branch review: every other optional field on this branch tolerates an explicit
+    // JSON null (dv/dav via walk.String, z/trfi/trft via the NullableInt32/64 accessors), but "otc"
+    // read through walk.Boolean, which throws on null instead of treating it the way absence is
+    // already treated -- a parse failure over one field the wire is documented to omit, which
+    // TopicSink.Write cannot recover from (it terminates every topic on the stream, not just this
+    // one). An explicit null carries the same "not OTC" meaning the wire's own omit-when-false
+    // convention already gives absence, so it reads as false rather than as a third, unknown state.
+    [Fact]
+    public void AnExplicitNullOtcReadsAsFalse()
+    {
+        StockAggregate bar = ReadAggregate(
+            """[{"ev":"A","sym":"FCX","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"otc":null}]""",
+            "A");
+
+        Assert.False(bar.Otc);
+    }
+
     [Fact]
     public void AnAggregateWithANonStringSymbolThrowsJsonException()
     {

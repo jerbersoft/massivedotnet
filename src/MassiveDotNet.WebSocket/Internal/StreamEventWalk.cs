@@ -126,6 +126,17 @@ internal struct StreamEventWalk
         return JsonValueReader.ReadBoolean(ref reader, _model, property);
     }
 
+    /// <summary>Reads a boolean, or <see langword="null"/> from a JSON null.</summary>
+    /// <param name="reader">The reader this walk is driving.</param>
+    /// <param name="property">The wire property being read, named in a failure message.</param>
+    /// <returns>The boolean, or <see langword="null"/>.</returns>
+    public bool? NullableBoolean(ref Utf8JsonReader reader, string property)
+    {
+        Advance(ref reader);
+
+        return JsonValueReader.ReadNullableBoolean(ref reader, _model, property);
+    }
+
     /// <summary>Reads a 32-bit integer.</summary>
     /// <param name="reader">The reader this walk is driving.</param>
     /// <param name="property">The wire property being read, named in a failure message.</param>

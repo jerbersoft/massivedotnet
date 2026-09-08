@@ -59,7 +59,11 @@ internal sealed class StockAggregateConverter(TickerPool tickers, string topicCo
             else if (reader.ValueTextEquals("z"u8)) { averageTradeSize = walk.Int64(ref reader, "z"); }
             else if (reader.ValueTextEquals("s"u8)) { start = walk.Int64(ref reader, "s"); }
             else if (reader.ValueTextEquals("e"u8)) { end = walk.Int64(ref reader, "e"); }
-            else if (reader.ValueTextEquals("otc"u8)) { otc = walk.Boolean(ref reader, "otc"); }
+            // NullableBoolean, not Boolean: a live capture sent "otc":null (#23's whole-branch
+            // review), and the wire's own convention already treats absence as "not OTC" -- an
+            // explicit null carries the same meaning rather than a third, unknown state, so it
+            // coalesces to false the same way an absent field does.
+            else if (reader.ValueTextEquals("otc"u8)) { otc = walk.NullableBoolean(ref reader, "otc") ?? false; }
         }
 
         return new StockAggregate
