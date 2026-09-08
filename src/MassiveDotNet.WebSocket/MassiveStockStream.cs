@@ -109,6 +109,29 @@ public sealed class MassiveStockStream : IAsyncDisposable
     }
 
     /// <summary>
+    /// Raised when a reconnect re-sent this stream's subscriptions and the server did not
+    /// acknowledge all of them, carrying the pairs that went unacknowledged.
+    /// </summary>
+    /// <remarks>
+    /// Degraded, not terminal, and distinct from <see cref="Faulted"/> for that reason: the socket
+    /// is up and every acknowledged topic is still delivering, so no sequence ends. It exists
+    /// because the server answers an unrecognised topic with silence rather than an error (D33), so
+    /// a replay nobody checks can leave a topic unsubscribed on a connection
+    /// <see cref="Reconnected"/> has already reported as healthy -- a stream that looks alive and
+    /// delivers nothing, indistinguishable from a quiet market.
+    /// <para>
+    /// The pairs stay in the subscription registry, so the next reconnect replays them again. A
+    /// consumer that wants them back sooner can re-subscribe, which is acknowledgement-counted the
+    /// ordinary way and throws if the server ignores it again.
+    /// </para>
+    /// </remarks>
+    public event Action<MassiveStreamSubscriptionException>? SubscriptionsLost
+    {
+        add => _connection.SubscriptionsLost += value;
+        remove => _connection.SubscriptionsLost -= value;
+    }
+
+    /// <summary>
     /// Raised when a topic buffer overflowed and dropped an event, naming the topic's wire code
     /// and that topic's own running drop count, throttled to at most once a second so a sustained
     /// overflow does not produce an unbounded stream of notifications.

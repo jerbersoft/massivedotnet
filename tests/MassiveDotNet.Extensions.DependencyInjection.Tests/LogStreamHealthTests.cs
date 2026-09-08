@@ -144,4 +144,60 @@ public sealed class LogStreamHealthTests
         Assert.Contains("dropped 1 events on topic T", captured, StringComparison.Ordinal);
         Assert.Contains("dropped 1 events on topic Q", captured, StringComparison.Ordinal);
     }
+
+    // Issue #52: a reconnect whose replay the server never acknowledges is reported as reconnected
+    // by every other signal the SDK has, so the log is where a consumer wiring the SDK through DI
+    // actually finds out. Without this bridge the event exists and nobody watching the logs would
+    // ever see it -- D-W5's whole argument for why core's silence is narrowed here rather than
+    // teaching core about logging (rule 8).
+    [Fact]
+    public async Task AReplayTheServerNeverAcknowledgesIsReportedOnTheLogger()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        // Connects and authenticates, then answers the replay with silence -- the server behaviour
+        // D33 records, where an unrecognised topic is ignored rather than refused.
+        FakeWebSocket second = new();
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        int created = 0;
+        MassiveStreamClient client = new(
+            new MassiveStreamOptions
+            {
+                ApiKey = SentinelApiKey,
+                HandshakeTimeout = Duration.FromMilliseconds(250),
+            },
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await using MassiveStockStream stream =
+            await client.ConnectStocksAsync(() => created++ == 0 ? first : second, Ct);
+
+        CapturingLoggerProvider capture = new();
+        using ILoggerFactory factory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(capture);
+        });
+
+        stream.LogStreamHealth(factory.CreateLogger("stream-health-test"));
+
+        await stream.SubscribeTradesAsync(["AAPL"], Ct);
+
+        TaskCompletionSource lost = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        stream.SubscriptionsLost += _ => lost.TrySetResult();
+
+        first.AbortNext();
+        await lost.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), Ct);
+
+        string captured = capture.Text;
+
+        Assert.Contains("never acknowledged 1 of the subscriptions it replayed (T.AAPL)", captured, StringComparison.Ordinal);
+
+        // The same rule this file exists for: a third placeholder must not become the one that
+        // finally carries a key into a log (rule 11).
+        Assert.DoesNotContain(SentinelApiKey, captured, StringComparison.Ordinal);
+    }
 }

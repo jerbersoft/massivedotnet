@@ -55,6 +55,18 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private Dictionary<string, string>? _pendingAcks;
     private TaskCompletionSource? _pendingAcknowledgements;
 
+    // The REPLAY's own owed acknowledgements, kept in a second slot rather than sharing the one
+    // above. Sharing cannot work: SubscribeAsync assigns over _pendingAcks whenever a caller
+    // subscribes, and a replay's verification deliberately outlives the reconnect that armed it
+    // (see VerifyReplayAsync), so a caller subscribing inside that window would erase what the
+    // replay is waiting on -- producing a shortfall report against a server that had answered,
+    // which is a false alarm on the one signal a consumer must be able to trust. Keyed by the
+    // acknowledgement text exactly as _pendingAcks is, but VALUED by the whole `T.AAPL` parameter
+    // rather than the ticker alone, because a parameter is what a replay re-sends and therefore
+    // what a shortfall has to name.
+    private Dictionary<string, string>? _replayAcks;
+    private TaskCompletionSource? _replayAcknowledgements;
+
     public MassiveStreamConnection(
         MassiveStreamOptions options,
         MassiveMarket market,
@@ -154,6 +166,29 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 
     /// <summary>Raised when the stream has stopped for good.</summary>
     public event Action<Exception>? Faulted;
+
+    /// <summary>Raised when a reconnect's replayed subscriptions were not all acknowledged.</summary>
+    /// <remarks>
+    /// Degraded, not terminal: the connection is up and every acknowledged topic is delivering.
+    /// <see cref="Reconnected"/> still fires when the socket comes back, unchanged -- this is a
+    /// second signal beside it rather than a change to what the first one means, because a
+    /// reconnect that fires only after verification either cannot fire at all on a shortfall (so a
+    /// consumer never learns the stream returned) or fires anyway (so it promises something it did
+    /// not check).
+    /// </remarks>
+    public event Action<MassiveStreamSubscriptionException>? SubscriptionsLost;
+
+    // Written by the read-loop thread when a reconnect arms a verification, read by DisposeAsync on
+    // the caller's, so Volatile for the same visibility reason _reconnectCount above is -- not
+    // atomicity, which a reference already has.
+    private Task _replayVerification = Task.CompletedTask;
+
+    /// <summary>
+    /// The most recent replay's deferred verification, so disposal can wait for it to settle rather
+    /// than leaving a detached task running past the connection that started it. Also what lets a
+    /// test observe the window deterministically instead of sleeping past it.
+    /// </summary>
+    internal Task ReplayVerification => Volatile.Read(ref _replayVerification);
 
     /// <summary>The delay before a given attempt, exposed for testing.</summary>
     /// <param name="options">The backoff configuration.</param>
@@ -300,11 +335,10 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 _reader = new FrameReader(_socket!, _options.MaxMessageBytes);
 
                 // Replay before reporting success: a caller told the stream is back has every
-                // right to assume their subscriptions came back with it.
-                foreach (string parameters in Registry.Parameters)
-                {
-                    await SendActionAsync("subscribe", parameters, cancellationToken);
-                }
+                // right to assume their subscriptions came back with it. Whether the server
+                // actually honoured that replay is verified afterwards and off this thread --
+                // see VerifyReplayAsync for why it cannot be awaited here.
+                await ReplaySubscriptionsAsync(cancellationToken);
 
                 Volatile.Write(ref _reconnectCount, _reconnectCount + 1);
                 // D5's pattern: see the _lastReconnectedTicks field comment for why this is a raw
@@ -357,6 +391,170 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         // Faulted would fire on what was really just a shutdown (Task 11 review round 1, finding 8).
         cancellationToken.ThrowIfCancellationRequested();
         return false;
+    }
+
+    // Re-sends every live subscription and arms the deferred check that the server honoured them.
+    // Called from TryReconnectAsync, so this runs on the read-loop thread and must not wait for
+    // anything that thread is itself responsible for delivering.
+    private async Task ReplaySubscriptionsAsync(CancellationToken cancellationToken)
+    {
+        // One snapshot drives both the sends and what they are owed, so a caller mutating the
+        // registry mid-replay cannot leave the two disagreeing -- which would report a shortfall
+        // for a pair that was never re-sent.
+        IReadOnlyCollection<string> replayed = Registry.Parameters;
+
+        if (replayed.Count == 0)
+        {
+            // Nothing was subscribed, so nothing can be lost. Deliberately leaves any earlier
+            // verification still in flight as ReplayVerification, rather than overwriting it with a
+            // completed task and losing the handle disposal needs.
+            return;
+        }
+
+        Dictionary<string, string> owed = new(StringComparer.Ordinal);
+
+        foreach (string parameters in replayed)
+        {
+            owed[$"subscribed to: {parameters}"] = parameters;
+        }
+
+        TaskCompletionSource acknowledgements = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Published BEFORE the first send, for exactly SubscribeAsync's reason: an acknowledgement
+        // arriving between the send and the publish would find nothing tracking it and be ignored,
+        // which is a shortfall reported against a server that did answer.
+        lock (_ackLock)
+        {
+            _replayAcks = owed;
+            _replayAcknowledgements = acknowledgements;
+        }
+
+        try
+        {
+            foreach (string parameters in replayed)
+            {
+                await SendActionAsync("subscribe", parameters, cancellationToken);
+            }
+        }
+        catch
+        {
+            // This attempt is over; TryReconnectAsync's own catch will back off and try again.
+            // Clearing is load-bearing rather than tidiness: an abandoned slot still matches in
+            // OnStatus, where it would swallow a later caller's acknowledgement and make THAT
+            // caller's subscribe report the shortfall instead.
+            ClearReplayAcks(owed);
+            throw;
+        }
+
+        Volatile.Write(
+            ref _replayVerification, VerifyReplayAsync(owed, acknowledgements, cancellationToken));
+    }
+
+    /// <summary>
+    /// Waits for the replayed subscriptions' acknowledgements away from the read loop, and reports
+    /// whichever never arrived through <see cref="SubscriptionsLost"/>.
+    /// </summary>
+    /// <remarks>
+    /// Started by the reconnect and deliberately NOT awaited by it. The replay runs on the read
+    /// loop -- TryReconnectAsync is reached from it -- and the acknowledgements it needs are
+    /// delivered BY that same loop, through OnStatus, so awaiting them there would deadlock the
+    /// loop against itself. That is why D33 recorded this gap plainly instead of half-closing it,
+    /// and moving only the WAIT off the loop is what resolves it: the loop returns to reading the
+    /// moment this hits its first await, keeps delivering every healthy topic throughout the
+    /// window, and is what completes the wait it is no longer blocked on.
+    /// <para>
+    /// The deadline is a real timer rather than a check performed as messages arrive, because the
+    /// failure this exists to catch is a topic that produces no messages at all -- an opportunistic
+    /// check would never run in precisely the case that matters.
+    /// </para>
+    /// <para>
+    /// The registry is deliberately not pruned on a shortfall. An unacknowledged pair is still what
+    /// the caller asked for, so keeping it means the next reconnect replays it again; dropping it
+    /// would be the silent give-up this SDK refuses everywhere else.
+    /// </para>
+    /// </remarks>
+    private async Task VerifyReplayAsync(
+        Dictionary<string, string> owed,
+        TaskCompletionSource acknowledgements,
+        CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // Boundary crossing (produce): the domain Duration converts here and nowhere above. No new
+        // option is introduced for this window -- HandshakeTimeout already documents itself as
+        // bounding "connect, authentication, and subscription acknowledgement", and a replay is a
+        // subscription acknowledgement the SDK asked for rather than the caller.
+        timeout.CancelAfter(_options.HandshakeTimeout.ToTimeSpan());
+
+        try
+        {
+            await acknowledgements.Task.WaitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Either the window closed before every pair was acknowledged, or the connection is
+            // shutting down. `owed` still holds exactly which pairs are outstanding, read below
+            // under the same lock OnStatus removes them under.
+        }
+
+        string[] unacknowledged;
+
+        lock (_ackLock)
+        {
+            if (!ReferenceEquals(_replayAcks, owed))
+            {
+                // A later reconnect has already re-armed and owns the slot now. Its replay re-sent
+                // everything this one was waiting for, so this attempt's shortfall is moot -- and
+                // reading the field here would report the NEW replay's outstanding pairs as this
+                // one's, then null a slot that is still in use.
+                return;
+            }
+
+            unacknowledged = [.. owed.Values.Order(StringComparer.Ordinal)];
+            _replayAcks = null;
+            _replayAcknowledgements = null;
+        }
+
+        if (unacknowledged.Length == 0 || cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        // Narrowed to what the caller still wants. A pair unsubscribed from inside the verification
+        // window is not a loss -- they asked for it to stop -- and the window is long enough
+        // (HandshakeTimeout) for that to happen: drop, replay, server silence, unsubscribe. Reporting
+        // it would be a false alarm on the one signal that has to be trusted, which is the same
+        // reason the replay does not share the caller's acknowledgement slot.
+        HashSet<string> live = new(Registry.Parameters, StringComparer.Ordinal);
+        string[] lost = [.. unacknowledged.Where(live.Contains)];
+
+        if (lost.Length == 0)
+        {
+            return;
+        }
+
+        // Out-of-band, because no caller is awaiting the replay to throw at: the same evidence
+        // MassiveStreamSubscriptionException carries for a caller's own shortfall, delivered as a
+        // signal instead. Through EventRaiser for Reconnected's reason -- this runs off the read
+        // loop, so a throwing handler cannot end the stream from here, but it would fault a task
+        // nobody awaits and starve every handler registered after it.
+        EventRaiser.Raise(
+            SubscriptionsLost,
+            new MassiveStreamSubscriptionException(string.Join(',', lost), lost.Length));
+    }
+
+    // Clears the replay slot only if it is still the one the caller published. A later reconnect
+    // that has already re-armed owns the field, and clearing it there would destroy the tracking
+    // for a replay still in flight.
+    private void ClearReplayAcks(Dictionary<string, string> owed)
+    {
+        lock (_ackLock)
+        {
+            if (ReferenceEquals(_replayAcks, owed))
+            {
+                _replayAcks = null;
+                _replayAcknowledgements = null;
+            }
+        }
     }
 
     // The single place that ends a connection for good, called from ReadLoopAsync's outer catch.
@@ -538,6 +736,23 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 
         lock (_ackLock)
         {
+            // One acknowledgement credits exactly ONE waiter, and the replay is tried first. Both
+            // halves matter when a caller re-subscribes to a pair the replay is still waiting on,
+            // which owes the identical message text: crediting both would let one answer satisfy
+            // two requests, and crediting the caller first would leave the replay short and report
+            // a loss the server had in fact acknowledged. The replay wins because it is sent inside
+            // the reconnect while _subscribeGate is held, so any caller subscribe for the same pair
+            // can only follow it on the wire -- and the server answers in the order it was asked.
+            if (_replayAcks is { } replayed && replayed.Remove(message))
+            {
+                if (replayed.Count == 0)
+                {
+                    _replayAcknowledgements?.TrySetResult();
+                }
+
+                return;
+            }
+
             // Matched by the exact message text, not counted -- see the field comment on
             // _pendingAcks for why a bare count cannot tell a subscribe's acknowledgement from an
             // unsubscribe's. Anything that does not match a currently-tracked message is ignored
@@ -893,6 +1108,22 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             // The loop's own outcome -- cancelled, faulted, or never started -- stays observable on
             // ReadLoopTask itself. Disposing must not throw a second time merely because the caller
             // chose to stop the stream; Faulted (Task 11) is where a consumer learns why it stopped.
+        }
+
+        try
+        {
+            // A replay's verification runs off the read loop, so stopping that loop does not stop
+            // it: without this, disposal could return while a detached task still held the
+            // connection's options and was still about to raise SubscriptionsLost at a consumer who
+            // had already torn the stream down. _shutdown is cancelled above, which is what makes
+            // this settle promptly rather than waiting out the deadline -- and what makes it return
+            // silently instead of reporting a shortfall that is only an artifact of disposal.
+            await ReplayVerification;
+        }
+        catch (Exception)
+        {
+            // Nothing in VerifyReplayAsync is meant to escape; this is the belt to that braces, so
+            // a caller's DisposeAsync is never the place a stream's own bookkeeping surfaces.
         }
 
         // Every registered sink's sequence ends on disposal -- and, since Task 11, on a TERMINAL

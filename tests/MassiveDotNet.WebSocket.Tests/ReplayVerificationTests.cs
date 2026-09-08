@@ -1,0 +1,498 @@
+using MassiveDotNet.WebSocket.Events;
+using MassiveDotNet.WebSocket.Internal;
+using NodaTime;
+using NodaTime.Testing;
+using Xunit;
+
+namespace MassiveDotNet.WebSocket.Tests;
+
+/// <summary>
+/// Issue #52: a reconnect replays the subscription registry but never verifies that the server
+/// acknowledged any of it, while <c>Reconnected</c> and <c>ReconnectCount</c> report the reconnect
+/// as successful either way. D33's own "why" column records the behaviour that makes this matter --
+/// the server silently drops a topic it does not recognise rather than rejecting it -- so a replay
+/// nobody checks can leave a topic unsubscribed on a connection the SDK calls healthy, which is
+/// indistinguishable from a quiet market (D29's argument).
+/// </summary>
+public class ReplayVerificationTests
+{
+    private const string Connected = """[{"ev":"status","status":"connected","message":"Connected Successfully"}]""";
+    private const string AuthSuccess = """[{"ev":"status","status":"auth_success","message":"authenticated"}]""";
+
+    // Short enough that a withheld acknowledgement is reported inside a test's patience, long
+    // enough that it is not racing ordinary scheduling. It bounds the replay's verification window
+    // exactly as it already bounds a caller's own subscribe (see MassiveStreamOptions).
+    private static MassiveStreamOptions FastReconnect() => new()
+    {
+        ApiKey = "k",
+        HandshakeTimeout = Duration.FromMilliseconds(250),
+        Reconnect = new MassiveStreamReconnectOptions
+        {
+            InitialBackoff = Duration.FromMilliseconds(1),
+            MaxBackoff = Duration.FromMilliseconds(5),
+            Jitter = 0,
+        },
+    };
+
+    [Fact]
+    public async Task AReplayTheServerNeverAcknowledgesIsReportedAsLostSubscriptions()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        // No acknowledgement for the replay: this is the server silently dropping what it was
+        // asked to restore, which is precisely what nothing in the offline suite noticed before.
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<MassiveStreamSubscriptionException> lost =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += error => lost.TrySetResult(error);
+
+        first.AbortNext();
+
+        MassiveStreamSubscriptionException reported = await lost.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, reported.Unacknowledged);
+        Assert.Contains("T.AAPL", reported.Message, StringComparison.Ordinal);
+
+        // The reconnect itself genuinely happened -- this is a degraded stream, not a failed one,
+        // which is why it is its own signal rather than a change to what Reconnected means.
+        Assert.Equal(1, connection.ReconnectCount);
+    }
+
+    // The other half of the pin: a replay the server DOES honour must stay silent. Without this,
+    // the fix could satisfy the test above by reporting a loss on every reconnect, which is a
+    // signal a consumer would learn to ignore -- the worst possible outcome for a warning whose
+    // whole value is that it is rare and true.
+    [Fact]
+    public async Task AFullyAcknowledgedReplayReportsNothing()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new() { AutoAcknowledgeSubscribes = true };
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL", "MSFT"], TestContext.Current.CancellationToken);
+
+        List<MassiveStreamSubscriptionException> reported = [];
+        connection.SubscriptionsLost += error => reported.Add(error);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // Awaiting the verification itself rather than sleeping past the deadline: a sleep long
+        // enough to be safe makes the test slow, and one short enough to be fast turns a late raise
+        // into a false pass.
+        await connection.ReplayVerification.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Empty(reported);
+    }
+
+    // Acceptance criterion 2 of issue #52. The deadline must not park the read loop -- which is the
+    // whole reason the wait was moved off it -- so a topic the server DID acknowledge keeps
+    // delivering throughout a window another topic is timing out in.
+    [Fact]
+    public async Task TheDeadlineDoesNotParkTheReadLoopWhileItRuns()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        // Connected and authenticated, but the replay goes unacknowledged: the connection spends
+        // the next HandshakeTimeout inside its verification window.
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        TopicSink<StockTrade> sink = new("T", capacity: 8, new StockTradeConverter(new TickerPool(16)));
+        connection.AddSink(sink);
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // The verification is still outstanding at this point -- Reconnected fires before the
+        // acknowledgements it is waiting for could possibly have been declared missing.
+        Assert.False(connection.ReplayVerification.IsCompleted);
+
+        second.EnqueueText("""[{"ev":"T","sym":"AAPL","i":"1","p":1,"s":1,"t":1,"q":1}]""");
+
+        StockTrade delivered = await ReadOneAsync(sink, TestContext.Current.CancellationToken);
+
+        Assert.Equal("AAPL", delivered.Ticker);
+    }
+
+    // The replay's shortfall must not prune the registry: the pair is still what the caller asked
+    // for, so the NEXT reconnect has to ask for it again. Dropping it would turn one server-side
+    // silence into a subscription the SDK quietly gave up on forever.
+    [Fact]
+    public async Task AShortfallLeavesTheRegistryIntactSoTheNextReconnectReplaysItAgain()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        FakeWebSocket third = new();
+        FakeWebSocket[] sockets = [first, second, third];
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        third.EnqueueText(Connected);
+        third.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => sockets[created++],
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<MassiveStreamSubscriptionException> lost =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += error => lost.TrySetResult(error);
+
+        first.AbortNext();
+        await lost.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        TaskCompletionSource reconnectedAgain = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += count =>
+        {
+            if (count == 2)
+            {
+                reconnectedAgain.TrySetResult();
+            }
+        };
+
+        second.AbortNext();
+        await reconnectedAgain.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Contains("""{"action":"subscribe","params":"T.AAPL"}""", third.Sent);
+    }
+
+    // The reason the replay gets its own acknowledgement slot rather than sharing SubscribeAsync's.
+    // A caller subscribing inside the verification window assigns over _pendingAcks; if the replay
+    // lived there too, its tracking would be erased and it would report a loss on a server that had
+    // answered -- a false alarm on the one signal that has to be trustworthy.
+    [Fact]
+    public async Task ACallerSubscribingInsideTheWindowNeitherErasesNorStealsTheReplaysAcknowledgements()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new() { AutoAcknowledgeSubscribes = true };
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        List<MassiveStreamSubscriptionException> reported = [];
+        connection.SubscriptionsLost += error => reported.Add(error);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // The same pair the replay is waiting on, so both owe the identical acknowledgement text --
+        // the collision the two slots and OnStatus's replay-first crediting exist to resolve. The
+        // caller's own subscribe must still be acknowledged rather than starved by the replay.
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        await connection.ReplayVerification.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Empty(reported);
+    }
+
+    // Only the pairs that actually went unanswered are named. A shortfall that reported the whole
+    // request would send a consumer looking for a fault in topics that are delivering.
+    [Fact]
+    public async Task OnlyTheUnacknowledgedPairsAreNamed()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL", "MSFT"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<MassiveStreamSubscriptionException> lost =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += error => lost.TrySetResult(error);
+
+        first.AbortNext();
+
+        // Answer exactly one of the two replayed pairs. The fake sends one subscribe frame per
+        // parameter, so this is the shape a partially-entitled or partially-retired topic set takes.
+        await WaitForSendAsync(second, """{"action":"subscribe","params":"T.MSFT"}""");
+        second.EnqueueText("""[{"ev":"status","status":"success","message":"subscribed to: T.MSFT"}]""");
+
+        MassiveStreamSubscriptionException reported = await lost.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, reported.Unacknowledged);
+        Assert.Contains("T.AAPL", reported.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("T.MSFT", reported.Message, StringComparison.Ordinal);
+    }
+
+    // EventRaiser's rule, at the newest raise site: a multicast delegate stops invoking subscribers
+    // the instant one throws, so a per-handler try/catch is what keeps a misbehaving consumer from
+    // starving its neighbours -- and this raise runs on a task nobody awaits, where an escaping
+    // exception would otherwise vanish entirely.
+    [Fact]
+    public async Task AThrowingSubscriptionsLostHandlerDoesNotStarveTheOthers()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<Exception> faulted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Faulted += error => faulted.TrySetResult(error);
+
+        TaskCompletionSource survivor = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += _ => throw new InvalidOperationException("consumer bug");
+        connection.SubscriptionsLost += _ => survivor.TrySetResult();
+
+        first.AbortNext();
+
+        await survivor.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // The stream is degraded, not dead: a handler throwing about a shortfall must not become
+        // the terminal stop the shortfall itself never was.
+        Assert.False(faulted.Task.IsCompleted);
+        Assert.False(connection.ReadLoopTask.IsCompleted);
+    }
+
+    // Disposal is not a shortfall. Without the cancellation check, tearing a stream down inside a
+    // verification window would report every replayed pair as lost on the way out -- a warning
+    // caused entirely by the consumer's own DisposeAsync.
+    [Fact]
+    public async Task DisposingInsideTheWindowReportsNothing()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        List<MassiveStreamSubscriptionException> reported = [];
+
+        await using (connection)
+        {
+            await connection.ConnectAsync(TestContext.Current.CancellationToken);
+            connection.StartReading();
+
+            await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+            connection.SubscriptionsLost += error => reported.Add(error);
+
+            TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            connection.Reconnected += _ => reconnected.TrySetResult();
+
+            first.AbortNext();
+            await reconnected.Task.WaitAsync(
+                Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+            Assert.False(connection.ReplayVerification.IsCompleted);
+        }
+
+        // DisposeAsync awaits the verification, so by here it has settled one way or the other.
+        Assert.True(connection.ReplayVerification.IsCompleted);
+        Assert.Empty(reported);
+    }
+
+    // The verification window is HandshakeTimeout long, which is ample room for a caller to
+    // unsubscribe from a pair the replay is still waiting on. That pair is not lost -- they asked
+    // for it to stop -- and reporting it would be a false alarm on the one signal that has to be
+    // trusted.
+    [Fact]
+    public async Task APairUnsubscribedInsideTheWindowIsNotReportedAsLost()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        List<MassiveStreamSubscriptionException> reported = [];
+        connection.SubscriptionsLost += error => reported.Add(error);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // Inside the window: the replay is still waiting on T.AAPL and the deadline has not passed.
+        Assert.False(connection.ReplayVerification.IsCompleted);
+        await connection.UnsubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        await connection.ReplayVerification.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Empty(reported);
+    }
+
+    // Bounded rather than awaited directly: a sink nothing ever writes to would otherwise hang
+    // until the runner's own much longer timeout instead of failing fast and readably (the shape
+    // ReconnectTests.ReadAllAsync already uses).
+    private static async Task<StockTrade> ReadOneAsync(TopicSink<StockTrade> sink, CancellationToken cancellationToken)
+    {
+        Task<StockTrade> consumer = Task.Run(async () =>
+        {
+            await foreach (StockTrade trade in sink.Subscription.WithCancellation(cancellationToken))
+            {
+                return trade;
+            }
+
+            throw new InvalidOperationException("The sink's sequence ended without delivering anything.");
+        }, cancellationToken);
+
+        return await consumer.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), cancellationToken);
+    }
+
+    // A real server cannot answer a frame before it has received it, and a FakeWebSocket can: an
+    // acknowledgement enqueued before the send it answers can be consumed by the already-parked
+    // read loop first, racing whatever published what it was waiting for. Polling the recorded
+    // sends keeps the causality honest, the same fix ReconnectTests applies through SentSignal --
+    // used here rather than SentSignal because the frame being waited for is the SECOND of two the
+    // replay sends, which a single signal cannot distinguish.
+    private static async Task WaitForSendAsync(FakeWebSocket socket, string frame)
+    {
+        using CancellationTokenSource timeout = new();
+        timeout.CancelAfter(Duration.FromSeconds(5).ToTimeSpan());
+
+        while (!socket.Sent.Contains(frame, StringComparer.Ordinal))
+        {
+            await Task.Delay(Duration.FromMilliseconds(5).ToTimeSpan(), timeout.Token);
+        }
+    }
+}

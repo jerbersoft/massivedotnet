@@ -84,6 +84,15 @@ public static partial class MassiveStreamServiceCollectionExtensions
 
         stream.Reconnected += count => LogReconnected(logger, count);
 
+        // The reconnect above and this are two halves of one story, and only together are they
+        // honest: LogReconnected says the socket came back, and this says which subscriptions did
+        // not come back with it. Logged at Error rather than the Warning its siblings use because
+        // the others describe a gap the consumer can see ended -- a reconnect that finished, a
+        // buffer that overflowed and recovered -- while this one describes a topic that will keep
+        // looking exactly like a quiet market until something re-subscribes it.
+        stream.SubscriptionsLost += error =>
+            LogSubscriptionsLost(logger, error.Unacknowledged, error.Parameters);
+
         // Per-topic, not a single scalar: DropObserved now multiplexes every topic the stream
         // opens over one event, so the "how much is genuinely new since I last logged" delta has
         // to be tracked per topic code, not once for the whole stream -- otherwise a trades drop
@@ -118,4 +127,11 @@ public static partial class MassiveStreamServiceCollectionExtensions
         Message = "The Massive stream dropped {Dropped} events on topic {TopicCode} because a topic buffer was full. "
             + "Raise TopicBufferCapacity or do less work in the consuming loop.")]
     private static partial void LogDropped(ILogger logger, long dropped, string topicCode);
+
+    [LoggerMessage(
+        Level = LogLevel.Error,
+        Message = "The Massive stream reconnected but the server never acknowledged {Unacknowledged} of the "
+            + "subscriptions it replayed ({Parameters}). Those topics are delivering nothing and look "
+            + "exactly like a quiet market; re-subscribe to restore them.")]
+    private static partial void LogSubscriptionsLost(ILogger logger, int unacknowledged, string parameters);
 }
