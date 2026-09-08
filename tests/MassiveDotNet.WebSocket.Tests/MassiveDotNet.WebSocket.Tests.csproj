@@ -22,4 +22,10 @@
     <ProjectReference Include="../../src/MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Allocation is internal to MassiveDotNet.Rest.Tests; linked rather than copied so the two
+         projects share one measurement harness instead of two that can silently drift (Task 13). -->
+    <Compile Include="../MassiveDotNet.Rest.Tests/Allocation.cs" Link="Allocation.cs" />
+  </ItemGroup>
+
 </Project>
