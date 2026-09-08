@@ -58,7 +58,12 @@ claims — the aggregate without `dv`/`dav`, and the limit up-limit down band �
 strict equality for the same reason the two pre-existing zero claims above are: headroom on a zero
 would defeat the point (D31). The two ceilings carry roughly 20% headroom rounded up to the next
 multiple of 8: 64 B → 80 B for the aggregate's two decimal-volume strings, and 24 B → 32 B for the
-imbalance's one-character auction type. Each of the four was watched failing under its own
+imbalance's one-character auction type. The imbalance ceiling's 33% headroom is the same
+mechanical effect as the trade ceiling's 25% above: 20% of 24 B (4.8 B) is under one allocator
+size-class step, so rounding the 20% target up to the next multiple of 8 lands a full step (8 B)
+above the measured figure rather than the fractional amount 20% alone would give. The aggregate
+ceiling's 25% is a plainer case of the same rounding rule rather than extra slack: 64 B + 20% is
+76.8 B, and the nearest multiple of 8 at or above that is 80 B. Each of the four was watched failing under its own
 regression before being committed, one at a time, restoring in between; the same
 `ConditionSetSerialization.Read` regression used for `ConditionsWithinTheInlineCapacityAllocateNothing`
 also reddens `ParsingALimitUpLimitDownBandAllocatesNothing`, since one implementation serves the
