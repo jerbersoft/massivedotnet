@@ -49,6 +49,25 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
 
     public int ConnectCount { get; private set; }
 
+    /// <summary>
+    /// When set, every "subscribe" action sent through this socket is acknowledged immediately
+    /// and synchronously, as part of the send itself -- "success", naming each pair exactly as
+    /// the real server does ("subscribed to: T.AAPL") -- rather than depending on a test to
+    /// separately notice the send and enqueue a response later.
+    /// </summary>
+    /// <remarks>
+    /// Off by default: every existing test drives acknowledgement timing itself, and turning this
+    /// on for everyone would silently change what those tests exercise. Added for tests that need
+    /// many concurrent subscribes to complete reliably without depending on a separate thread or
+    /// task noticing each send in time (Task 12 review round 1, F2): a prior design used a
+    /// dedicated responder thread racing 64 blocked participants for the same acknowledgement, and
+    /// a full-solution run (22 attempts) found it still flaked about 9% of the time -- a false
+    /// *failure* on correct code, which is worse than a false negative because it breaks a green
+    /// build. With this on, nothing needs to "notice" a send at all, so there is no scheduling
+    /// window left to lose.
+    /// </remarks>
+    public bool AutoAcknowledgeSubscribes { get; set; }
+
     /// <summary>Queues one complete message.</summary>
     public void EnqueueText(string message) =>
         _inbound.Writer.TryWrite(new Frame(
@@ -138,10 +157,57 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
 
     public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
     {
-        Sent.Add(Encoding.UTF8.GetString(buffer.Span));
+        string text = Encoding.UTF8.GetString(buffer.Span);
+        Sent.Add(text);
         SentSignal.TrySetResult();
         SentSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        if (AutoAcknowledgeSubscribes && TryBuildSubscribeAcknowledgement(text, out string acknowledgement))
+        {
+            EnqueueText(acknowledgement);
+        }
+
         return ValueTask.CompletedTask;
+    }
+
+    // Parses exactly the shape MassiveStreamConnection.SendActionAsync produces --
+    // {"action":"subscribe","params":"T.AAPL,T.MSFT"} -- and builds the "success" acknowledgement
+    // the real server sends for it, one status event per pair. Plain string slicing rather than a
+    // JSON parser: this fake only ever needs to understand text it produced itself, through that
+    // one call site, so there is nothing here that needs to tolerate an arbitrary shape.
+    private static bool TryBuildSubscribeAcknowledgement(string sentText, out string acknowledgement)
+    {
+        acknowledgement = string.Empty;
+
+        if (!sentText.Contains("\"action\":\"subscribe\"", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        const string ParamsMarker = "\"params\":\"";
+        int start = sentText.IndexOf(ParamsMarker, StringComparison.Ordinal);
+
+        if (start < 0)
+        {
+            return false;
+        }
+
+        start += ParamsMarker.Length;
+        int end = sentText.IndexOf('"', start);
+
+        if (end < 0)
+        {
+            return false;
+        }
+
+        string[] pairs = sentText[start..end].Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+        string events = string.Join(
+            ',',
+            pairs.Select(pair => $$"""{"ev":"status","status":"success","message":"subscribed to: {{pair}}"}"""));
+
+        acknowledgement = $"[{events}]";
+        return true;
     }
 
     public async ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken)

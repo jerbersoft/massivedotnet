@@ -47,13 +47,10 @@ public class AddMassiveStreamTests
     // assembly (where MassiveStreamClient itself lives) references no Microsoft.Extensions.*
     // package.
     //
-    // LogStreamHealth itself is not exercised end-to-end from this project: MassiveStockStream's
-    // constructor, and the internal MassiveWebSocketFactory-driven ConnectStocksAsync overload the
-    // WebSocket test project uses to drive one offline, are both internal to MassiveDotNet.WebSocket
-    // with InternalsVisibleTo granted only to its own test project -- so building a connected stream
-    // here would need a live socket. Reviewed instead by inspection: LogStreamHealth's two log calls
-    // interpolate only a reconnect count and a drop count, never options.ApiKey or anything derived
-    // from it (see the Task 12 report).
+    // LogStreamHealth itself is now exercised end-to-end, in LogStreamHealthTests.cs (F3/H8, Task
+    // 12 review round 1): a second InternalsVisibleTo on the WebSocket csproj, and FakeWebSocket
+    // linked (not duplicated) from the WebSocket test project, are what make building a connected
+    // MassiveStockStream possible from here, offline, with no live socket needed.
     [Fact]
     public void TheWebSocketAssemblyReferencesNoMicrosoftExtensions()
     {

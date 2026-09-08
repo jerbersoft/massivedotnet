@@ -57,47 +57,57 @@ public static partial class MassiveStreamServiceCollectionExtensions
     /// Reports drops and reconnects on the application's logger.
     /// </summary>
     /// <param name="stream">The stream to watch.</param>
-    /// <param name="subscription">The subscription whose drop count to report.</param>
     /// <param name="logger">The logger.</param>
-    /// <typeparam name="T">The event type.</typeparam>
     /// <remarks>
-    /// D-W4's accepted cost is that a consumer who never reads <c>DroppedCount</c> loses data
-    /// quietly. This is what narrows it: rule 8 confines <c>Microsoft.Extensions.*</c> to this
-    /// package, so the bridge lives here and core never learns that logging exists.
+    /// D-W4's accepted cost is that a consumer who never reads a subscription's own
+    /// <c>DroppedCount</c> loses data quietly. This is what narrows it: rule 8 confines
+    /// <c>Microsoft.Extensions.*</c> to this package, so the bridge lives here and core never
+    /// learns that logging exists.
+    /// <para>
+    /// F7 (Task 12 review round 1): this used to take one <c>MassiveTopicSubscription&lt;T&gt;</c>
+    /// and read its <c>DroppedCount</c> directly, which had no correct calling pattern for a
+    /// consumer streaming more than one topic -- calling it once per subscription registered a
+    /// separate <c>Reconnected</c> handler each time, so every reconnect was logged once per topic;
+    /// calling it once covered only the one topic it was given, so every other topic's drops went
+    /// unreported. <see cref="MassiveStockStream.DropObserved"/> now carries the topic code and
+    /// that topic's own running count, so one subscription here, regardless of how many topics the
+    /// stream ever opens, reports every one of them honestly.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/>, <paramref name="subscription"/>, or <paramref name="logger"/> is
-    /// <see langword="null"/>.
+    /// <paramref name="stream"/> or <paramref name="logger"/> is <see langword="null"/>.
     /// </exception>
-    public static void LogStreamHealth<T>(
-        this MassiveStockStream stream,
-        MassiveTopicSubscription<T> subscription,
-        ILogger logger)
+    public static void LogStreamHealth(this MassiveStockStream stream, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        ArgumentNullException.ThrowIfNull(subscription);
         ArgumentNullException.ThrowIfNull(logger);
-
-        long reported = 0;
 
         stream.Reconnected += count => LogReconnected(logger, count);
 
-        stream.DropObserved += () =>
-        {
-            long dropped = subscription.DroppedCount;
+        // Per-topic, not a single scalar: DropObserved now multiplexes every topic the stream
+        // opens over one event, so the "how much is genuinely new since I last logged" delta has
+        // to be tracked per topic code, not once for the whole stream -- otherwise a trades drop
+        // and a quotes drop interleaved on the same event would each appear to be the other's
+        // continuation. Read and written only from DropObserved's own handler, which the read loop
+        // invokes one call at a time, so no further synchronization is needed here.
+        Dictionary<string, long> reported = new(StringComparer.Ordinal);
 
-            if (dropped > reported)
+        stream.DropObserved += (topicCode, droppedCount) =>
+        {
+            long previouslyReported = reported.TryGetValue(topicCode, out long value) ? value : 0;
+
+            if (droppedCount > previouslyReported)
             {
-                LogDropped(logger, dropped - reported);
-                reported = dropped;
+                LogDropped(logger, droppedCount - previouslyReported, topicCode);
+                reported[topicCode] = droppedCount;
             }
         };
     }
 
     // CA1848: LoggerMessage delegates rather than the plain ILogger.LogWarning(...) extension,
     // which allocates a params array and boxes every argument on every call. Neither message ever
-    // interpolates anything key-shaped -- a reconnect count and a drop count, never
-    // options.ApiKey or anything derived from it (rule 11).
+    // interpolates anything key-shaped -- a reconnect count, a topic's wire code, and a drop count,
+    // never options.ApiKey or anything derived from it (rule 11).
     [LoggerMessage(
         Level = LogLevel.Warning,
         Message = "The Massive stream reconnected ({Count} so far). Messages sent while it was down were missed.")]
@@ -105,7 +115,7 @@ public static partial class MassiveStreamServiceCollectionExtensions
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Massive stream dropped {Dropped} events because a topic buffer was full. "
+        Message = "The Massive stream dropped {Dropped} events on topic {TopicCode} because a topic buffer was full. "
             + "Raise TopicBufferCapacity or do less work in the consuming loop.")]
-    private static partial void LogDropped(ILogger logger, long dropped);
+    private static partial void LogDropped(ILogger logger, long dropped, string topicCode);
 }

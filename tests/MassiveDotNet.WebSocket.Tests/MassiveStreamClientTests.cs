@@ -141,4 +141,35 @@ public class MassiveStreamClientTests
 
         Assert.All(sockets, socket => Assert.Equal(WebSocketState.Closed, socket.State));
     }
+
+    // F4 (Task 12 review round 1): nothing removed a MassiveStockStream from _streams except the
+    // CLIENT'S OWN DisposeAsync -- a consumer who opens and closes many streams over the life of a
+    // long-running singleton (D28; MassiveStreamClient's own remarks say "long-lived and shared")
+    // accumulated dead stream objects, each pinning a MassiveStreamConnection, a TickerPool, and
+    // every topic buffer, for as long as the client itself lived. This is the reviewer's own probe,
+    // committed, using the internal StreamCount seam added to make the leak (and its absence)
+    // directly observable rather than inferred.
+    [Fact]
+    public async Task DisposedStreamsAreReleasedByTheClient()
+    {
+        MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = "k" });
+
+        MassiveStockStream streamA = await client.ConnectStocksAsync(() => ConnectedSocket(), TestContext.Current.CancellationToken);
+        MassiveStockStream streamB = await client.ConnectStocksAsync(() => ConnectedSocket(), TestContext.Current.CancellationToken);
+        MassiveStockStream streamC = await client.ConnectStocksAsync(() => ConnectedSocket(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, client.StreamCount);
+
+        await streamA.DisposeAsync();
+        Assert.Equal(2, client.StreamCount);
+
+        await streamB.DisposeAsync();
+        await streamC.DisposeAsync();
+
+        Assert.Equal(0, client.StreamCount);
+
+        // The client's own DisposeAsync must still be harmless once every stream it tracked is
+        // already gone -- an empty list disposes nothing, rather than erroring.
+        await client.DisposeAsync();
+    }
 }

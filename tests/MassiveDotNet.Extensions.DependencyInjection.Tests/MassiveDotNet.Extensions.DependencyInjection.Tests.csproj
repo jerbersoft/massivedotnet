@@ -12,11 +12,22 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <!-- FakeClock for the sentinel-key throttle test (F3/H8, Task 12 review round 1); test-only,
+         never referenced from src (rule 7), the same reasoning the WebSocket test project uses. -->
+    <PackageReference Include="NodaTime.Testing" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/MassiveDotNet.Extensions.DependencyInjection/MassiveDotNet.Extensions.DependencyInjection.csproj" />
     <ProjectReference Include="../../src/MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- F3/H8 (Task 12 review round 1): linked, not duplicated, the same mechanism Task 13's
+         brief already uses for Allocation.cs, and the repo's own precedent for sharing a test
+         helper across projects. Two copies of a fake drift, and the drift would be invisible
+         because both stay green independently. -->
+    <Compile Include="../MassiveDotNet.WebSocket.Tests/FakeWebSocket.cs" Link="FakeWebSocket.cs" />
   </ItemGroup>
 
 </Project>

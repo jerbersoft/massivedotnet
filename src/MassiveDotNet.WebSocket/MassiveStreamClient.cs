@@ -72,7 +72,14 @@ public sealed class MassiveStreamClient : IAsyncDisposable
         await connection.ConnectAsync(cancellationToken);
         connection.StartReading();
 
-        MassiveStockStream stream = new(connection, _options, _clock);
+        // F4 (Task 12 review round 1): the stream calls Unregister on itself, once, at the end of
+        // its own DisposeAsync -- not just when THIS client disposes it -- so a consumer who opens
+        // and closes many streams over the life of a long-running singleton (D28) does not pin a
+        // dead connection, TickerPool, and every topic buffer for each one, for the rest of the
+        // process. `stream` is read inside the lambda only once DisposeAsync eventually invokes
+        // it, long after this local has been assigned -- the constructor never calls it itself.
+        MassiveStockStream? stream = null;
+        stream = new MassiveStockStream(connection, _options, _clock, () => Unregister(stream!));
 
         lock (_streamsLock)
         {
@@ -88,6 +95,30 @@ public sealed class MassiveStreamClient : IAsyncDisposable
         // it itself rather than leaking a live socket and read loop.
         await stream.DisposeAsync();
         throw new ObjectDisposedException(nameof(MassiveStreamClient));
+    }
+
+    // F4: Remove on a list that no longer holds this stream -- because DisposeAsync already
+    // cleared it, or because this exact stream was never added (the disposed-race path above) --
+    // is a harmless no-op, the same "double disposal is clean" property every IAsyncDisposable in
+    // this SDK already has.
+    private void Unregister(MassiveStockStream stream)
+    {
+        lock (_streamsLock)
+        {
+            _streams.Remove(stream);
+        }
+    }
+
+    /// <summary>How many streams this client currently tracks. Test-only.</summary>
+    internal int StreamCount
+    {
+        get
+        {
+            lock (_streamsLock)
+            {
+                return _streams.Count;
+            }
+        }
     }
 
     /// <summary>

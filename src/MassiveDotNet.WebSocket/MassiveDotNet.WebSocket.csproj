@@ -16,6 +16,12 @@
     <!-- TickerPool and the rest of Internal/ are internal; the tests need to construct them
          directly, the same reasoning MassiveDotNet.CodeGen already uses for its diagnostics. -->
     <InternalsVisibleTo Include="MassiveDotNet.WebSocket.Tests" />
+    <!-- F3/H8 (Task 12 review round 1): LogStreamHealth is the only code in the SDK that formats
+         stream state into log text, the only place an API key could reach a log (rule 11). The
+         DI test project needs the internal MassiveStreamClient(options, clock) constructor and the
+         internal MassiveWebSocketFactory-driven ConnectStocksAsync overload to build a connected
+         MassiveStockStream offline, the same way MassiveDotNet.WebSocket.Tests already does. -->
+    <InternalsVisibleTo Include="MassiveDotNet.Extensions.DependencyInjection.Tests" />
   </ItemGroup>
 
 </Project>
