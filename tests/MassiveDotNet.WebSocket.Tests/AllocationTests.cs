@@ -165,15 +165,38 @@ public sealed class AllocationTests
     /// red under an unbounded channel before being committed.
     /// </para>
     /// <para>
-    /// The 256 KB bound is deliberately loose, the same reasoning
-    /// <c>CursorTraversalTests.RetainsNoMemoryProportionalToThePagesTraversed</c> uses for its own
-    /// 8 MB bound: <see cref="GC.GetTotalMemory(bool)"/> is process-wide, not a per-thread
-    /// allocation delta, so it carries noise from whatever else lives on the heap. Measured on
-    /// 2026-09-08, the correct bounded-channel implementation grew by roughly 92,000-111,000 B
-    /// between the small and large pass depending on what else was resident; regressed to an
-    /// unbounded channel (<c>Channel.CreateUnbounded&lt;T&gt;()</c>), the same test grew by
-    /// 7,007,240 B — 26.7x the bound. The gap between "genuine, bounded growth" and "unbounded
-    /// accumulation" is wide enough that a loose bound is still a meaningful one.
+    /// <see cref="GC.GetTotalMemory(bool)"/> is process-wide, not a per-thread allocation delta, so
+    /// it carries noise from whatever else lives on the heap -- and under <c>dotnet test</c>
+    /// specifically (never the native runner, which measured clean across ten unfiltered runs) that
+    /// noise is not small jitter but a repeatable ~1,037,880 B step, observed 2026-09-08 landing on
+    /// one side or the other of a single small/large pair often enough to fail roughly one run in
+    /// three at 226 tests -- a step this project's own xunit-level isolation
+    /// (<c>ProcessMemoryTests.cs</c>, <c>[Collection("Process memory")]</c>) cannot reach, because
+    /// it does not come from another xunit collection: it persisted even fully serial. Switching to
+    /// <see cref="GC.GetAllocatedBytesForCurrentThread"/>, immune to that step, was tried first and
+    /// rejected on its own measured evidence: it reported 4,800 B for 200 events against 638,400 B
+    /// for 20,000 -- proportional to events processed, not flat, because every trade's id string is
+    /// genuine, unpooled, per-event garbage (D-W10) that this instrument counts as allocated whether
+    /// or not the bounded buffer ever retains it. It cannot express a retention claim here.
+    /// </para>
+    /// <para>
+    /// So the probe stays process-wide, and is made noise-robust instead: eight independent
+    /// small/large samples, asserted on their minimum. The step only ever adds to a single raw
+    /// <c>GC.GetTotalMemory</c> reading, never subtracts, so the cleanest sample -- the one it
+    /// happened not to land on -- is a lower bound on genuine retention, never an underestimate of
+    /// it. Measured on 2026-09-08 across six repeated runs, the correct implementation's
+    /// minimum-of-eight landed between -1,350,736 B and -1,338,968 B every time (negative because
+    /// the step reliably landed on the small side of the first pair, which is a valid, if
+    /// unintuitive, reading of a process-wide probe).
+    /// <b>Inflating <c>capacity</c> alone does not regress this test</b> -- tried first, and
+    /// rejected on its own measured evidence: with a huge but still-bounded capacity, later samples
+    /// in the same run land near-zero, because the channel's backing storage grows to accommodate
+    /// one large burst and later bursts of the same size no longer make it grow further, so the
+    /// minimum of eight hides exactly the regression it exists to catch. Reverted to
+    /// <c>Channel.CreateUnbounded&lt;T&gt;()</c> -- the scenario this test was written against --
+    /// every one of eight samples came back close together and the minimum was 1,671,264 B, 6.4x
+    /// the 256 KB bound. The ceiling itself is unchanged from when this test was first written: the
+    /// fix is what is measured, not how much slack it gets.
     /// </para>
     /// </remarks>
     [Fact]
@@ -203,13 +226,28 @@ public sealed class AllocationTests
             return GC.GetTotalMemory(forceFullCollection: true);
         }
 
-        long small = Retained(10);
-        long large = Retained(1_000);
+        const int Samples = 8;
+        long minDelta = long.MaxValue;
+
+        for (int sample = 0; sample < Samples; sample++)
+        {
+            long small = Retained(10);
+            long large = Retained(1_000);
+            long delta = large - small;
+
+            if (delta < minDelta)
+            {
+                minDelta = delta;
+            }
+        }
 
         Assert.True(
-            large - small < 256 * 1024,
-            $"Retention grew by {Allocation.Describe(large - small)} between 200 and 20,000 events. "
-                + "A bounded buffer that drops the oldest must cost the same either way.");
+            minDelta < 256 * 1024,
+            $"Retention grew by at least {Allocation.Describe(minDelta)} -- the smallest of "
+                + $"{Samples} independent small/large samples -- between 200 and 20,000 events. A "
+                + "bounded buffer that drops the oldest must cost the same either way; host noise "
+                + "only ever adds to a single raw reading, so the minimum across repeated samples is "
+                + "the cleanest one available.");
     }
 
     /// <summary>

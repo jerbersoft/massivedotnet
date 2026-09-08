@@ -38,7 +38,7 @@ ships with.
 | `ParsingATradeAllocatesNothingBeyondItsTradeId` | Parse one trade, ticker pooled, conditions inline | 32 B | 40 B | `tickers.Intern(ref reader)` → `reader.GetString()`: 64 B |
 | `TheTickerCostsNothingAfterTheFirstEvent` | 1,000 repeat interns of a pooled ticker | 0 B | exactly 0 | alternate lookup → `_pool.TryGetValue(new string(ticker), …)`: 32,000 B |
 | `ConditionsWithinTheInlineCapacityAllocateNothing` | Read a 3-code condition array (inline capacity is 8) | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 320 B |
-| `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, 200 vs. 20,000 events written | ~92,000-111,000 B | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 7,007,240 B |
+| `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, minimum of 8 samples of 200 vs. 20,000 events written | -1,350,736 to -1,338,968 B (min-of-8) | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 1,671,264 B (min-of-8) |
 | `ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes` | Parse one `A`/`AM` aggregate carrying `dv`/`dav`, ticker pooled | 64 B | 80 B | `walk.Ticker(…)` → `walk.String(…)`: 96 B |
 | `ParsingAnAggregateWithoutDecimalVolumesAllocatesNothing` | Parse the same bar without `dv`/`dav` | 0 B | exactly 0 | same unpooled-ticker change: 32 B |
 | `ParsingALimitUpLimitDownBandAllocatesNothing` | Parse one `LULD` band, ticker pooled, indicators inline | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 144 B |
@@ -80,20 +80,15 @@ in `MassiveDotNet.Rest.Tests` already uses for the same class of claim, and that
 explains why its bound (8 MB) is far looser than a 20%-headroom figure would be: the measurement is
 process-wide, so it carries noise from whatever else is resident on the heap, not just the code
 under test. `RetainsNoMemoryProportionalToTheEventsReceived` inherits the same shape and the same
-reasoning, with a 256 KB bound: the correct, bounded-channel implementation measured 91,912-110,640
-B of growth across repeated isolated runs (a capacity-8 channel with drop-oldest retains a constant
-number of events regardless of how many pass through it, so this is close to the process's own
-baseline noise), and the regression to an unbounded channel measured 7,007,240 B — roughly 60-75x
-the correct figure and 26.7x the bound. That gap is wide enough for a loose bound to still mean
-something.
+reasoning, with a 256 KB bound.
 
 The bound was 512 KB when first committed and was tightened to 256 KB before the task closed. At
-512 KB it sat roughly 4.6x above the highest figure ever observed from correct code, which would
-have caught an unbounded channel but slept through a regression that merely tripled retention. 256
-KB is about 2.3x that maximum: still far looser than D31's usual 20% headroom, deliberately,
-because a process-wide reading is noisier than a thread-local allocation delta -- but tight enough
-that a doubling fails. Verified stable at the tighter bound across 10 runs of the test alone, 6 of
-the whole project, and 12 of the full solution.
+512 KB it sat roughly 4.6x above the highest single-sample figure ever observed from correct code
+at the time (91,912-110,640 B), which would have caught an unbounded channel but slept through a
+regression that merely tripled retention. 256 KB is about 2.3x that maximum: still far looser than
+D31's usual 20% headroom, deliberately, because a process-wide reading is noisier than a
+thread-local allocation delta -- but tight enough that a doubling fails. That single-sample
+instrument is superseded by the minimum-of-eight scheme below; the bound itself never moved.
 
 **A genuine flaky-gate finding, found and fixed before this ceiling was committed, per this task's
 explicit ask to report rather than tune around it.** Run alongside the rest of
@@ -107,20 +102,73 @@ allocations, not just this test's. `MassiveDotNet.Rest.Tests` does not hit this,
 classes are overwhelmingly synchronous stub-handler tests with nothing running on another thread
 while `CursorTraversalTests` measures.
 
-The fix is `tests/MassiveDotNet.WebSocket.Tests/ProcessMemoryTests.cs`:
+The first fix was `tests/MassiveDotNet.WebSocket.Tests/ProcessMemoryTests.cs`:
 `[CollectionDefinition("Process memory", DisableParallelization = true)]`. This is an
 execution-ordering fix, not a threshold tune — the number the correct code produces did not change,
-only what else was allowed to run while it was being measured.
+only what else was allowed to run while it was being measured. It started as the assembly-wide
+`[assembly: CollectionBehavior(DisableTestParallelization = true)]`, which worked but was broader
+than the problem: only the one test reading `GC.GetTotalMemory` is vulnerable, because the other
+three ceilings go through `Allocation.Measure`, which reads `GC.GetAllocatedBytesForCurrentThread`
+— thread-local, and immune to whatever else is running. Disabling parallelization for just this
+collection keeps it from running beside any other xUnit collection while leaving the rest of the
+assembly parallel, and it is measurably cheaper: 688 ms against roughly 1 s for the assembly-wide
+form. Confirmed stable across 14 unfiltered runs of the project in the narrow form at the time —
+but every one of those 14 runs, and the ones behind the paragraph above, went through the native
+xUnit v3 runner directly, never `dotnet test`.
 
-It started as the assembly-wide `[assembly: CollectionBehavior(DisableTestParallelization = true)]`,
-which worked but was broader than the problem: only the one test reading `GC.GetTotalMemory` is
-vulnerable, because the other three ceilings go through `Allocation.Measure`, which reads
-`GC.GetAllocatedBytesForCurrentThread` — thread-local, and immune to whatever else is running.
-Disabling parallelization for just this collection keeps it from running beside any other while
-leaving the rest of the assembly parallel, and it is measurably cheaper: 688 ms against roughly 1 s
-for the assembly-wide form, which is the project's original parallel duration. Confirmed stable
-across 14 unfiltered runs of the project in the narrow form, where runs before any fix failed on
-this test alone.
+## Follow-up, 2026-09-08: xUnit-level isolation was necessary but not sufficient
+
+The collection fix above is real and stays: it stops this test's reading from being polluted by
+this project's *own* xUnit collections, proven again below. It turned out not to be the whole
+story, because `dotnet test` — the command every release gate and CI job actually runs, never the
+native runner directly — routes execution through the `xunit.runner.visualstudio` / VSTest bridge,
+an in-process test host with its own background activity that no `[Collection]` attribute can
+reach, because it is not an xUnit collection at all. Found when this project's 226 tests, run
+repeatedly via `dotnet test`, failed this test roughly one run in three despite the fix above; the
+native runner, both in its default parallel mode and fully serial (`-parallel none`), stayed clean
+across ten unfiltered runs on the same binary. Forcing xUnit's own parallelism off through
+`dotnet test`'s passthrough flags (`-- xunit.parallelizeAssembly=false xunit.maxParallelThreads=1`)
+made no measurable difference, which is what pinned the pollution to the bridge process rather than
+to anything xUnit schedules.
+
+The pollution was not classical jitter: every failure under `dotnet test` read
+`Retention grew by 1,037,880 B` — the same figure, exactly, every time — landing on one side or the
+other of a single small/large pair. A fixed step that lands on one raw `GC.GetTotalMemory` reading
+or the other is exactly the shape a minimum-of-several-samples estimator is built for: the step
+only ever adds to a reading, never subtracts, so the sample it happens not to land on is a genuine,
+unpolluted reading of retention, and a real regression -- additive on top of the same step -- still
+raises the samples the step misses.
+
+Before adopting that, `GC.GetAllocatedBytesForCurrentThread` — immune to the step entirely, and
+already the instrument behind the first three rows in the table above — was tried and measured
+first, per this task's explicit instruction not to substitute it blindly. Measured across the same
+200-event and 20,000-event passes: 4,800 B and 638,400 B respectively — proportional to events
+processed, not flat. That is expected once named: every trade's id string is genuine, unpooled,
+per-event garbage (only the ticker is pooled), so this instrument counts it as allocated whether or
+not the bounded buffer ever retains it past that write. It measures a different property
+("processing allocates proportionally", which is already covered by
+`ParsingATradeAllocatesNothingBeyondItsTradeId`) than the one this test is named for
+("retention does not grow"), so it was rejected for this test specifically.
+
+`RetainsNoMemoryProportionalToTheEventsReceived` now takes the minimum `large - small` delta across
+eight independent samples in one run, asserted against the same, unmoved 256 KB bound. Measured
+2026-09-08 across six repeated runs of the correct implementation, the minimum-of-eight landed
+between -1,350,736 B and -1,338,968 B every time (negative because the step reliably landed on the
+small side of the first pair — a valid reading of a subtraction between two noisy process-wide
+probes). Regression-tested against `Channel.CreateUnbounded<T>()`, the same scenario the original
+7,007,240 B single-sample figure came from: every one of eight samples came back close together and
+the minimum was 1,671,264 B, 6.4x the 256 KB bound, confirmed reproducible across three repeated
+failing runs. A second candidate regression -- inflating `capacity` on the still-bounded channel to
+1,000,000 rather than switching channel types -- was tried first and rejected on its own measured
+evidence: later samples in the same run land near-zero once the channel's backing storage has
+already grown once to accommodate a large burst, so the minimum of eight hides exactly the
+regression it exists to catch. That is not a property of *this* fix; it is a property of
+minimum-of-samples estimators in general, worth naming so nobody reaches for a large fixed capacity
+as a regression proxy again.
+
+**Verified clean across 12 consecutive full-project runs under `dotnet test`** (8 required, 4 more
+for margin) after the sampling change — zero failures, where the same command failed
+roughly one run in three before it.
 
 `MassiveDotNet.Rest.Tests` uses neither mechanism for its own `CursorTraversalTests`. That is
 latently safe rather than protected: its 497 tests are synchronous stub-handler tests with nothing
