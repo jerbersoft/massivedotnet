@@ -638,4 +638,66 @@ public class StockStreamTests
             frame => frame.Contains("\"action\":\"unsubscribe\"", StringComparison.Ordinal)
                 && frame.Contains("\"params\":\"NOI.AAPL\"", StringComparison.Ordinal));
     }
+
+    // D-W17's property is PROMPTNESS, not merely "eventually": a consumer's `await foreach` must
+    // end when the stream is disposed, without waiting for the read loop to be awaited and
+    // drained (MassiveStreamConnection.DisposeAsync completes every sink again on its own, but
+    // only after that drain -- relying on it would delay every consumer by its length). Proved
+    // here by ordering against a gate this test controls, not by elapsed time (D31): the read
+    // loop's next genuinely empty receive -- the one after the subscribe below is acknowledged --
+    // is blocked, ignoring cancellation, and this test waits for confirmation that the read loop
+    // is ACTUALLY parked there before disposing, so DisposeAsync's own await of the read loop
+    // provably cannot finish until ReleaseReceive runs below -- and the assertion that the
+    // sequence already ended happens strictly before that release.
+    [Fact]
+    public async Task DisposalEndsSequencesWithoutWaitingForTheReadLoopToDrain()
+    {
+        FakeWebSocket socket = new();
+        socket.EnqueueText(Connected);
+        socket.EnqueueText(AuthSuccess);
+        socket.AutoAcknowledgeSubscribes = true;
+
+        // The two handshake frames above are the first two of the three frames this test's own
+        // setup delivers; the subscribe below, once it actually runs, is what delivers the third
+        // (its acknowledgement). Gating by COUNT rather than "the very next receive" is what lets
+        // this be armed here, before either the connection or the subscribe exist yet, without
+        // racing the read loop's own background Task.Run to reach a particular call -- see
+        // GateReceiveAfter's own remarks for why that race is real, not merely theoretical: the
+        // read loop re-checks cancellation at the top of every iteration, so disposing the moment
+        // this is armed -- without first confirming the block below was actually reached -- lets
+        // the loop exit there instead, never calling receive a fourth time at all.
+        Task gateEntered = socket.GateReceiveAfter(3);
+
+        MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = "k" });
+        MassiveStockStream stream =
+            await client.ConnectStocksAsync(() => socket, TestContext.Current.CancellationToken);
+
+        MassiveTopicSubscription<StockAggregate> bars =
+            await stream.SubscribeSecondAggregatesAsync(["AAPL"], TestContext.Current.CancellationToken);
+
+        // Confirms the read loop is genuinely parked inside the gate -- not merely that arming it
+        // happened before this line -- before disposing below.
+        await gateEntered.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        ValueTask disposeTask = stream.DisposeAsync();
+
+        await using IAsyncEnumerator<StockAggregate> barEnumerator =
+            bars.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        bool moved = await barEnumerator.MoveNextAsync()
+            .AsTask()
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.False(moved);
+
+        // The read loop has not been drained yet -- proven structurally, not by timing: nothing
+        // can complete MassiveStreamConnection.DisposeAsync's own await of ReadLoopTask until the
+        // gate above is released, which has not happened yet at this line, and the read loop was
+        // confirmed to already be blocked on it before disposal ran.
+        Assert.False(disposeTask.IsCompleted);
+
+        socket.ReleaseReceive();
+
+        await disposeTask.AsTask().WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+    }
 }
