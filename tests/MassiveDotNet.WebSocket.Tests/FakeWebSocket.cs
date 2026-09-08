@@ -138,6 +138,60 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
     /// <summary>Releases a connect gated by <see cref="GateNextConnect"/>. A no-op if none is gated.</summary>
     public void ReleaseConnect() => _connectGate?.TrySetResult();
 
+    private TaskCompletionSource? _receiveGate;
+    private TaskCompletionSource? _receiveGateEntered;
+    private int _gateAfterFrameCount;
+    private int _framesDelivered;
+
+    /// <summary>
+    /// Arms a block on the receive that would deliver the (<paramref name="frameCount"/> + 1)th
+    /// genuinely new frame -- counting only frames actually dequeued from the inbound queue, never
+    /// a buffer-too-small continuation of one already in progress -- and returns a task that
+    /// completes once the read loop is ACTUALLY blocked there, so a caller can await it rather
+    /// than guess when that has happened.
+    /// </summary>
+    /// <remarks>
+    /// The returned task exists because arming and blocking are not the same moment, and the gap
+    /// between them matters here in a way it does not for <see cref="GateNextConnect"/>:
+    /// <see cref="MassiveStreamConnection"/>'s own read loop re-checks its cancellation token at
+    /// the top of every loop iteration, BEFORE calling receive again -- so if a caller cancels
+    /// (disposal does, via <see cref="MassiveStreamConnection.DisposeAsync"/>) while the read loop
+    /// is merely BETWEEN receives rather than blocked inside one, the loop exits there and never
+    /// reaches this gate at all, no matter how it is armed. Observed directly: arming by count
+    /// alone, with disposal following immediately, reliably lost that race outright rather than
+    /// merely flaking -- FramesDelivered stopped at exactly the count, and the gate was never
+    /// entered. Awaiting this task is what turns "probably blocked by now" into a fact a caller can
+    /// rely on before disposing.
+    /// <para>
+    /// Counted by frame rather than "the very next receive", independent of the race above,
+    /// because it is what makes arming safe at any point -- including before a single frame is
+    /// queued or the connection is even opened: it is the COUNT, not when this is called, that
+    /// decides which receive blocks, so every frame delivered before the count is reached -- a
+    /// handshake, a subscribe acknowledgement enqueued once whatever caller queued it has actually
+    /// run -- goes through untouched regardless of how the background read loop happens to be
+    /// scheduled relative to this call.
+    /// </para>
+    /// <para>
+    /// The wait inside <see cref="ReceiveAsync"/> also does NOT link the caller's cancellation
+    /// token, unlike <see cref="GateNextConnect"/>: disposal cancels its shutdown token before
+    /// awaiting the read loop, and a gate that honoured that token would unblock the instant
+    /// disposal starts, collapsing the window this exists to hold open to nothing. Ignoring it
+    /// keeps the read loop open for exactly as long as the test needs, so a consumer's sequence
+    /// ending can be proven to happen BEFORE the drain, on ordering rather than on how fast this
+    /// fake happens to be.
+    /// </para>
+    /// </remarks>
+    public Task GateReceiveAfter(int frameCount)
+    {
+        _gateAfterFrameCount = frameCount;
+        _receiveGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _receiveGateEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return _receiveGateEntered.Task;
+    }
+
+    /// <summary>Releases a receive gated by <see cref="GateReceiveAfter"/>. A no-op if none is gated.</summary>
+    public void ReleaseReceive() => _receiveGate?.TrySetResult();
+
     public async Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
     {
         // The field is deliberately NOT cleared here before awaiting: ReleaseConnect reads the
@@ -222,7 +276,33 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
         }
         else
         {
-            frame = await _inbound.Reader.ReadAsync(cancellationToken);
+            // TryRead first, rather than going straight to the awaiting ReadAsync below: it is
+            // what lets GateReceiveAfter be armed before a single frame is queued and still let
+            // every already-buffered frame through untouched -- only a genuinely empty queue
+            // reaches the gate check. Equivalent to the unconditional ReadAsync this replaces ONLY
+            // when nothing is gated AND cancellationToken is not already cancelled: TryRead does
+            // not check the token before dequeuing, ReadAsync does (verified: an unbounded channel
+            // holding one item, read with an already-cancelled token, throws via ReadAsync but
+            // returns the item via TryRead). So with the shutdown token cancelled while a frame is
+            // still queued, this delivers that frame instead of throwing at once, deferring the
+            // exit to the read loop's own `while (!cancellationToken.IsCancellationRequested)`
+            // check on its next iteration -- at most one extra message, not "nothing is delivered
+            // after dispose".
+            if (!_inbound.Reader.TryRead(out frame))
+            {
+                if (_receiveGate is { } gate && _framesDelivered >= _gateAfterFrameCount)
+                {
+                    // Signalled from inside the wait, not before it: GateReceiveAfter's caller
+                    // awaits this to know the block below has genuinely started, not merely that
+                    // this method decided to enter it.
+                    _receiveGateEntered?.TrySetResult();
+                    await gate.Task;
+                }
+
+                frame = await _inbound.Reader.ReadAsync(cancellationToken);
+            }
+
+            _framesDelivered++;
             _offset = 0;
 
             if (frame.Abort)

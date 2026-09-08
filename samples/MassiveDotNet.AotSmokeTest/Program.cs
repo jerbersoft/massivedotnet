@@ -485,7 +485,7 @@ if (flaky.SentQueries.Any(query => query.Split("apiKey=", StringSplitOptions.Non
 // L3 (Task 14 ruling): this project referenced only .Rest through Task 13, so every "AOT publish
 // clean" claim made while building the streaming package proved nothing about it. The client is
 // constructed and disposed without connecting -- this project publishes in CI, which has no key
-// and no network (rule 13) -- and both hand-written event converters are built and read against a
+// and no network (rule 13) -- and every hand-written event converter is built and read against a
 // literal frame each, so ILC roots them and the ConditionSet InlineArray rather than trimming
 // instantiations nothing here would otherwise reach.
 Console.WriteLine("\nstreaming: rooting MassiveStreamClient, the event converters, and ConditionSet:");
@@ -541,13 +541,70 @@ if (streamQuote.Ticker != "MSFT" || streamQuote.Indicators.AsSpan().ToArray() is
     return 1;
 }
 
-// Rooted deliberately, never entered. Executing the two converters above proves THEY survive Native
-// AOT, but it leaves the machinery a real consumer actually goes through -- MassiveStockStream,
-// TopicSink<T>'s bounded Channel<T>, MassiveTopicSubscription<T>'s compiler-generated async
-// enumerator, EventRaiser's GetInvocationList casts, and the reconnect loop -- unreachable, so ILC
-// never analyses it and rules 3 and 4 say nothing about it. Reaching it from a branch guarded on
-// args, which ILC cannot fold away, roots the whole graph for analysis while guaranteeing it never
-// runs: CI has no key and no network (rule 13), and nothing passes this flag.
+// #23's whole-branch review: this branch added three more hand-written converters over three more
+// struct models (StockAggregate, StockImbalance, StockLimitUpLimitDown), and only the two above
+// were ever executed here -- everything past them was unreached, so ILC never analysed it and
+// rules 3 and 4 said nothing about it. Same pattern as the trade and quote converters above: build
+// each converter, read a literal frame, and check what came back.
+const string StreamAggregateFrame =
+    """[{"ev":"A","sym":"MSFT","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"otc":true}]""";
+const string StreamImbalanceFrame =
+    """[{"ev":"NOI","T":"MSFT","t":1,"at":930,"a":"M","i":1,"x":10,"o":480,"p":440,"b":25.03}]""";
+const string StreamLimitUpLimitDownFrame =
+    """[{"ev":"LULD","T":"MSFT","h":1.0,"l":0.5,"i":[16],"z":3,"t":1,"q":1}]""";
+
+Utf8JsonReader aggregateReader = new(Encoding.UTF8.GetBytes(StreamAggregateFrame));
+aggregateReader.Read();  // [
+aggregateReader.Read();  // {
+StockAggregate streamAggregate = new StockAggregateConverter(streamTickers, "A")
+    .Read(ref aggregateReader, typeof(StockAggregate), streamJsonOptions);
+
+Utf8JsonReader imbalanceReader = new(Encoding.UTF8.GetBytes(StreamImbalanceFrame));
+imbalanceReader.Read();  // [
+imbalanceReader.Read();  // {
+StockImbalance streamImbalance = new StockImbalanceConverter(streamTickers)
+    .Read(ref imbalanceReader, typeof(StockImbalance), streamJsonOptions);
+
+Utf8JsonReader limitUpLimitDownReader = new(Encoding.UTF8.GetBytes(StreamLimitUpLimitDownFrame));
+limitUpLimitDownReader.Read();  // [
+limitUpLimitDownReader.Read();  // {
+StockLimitUpLimitDown streamLimitUpLimitDown = new StockLimitUpLimitDownConverter(streamTickers)
+    .Read(ref limitUpLimitDownReader, typeof(StockLimitUpLimitDown), streamJsonOptions);
+
+Console.WriteLine(
+    $"  aggregate: {streamAggregate.Ticker} O {streamAggregate.Open:F3} C {streamAggregate.Close:F3}  otc {streamAggregate.Otc}");
+Console.WriteLine(
+    $"  imbalance: {streamImbalance.Ticker} type {streamImbalance.AuctionType} clearing {streamImbalance.BookClearingPrice:F2}");
+Console.WriteLine(
+    $"  luld     : {streamLimitUpLimitDown.Ticker} high {streamLimitUpLimitDown.HighPrice:F3} low "
+    + $"{streamLimitUpLimitDown.LowPrice:F3}  indicators [{string.Join(",", streamLimitUpLimitDown.Indicators.AsSpan().ToArray())}]");
+
+if (streamAggregate.Ticker != "MSFT" || !streamAggregate.Otc)
+{
+    Console.Error.WriteLine("FAIL: expected the streamed MSFT aggregate with otc true.");
+    return 1;
+}
+
+if (streamImbalance.Ticker != "MSFT" || streamImbalance.AuctionType != "M")
+{
+    Console.Error.WriteLine("FAIL: expected the streamed MSFT imbalance with auction type M.");
+    return 1;
+}
+
+if (streamLimitUpLimitDown.Ticker != "MSFT" || streamLimitUpLimitDown.Indicators.AsSpan().ToArray() is not [16])
+{
+    Console.Error.WriteLine("FAIL: expected the streamed MSFT LULD band with indicator [16].");
+    return 1;
+}
+
+// Rooted deliberately, never entered. Executing the five converters above proves THEY survive
+// Native AOT, but it leaves the machinery a real consumer actually goes through -- MassiveStockStream,
+// every TopicSink<T>/MassiveTopicSubscription<T> instantiation across all six topics, the
+// compiler-generated async enumerator, EventRaiser's GetInvocationList casts, and the reconnect
+// loop -- unreachable, so ILC never analyses it and rules 3 and 4 say nothing about it. Reaching it
+// from a branch guarded on args, which ILC cannot fold away, roots the whole graph for analysis
+// while guaranteeing it never runs: CI has no key and no network (rule 13), and nothing passes this
+// flag.
 if (args.Length > 0 && args[0] == "--rooting-only-never-passed")
 {
     await RootPublicStreamingSurfaceAsync(streamOptions);
@@ -567,6 +624,11 @@ static async Task RootPublicStreamingSurfaceAsync(MassiveStreamOptions options)
 
     MassiveTopicSubscription<StockTrade> trades = await stream.SubscribeTradesAsync(["MSFT"]);
     MassiveTopicSubscription<StockQuote> quotes = await stream.SubscribeQuotesAsync(["MSFT"]);
+    MassiveTopicSubscription<StockAggregate> secondAggregates = await stream.SubscribeSecondAggregatesAsync(["MSFT"]);
+    MassiveTopicSubscription<StockAggregate> minuteAggregates = await stream.SubscribeMinuteAggregatesAsync(["MSFT"]);
+    MassiveTopicSubscription<StockImbalance> imbalances = await stream.SubscribeImbalancesAsync(["MSFT"]);
+    MassiveTopicSubscription<StockLimitUpLimitDown> limitUpLimitDown =
+        await stream.SubscribeLimitUpLimitDownAsync(["MSFT"]);
 
     await foreach (StockTrade trade in trades)
     {
@@ -577,6 +639,30 @@ static async Task RootPublicStreamingSurfaceAsync(MassiveStreamOptions options)
     await foreach (StockQuote quote in quotes)
     {
         Console.WriteLine(quote.Ticker);
+        break;
+    }
+
+    await foreach (StockAggregate bar in secondAggregates)
+    {
+        Console.WriteLine(bar.Ticker);
+        break;
+    }
+
+    await foreach (StockAggregate bar in minuteAggregates)
+    {
+        Console.WriteLine(bar.Ticker);
+        break;
+    }
+
+    await foreach (StockImbalance imbalance in imbalances)
+    {
+        Console.WriteLine(imbalance.Ticker);
+        break;
+    }
+
+    await foreach (StockLimitUpLimitDown band in limitUpLimitDown)
+    {
+        Console.WriteLine(band.Ticker);
         break;
     }
 

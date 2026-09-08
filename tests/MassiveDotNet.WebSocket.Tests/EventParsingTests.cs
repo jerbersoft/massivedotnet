@@ -28,6 +28,36 @@ public class EventParsingTests
         return new StockQuoteConverter(new TickerPool(16)).Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
     }
 
+    private static StockAggregate ReadAggregate(string json, string topicCode)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockAggregateConverter(new TickerPool(16), topicCode)
+            .Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
+    }
+
+    private static StockImbalance ReadImbalance(string json)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockImbalanceConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
+    }
+
+    private static StockLimitUpLimitDown ReadLimitUpLimitDown(string json)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();  // [
+        reader.Read();  // {
+
+        return new StockLimitUpLimitDownConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockLimitUpLimitDown), JsonSerializerOptions.Default);
+    }
+
     [Fact]
     public void ThePublishedTradeSampleDeserializes()
     {
@@ -88,6 +118,22 @@ public class EventParsingTests
         StockTrade trade = ReadTrade("""[{"ev":"T","sym":"MSFT","p":1.0,"s":1,"i":"x","t":1,"q":1,"brandNew":{"nested":[1,2]}}]""");
 
         Assert.Equal("MSFT", trade.Ticker);
+    }
+
+    // The existing unknown-property test uses a scalar, which a missed Skip() survives by accident:
+    // the reader lands on the value and the next Read finds the following property name anyway. An
+    // unknown OBJECT or ARRAY is what actually distinguishes a correct walk, so the assertion is on
+    // a field that comes after it.
+    [Theory]
+    [InlineData("""{"ev":"T","sym":"MSFT","future":{"nested":[1,2]},"i":"12345","q":7}""")]
+    [InlineData("""{"ev":"T","sym":"MSFT","future":[1,[2,{"x":3}]],"i":"12345","q":7}""")]
+    public void AnUnknownNestedPropertyIsSkippedWholesale(string json)
+    {
+        StockTrade trade = ReadTrade($"[{json}]");
+
+        Assert.Equal("MSFT", trade.Ticker);
+        Assert.Equal("12345", trade.TradeId);
+        Assert.Equal(7, trade.SequenceNumber);
     }
 
     [Fact]
@@ -326,6 +372,384 @@ public class EventParsingTests
         reader.Read();
         StockQuote roundTripped = new StockQuoteConverter(new TickerPool(16))
             .Read(ref reader, typeof(StockQuote), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void ThePublishedSecondAggregateSampleDeserializes()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+
+        Assert.Equal("SPCE", bar.Ticker);
+        Assert.Equal(200, bar.Volume);
+        Assert.Equal(8642007, bar.AccumulatedVolume);
+        Assert.Equal(25.66, bar.OfficialOpenPrice);
+        Assert.Equal(25.3981, bar.VolumeWeightedAveragePrice);
+        Assert.Equal(25.39, bar.Open);
+        Assert.Equal(25.39, bar.Close);
+        Assert.Equal(25.39, bar.High);
+        Assert.Equal(25.39, bar.Low);
+        Assert.Equal(25.3714, bar.DailyVolumeWeightedAveragePrice);
+        Assert.Equal(50, bar.AverageTradeSize);
+    }
+
+    // ThePublishedSecondAggregateSampleDeserializes above cannot catch a transposed OHLC binding:
+    // the SPCE sample carries 25.39 for all four of Open/High/Low/Close, so any consistent
+    // relabeling among them still satisfies that test. The live FCX capture carries four distinct
+    // values, so this test pins each one by its literal number.
+    [Fact]
+    public void TheLiveAggregateCaptureDistinguishesOpenHighLowClose()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregateLive, "A");
+
+        Assert.Equal(78.1, bar.Open);
+        Assert.Equal(78.125, bar.High);
+        Assert.Equal(78.07, bar.Low);
+        Assert.Equal(78.08, bar.Close);
+    }
+
+    [Fact]
+    public void ThePublishedMinuteAggregateSampleDeserializesThroughTheSameModel()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockMinuteAggregate, "AM");
+
+        Assert.Equal("GTE", bar.Ticker);
+        Assert.Equal(4110, bar.Volume);
+        Assert.Equal(685, bar.AverageTradeSize);
+    }
+
+    // D5, and the unit the A/AM topics document and send: milliseconds, unlike NOI and LULD, which
+    // send nanoseconds for their own timestamp field.
+    [Fact]
+    public void AggregateWindowBoundsAreMillisecondsExposedAsInstants()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+
+        Assert.Equal(1610144868000, bar.StartTimestampMilliseconds);
+        Assert.Equal(1610144869000, bar.EndTimestampMilliseconds);
+        Assert.Equal(Instant.FromUnixTimeMilliseconds(1610144868000), bar.Start);
+        Assert.Equal(Instant.FromUnixTimeMilliseconds(1610144869000), bar.End);
+    }
+
+    // A minute bar spans sixty seconds and a second bar one, which is how a caller tells the two
+    // apart from one model (D-W14).
+    [Fact]
+    public void TheWindowLengthDistinguishesASecondBarFromAMinuteBar()
+    {
+        StockAggregate second = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+        StockAggregate minute = ReadAggregate(Fixtures.StockMinuteAggregate, "AM");
+
+        Assert.Equal(Duration.FromSeconds(1), second.End - second.Start);
+        Assert.Equal(Duration.FromMinutes(1), minute.End - minute.Start);
+    }
+
+    // The published sample omits all three, which is the documentation's own evidence that they
+    // are optional. "otc" is documented as left off when false, so absent reads as false rather
+    // than as an unknown.
+    [Fact]
+    public void AggregateFieldsAbsentFromTheSampleReadAsNullOrFalse()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregate, "A");
+
+        Assert.Null(bar.DecimalVolume);
+        Assert.Null(bar.DecimalAccumulatedVolume);
+        Assert.False(bar.Otc);
+    }
+
+    // The live capture exists precisely because the published sample cannot exercise these.
+    [Fact]
+    public void TheLiveAggregateCaptureCarriesTheDecimalVolumesTheSampleOmits()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregateLive, "A");
+
+        Assert.Equal("FCX", bar.Ticker);
+        Assert.Equal("4989.0", bar.DecimalVolume);
+        Assert.Equal("4332125.038360", bar.DecimalAccumulatedVolume);
+    }
+
+    [Fact]
+    public void AnOtcAggregateReadsAsOtc()
+    {
+        StockAggregate bar = ReadAggregate(
+            """[{"ev":"A","sym":"XYZ","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"otc":true}]""",
+            "A");
+
+        Assert.True(bar.Otc);
+    }
+
+    // #23's whole-branch review: every other optional field on this branch tolerates an explicit
+    // JSON null (dv/dav via walk.String, z/trfi/trft via the NullableInt32/64 accessors), but "otc"
+    // read through walk.Boolean, which throws on null instead of treating it the way absence is
+    // already treated -- a parse failure over one field the wire is documented to omit, which
+    // TopicSink.Write cannot recover from (it terminates every topic on the stream, not just this
+    // one). An explicit null carries the same "not OTC" meaning the wire's own omit-when-false
+    // convention already gives absence, so it reads as false rather than as a third, unknown state.
+    [Fact]
+    public void AnExplicitNullOtcReadsAsFalse()
+    {
+        StockAggregate bar = ReadAggregate(
+            """[{"ev":"A","sym":"FCX","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"otc":null}]""",
+            "A");
+
+        Assert.False(bar.Otc);
+    }
+
+    [Fact]
+    public void AnAggregateWithANonStringSymbolThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadAggregate("""[{"ev":"A","sym":123,"v":1}]""", "A"));
+
+        Assert.Contains("StockAggregate.sym", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAggregateCarryingNoSymbolThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadAggregate("""[{"ev":"A","v":1}]""", "A"));
+
+        Assert.Contains("StockAggregate", error.Message, StringComparison.Ordinal);
+    }
+
+    // The topic code the converter was built with is what it writes back, which is the whole reason
+    // one model can serve two topics.
+    [Theory]
+    [InlineData("A")]
+    [InlineData("AM")]
+    public void AnAggregateRoundTripsThroughWriteAndReadUnderEitherTopicCode(string topicCode)
+    {
+        StockAggregate original = ReadAggregate(Fixtures.StockSecondAggregateLive, topicCode);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockAggregateConverter(new TickerPool(16), topicCode)
+                .Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Assert.Contains(
+            $"\"ev\":\"{topicCode}\"",
+            Encoding.UTF8.GetString(buffer.WrittenSpan),
+            StringComparison.Ordinal);
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockAggregate roundTripped = new StockAggregateConverter(new TickerPool(16), topicCode)
+            .Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void ThePublishedImbalanceSampleDeserializes()
+    {
+        StockImbalance imbalance = ReadImbalance(Fixtures.StockImbalance);
+
+        Assert.Equal("NTEST.Q", imbalance.Ticker);
+        Assert.Equal("M", imbalance.AuctionType);
+        Assert.Equal(44, imbalance.SymbolSequence);
+        Assert.Equal(10, imbalance.ExchangeId);
+        Assert.Equal(480, imbalance.ImbalanceQuantity);
+        Assert.Equal(440, imbalance.PairedQuantity);
+        Assert.Equal(25.03, imbalance.BookClearingPrice);
+    }
+
+    // This topic sends the ticker as "T", not "sym" -- the same letter that is the trade topic's
+    // own wire code. A converter that assumed "sym" would find no ticker and throw on every event.
+    [Fact]
+    public void TheImbalanceTickerIsReadFromTheCapitalTProperty()
+    {
+        StockImbalance imbalance = ReadImbalance(Fixtures.StockImbalance);
+
+        Assert.Equal("NTEST.Q", imbalance.Ticker);
+    }
+
+    // Nanoseconds, documented and sampled that way -- unlike the aggregate topics, which send
+    // milliseconds. Read as milliseconds this instant would land roughly fifty million years out.
+    [Fact]
+    public void TheImbalanceTimestampIsNanosecondsExposedAsAnInstant()
+    {
+        StockImbalance imbalance = ReadImbalance(Fixtures.StockImbalance);
+
+        Assert.Equal(1601318039223013600, imbalance.TimestampNanoseconds);
+        Assert.Equal(Epoch.FromNanoseconds(1601318039223013600), imbalance.Timestamp);
+        Assert.Equal(2020, imbalance.Timestamp.InUtc().Year);
+    }
+
+    // D5's shape applied to a wall clock rather than an epoch: the wire's own (hour x 100) + minutes
+    // encoding is stored raw and the NodaTime type computed on read (rule 12's vocabulary).
+    [Theory]
+    [InlineData(930, 9, 30)]
+    [InlineData(1600, 16, 0)]
+    [InlineData(0, 0, 0)]
+    [InlineData(2359, 23, 59)]
+    public void TheAuctionTimeCodeIsExposedAsALocalTime(int code, int hour, int minute)
+    {
+        StockImbalance imbalance = ReadImbalance(
+            $$"""[{"ev":"NOI","T":"AAPL","t":1,"at":{{code}},"a":"M","i":1,"x":1,"o":1,"p":1,"b":1.0}]""");
+
+        Assert.Equal(code, imbalance.AuctionTimeCode);
+        Assert.Equal(new LocalTime(hour, minute), imbalance.AuctionTime);
+    }
+
+    // A computed property must not throw on a value the server chose, so a code that is not a wall
+    // clock reads as null and the raw code stays available.
+    [Theory]
+    [InlineData(2400)]
+    [InlineData(999)]
+    [InlineData(-1)]
+    [InlineData(1275)]
+    public void AnAuctionTimeCodeThatIsNotAWallClockReadsAsNull(int code)
+    {
+        StockImbalance imbalance = ReadImbalance(
+            $$"""[{"ev":"NOI","T":"AAPL","t":1,"at":{{code}},"a":"M","i":1,"x":1,"o":1,"p":1,"b":1.0}]""");
+
+        Assert.Null(imbalance.AuctionTime);
+        Assert.Equal(code, imbalance.AuctionTimeCode);
+    }
+
+    [Fact]
+    public void AnImbalanceWithANonStringTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadImbalance("""[{"ev":"NOI","T":123,"t":1}]"""));
+
+        Assert.Contains("StockImbalance.T", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnImbalanceCarryingNoTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadImbalance("""[{"ev":"NOI","t":1}]"""));
+
+        Assert.Contains("StockImbalance", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnImbalanceRoundTripsThroughWriteAndRead()
+    {
+        StockImbalance original = ReadImbalance(Fixtures.StockImbalance);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockImbalanceConverter(new TickerPool(16))
+                .Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockImbalance roundTripped = new StockImbalanceConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockImbalance), JsonSerializerOptions.Default);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void ThePublishedLimitUpLimitDownSampleDeserializes()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDown);
+
+        Assert.Equal("MSFT", band.Ticker);
+        Assert.Equal(492.99, band.HighPrice);
+        Assert.Equal(446.04, band.LowPrice);
+        Assert.Equal([16], band.Indicators.AsSpan().ToArray());
+        Assert.Equal(3, band.Tape);
+        Assert.Equal(5925769, band.SequenceNumber);
+    }
+
+    // Like NOI and unlike every other stock topic, the ticker arrives as "T".
+    [Fact]
+    public void TheLimitUpLimitDownTickerIsReadFromTheCapitalTProperty()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDownLive);
+
+        Assert.Equal("ATHR", band.Ticker);
+    }
+
+    // D-W15. Massive's documentation says this field is milliseconds; its own sample and the live
+    // wire both say nanoseconds. The assertion is on the resulting YEAR rather than on the raw
+    // long, because that is what distinguishes the two readings: as milliseconds these values land
+    // roughly fifty-six million years out, which no equality check on the stored long would catch.
+    [Fact]
+    public void TheLimitUpLimitDownTimestampIsNanosecondsNotTheDocumentedMilliseconds()
+    {
+        StockLimitUpLimitDown published = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDown);
+        StockLimitUpLimitDown live = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDownLive);
+
+        Assert.Equal(1764086430905642800, published.TimestampNanoseconds);
+        Assert.Equal(Epoch.FromNanoseconds(1764086430905642800), published.Timestamp);
+        Assert.Equal(2025, published.Timestamp.InUtc().Year);
+        Assert.Equal(2026, live.Timestamp.InUtc().Year);
+    }
+
+    [Fact]
+    public void LimitUpLimitDownIndicatorsReadAsAConditionSet()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(
+            """[{"ev":"LULD","T":"AAPL","h":1.0,"l":0.5,"i":[9,10,11],"z":1,"t":1,"q":1}]""");
+
+        Assert.Equal([9, 10, 11], band.Indicators.AsSpan().ToArray());
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownWithNoIndicatorsReadsAsAnEmptySet()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(
+            """[{"ev":"LULD","T":"AAPL","h":1.0,"l":0.5,"z":1,"t":1,"q":1}]""");
+
+        Assert.Equal(0, band.Indicators.Count);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownWithoutATapeReadsAsNull()
+    {
+        StockLimitUpLimitDown band = ReadLimitUpLimitDown(
+            """[{"ev":"LULD","T":"AAPL","h":1.0,"l":0.5,"i":[16],"t":1,"q":1}]""");
+
+        Assert.Null(band.Tape);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownWithANonStringTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadLimitUpLimitDown("""[{"ev":"LULD","T":123,"t":1}]"""));
+
+        Assert.Contains("StockLimitUpLimitDown.T", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownCarryingNoTickerThrowsJsonException()
+    {
+        JsonException error = Assert.Throws<JsonException>(() =>
+            ReadLimitUpLimitDown("""[{"ev":"LULD","t":1}]"""));
+
+        Assert.Contains("StockLimitUpLimitDown", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALimitUpLimitDownRoundTripsThroughWriteAndRead()
+    {
+        StockLimitUpLimitDown original = ReadLimitUpLimitDown(Fixtures.StockLimitUpLimitDownLive);
+
+        ArrayBufferWriter<byte> buffer = new();
+
+        using (Utf8JsonWriter writer = new(buffer))
+        {
+            new StockLimitUpLimitDownConverter(new TickerPool(16))
+                .Write(writer, original, JsonSerializerOptions.Default);
+        }
+
+        Utf8JsonReader reader = new(buffer.WrittenSpan);
+        reader.Read();
+        StockLimitUpLimitDown roundTripped = new StockLimitUpLimitDownConverter(new TickerPool(16))
+            .Read(ref reader, typeof(StockLimitUpLimitDown), JsonSerializerOptions.Default);
 
         Assert.Equal(original, roundTripped);
     }
