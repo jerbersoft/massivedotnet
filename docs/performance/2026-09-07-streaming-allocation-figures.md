@@ -38,7 +38,7 @@ ships with.
 | `ParsingATradeAllocatesNothingBeyondItsTradeId` | Parse one trade, ticker pooled, conditions inline | 32 B | 40 B | `tickers.Intern(ref reader)` → `reader.GetString()`: 64 B |
 | `TheTickerCostsNothingAfterTheFirstEvent` | 1,000 repeat interns of a pooled ticker | 0 B | exactly 0 | alternate lookup → `_pool.TryGetValue(new string(ticker), …)`: 32,000 B |
 | `ConditionsWithinTheInlineCapacityAllocateNothing` | Read a 3-code condition array (inline capacity is 8) | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 320 B |
-| `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, minimum of 8 samples of 200 vs. 20,000 events written | -1,350,736 to -1,338,968 B (min-of-8) | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 1,671,264 B (min-of-8) |
+| `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, `min(large_i) - min(small_i)` across 8 samples of 200 vs. 20,000 events written | 107,136 B | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 7,187,416 B |
 | `ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes` | Parse one `A`/`AM` aggregate carrying `dv`/`dav`, ticker pooled | 64 B | 80 B | `walk.Ticker(…)` → `walk.String(…)`: 96 B |
 | `ParsingAnAggregateWithoutDecimalVolumesAllocatesNothing` | Parse the same bar without `dv`/`dav` | 0 B | exactly 0 | same unpooled-ticker change: 32 B |
 | `ParsingALimitUpLimitDownBandAllocatesNothing` | Parse one `LULD` band, ticker pooled, indicators inline | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 144 B |
@@ -150,31 +150,124 @@ not the bounded buffer ever retains it past that write. It measures a different 
 `ParsingATradeAllocatesNothingBeyondItsTradeId`) than the one this test is named for
 ("retention does not grow"), so it was rejected for this test specifically.
 
-`RetainsNoMemoryProportionalToTheEventsReceived` now takes the minimum `large - small` delta across
-eight independent samples in one run, asserted against the same, unmoved 256 KB bound. Measured
-2026-09-08 across six repeated runs of the correct implementation, the minimum-of-eight landed
-between -1,350,736 B and -1,338,968 B every time (negative because the step reliably landed on the
-small side of the first pair — a valid reading of a subtraction between two noisy process-wide
-probes). Regression-tested against `Channel.CreateUnbounded<T>()`, the same scenario the original
-7,007,240 B single-sample figure came from: every one of eight samples came back close together and
-the minimum was 1,671,264 B, 6.4x the 256 KB bound, confirmed reproducible across three repeated
-failing runs. A second candidate regression -- inflating `capacity` on the still-bounded channel to
-1,000,000 rather than switching channel types -- was tried first and rejected on its own measured
-evidence: later samples in the same run land near-zero once the channel's backing storage has
-already grown once to accommodate a large burst, so the minimum of eight hides exactly the
-regression it exists to catch. That is not a property of *this* fix; it is a property of
-minimum-of-samples estimators in general, worth naming so nobody reaches for a large fixed capacity
-as a regression proxy again.
+`RetainsNoMemoryProportionalToTheEventsReceived` at this point took the minimum `large - small`
+delta across eight independent samples in one run, asserted against the same, unmoved 256 KB bound.
+Measured 2026-09-08 across six repeated runs of the correct implementation, the minimum-of-eight
+landed between -1,350,736 B and -1,338,968 B every time (negative because the step reliably landed
+on the small side of the first pair — a valid reading of a subtraction between two noisy
+process-wide probes). Regression-tested against `Channel.CreateUnbounded<T>()`, the same scenario
+the original 7,007,240 B single-sample figure came from: every one of eight samples came back close
+together and the minimum was 1,671,264 B, 6.4x the 256 KB bound, confirmed reproducible across
+three repeated failing runs. A second candidate regression -- inflating `capacity` on the
+still-bounded channel to 1,000,000 rather than switching channel types -- was tried first and
+rejected on its own measured evidence: later samples in the same run land near-zero once the
+channel's backing storage has already grown once to accommodate a large burst, so the minimum of
+eight hides exactly the regression it exists to catch. That was read at the time as a property of
+minimum-of-samples estimators in general; the next section found it was in fact this specific
+estimator's own defect, not an inherent property of sampling minima.
 
 **Verified clean across 12 consecutive full-project runs under `dotnet test`** (8 required, 4 more
 for margin) after the sampling change — zero failures, where the same command failed
-roughly one run in three before it.
+roughly one run in three before it. This stability claim is unaffected by the estimator correction
+below: the flakiness this section fixed was about *what else was running while the reading was
+taken* (xUnit-collection and VSTest-bridge isolation), never about which arithmetic the passing
+samples were reduced by, so the 12-run result stands on its own — see the new 8-run confirmation
+below for the corrected estimator specifically.
+
+**Superseded, 2026-09-08 (later the same day): every measured figure and the "minimum-of-samples
+estimators in general" framing in the two paragraphs above turned out to be wrong in a way this
+section's own flakiness fix was not.** The whole-branch review (#23) found `min(large_i - small_i)`
+itself backwards: see "The min-of-eight estimator was inverted" below for the corrected formula,
+figures, and re-proof. The -1,350,736 to -1,338,968 B reading above is not "a valid, if
+unintuitive, reading" of clean code, as it was described at the time -- it is the symptom.
 
 `MassiveDotNet.Rest.Tests` uses neither mechanism for its own `CursorTraversalTests`. That is
 latently safe rather than protected: its 497 tests are synchronous stub-handler tests with nothing
 running on another thread, so nothing pollutes the reading today. The first genuinely
 background-threaded async test added to that project inherits this exact bug, and the fix there is
 the same one-line collection definition.
+
+## The min-of-eight estimator was inverted, 2026-09-08 (later the same day)
+
+Whole-branch review (#23) on `RetainsNoMemoryProportionalToTheEventsReceived` found the estimator
+above -- `min(large_i - small_i)`, the minimum of each sample's own difference -- backwards. The
+step this whole section exists to survive (see above) is one-sided positive on each *raw reading*:
+it only ever adds to a single `GC.GetTotalMemory` call, never subtracts. But
+`min(large_i - small_i)` does not take the cleanest raw reading on each side; it takes the pairing
+whose *difference* is smallest, and noise landing on the `small` side of a pair **subtracts** from
+that pair's difference. Minimizing over differences therefore actively selects whichever sample
+happened to have its contamination on the small side -- the most contaminated pairing available,
+not the cleanest one, exactly backwards from the rationale this file stated for it. The
+-1,350,736 to -1,338,968 B figures recorded above are that selection at work: a delta that deeply
+negative is not a tight reading of near-zero retention, it is the estimator finding the one sample
+where noise helped it look best. Against the unmoved 256 KB bound that is roughly 1.6 MB of
+effective slack -- an ~11x loosening against the ~145 KB of headroom the original single-sample
+instrument had (256 KB against a highest observed clean reading of 91,912-110,640 B, per "The
+retention test's ceiling" above) -- precisely the excess-headroom failure D31 names, and the
+"minimum-of-samples estimators in general" framing recorded above was itself wrong: the defect was
+this specific formula, not sampling minima as a technique.
+
+**The fix**: take the minimum of each side independently, then subtract --
+`min(large_i) - min(small_i)`, not `min(large_i - small_i)`. Each minimum, taken on its own side, IS
+the cleanest raw reading of that side for the reason above (the step only ever adds), so their
+difference is a clean reading of the delta rather than a search for whichever pairing minimizes it.
+The loop already computed both values; nothing new is measured, only what is compared.
+
+Re-measured 2026-09-08 with the corrected estimator: `min(large)` and `min(small)` land on
+759,768 B and 652,632 B respectively on every repeated run on this host, a delta of **107,136 B**
+-- restoring the ~+100 KB order of magnitude this test was originally written against, and now
+comfortably under the 256 KB bound with headroom running the right direction. This is the figure
+now recorded in the table above.
+
+Both raw minima are large in absolute terms because `GC.GetTotalMemory` is process-wide (see "The
+retention test's ceiling" above): host noise and whatever else is resident on the heap are baked
+into every raw reading, only the *delta* is meant to be clean. One candidate contributor to that
+absolute size was checked directly, because it sits in this test's own code rather than in host
+noise: `frame`, the fixture array `TradeFrame` returns, is a live local at the point
+`GC.GetTotalMemory` is called in `Retained` -- nothing reassigns or nulls it first, and for the
+1,000-event pass it is roughly 119 KB (121,781 content bytes plus array overhead), large enough to
+land on the large object heap. Nulling it immediately before the collection sequence, on this
+runtime (.NET 10.0.2, `TieredCompilation=false`, Debug configuration, measured through
+`dotnet test`), changed neither raw minimum nor the delta, repeatably across multiple runs -- so on
+this host and configuration `frame`'s continued lexical scope is not part of what either minimum
+measures; whatever narrows its GC-tracked liveness does so before the point that matters here. That
+contradicts the folk assumption that a Debug build's unoptimized JIT keeps every in-scope local
+rooted through its whole method, at least for a plain local reassigned to `null` ahead of an
+explicit `GC.Collect()` sequence -- recorded here, beside the baseline it was checked against, so a
+future reader is not misled into subtracting a ~110-120 KB "fixture array tax" that this
+measurement does not actually carry.
+
+**Re-proving the guard.** `Channel.CreateUnbounded<T>()` in `TopicSink.cs`, the same falsifier used
+above, reproduces cleanly under the corrected estimator: `Retention grew by at least 6.85 MB
+(7,187,416 B) -- min(large) - min(small) across 8 independent samples -- between 200 and 20,000
+events. A bounded buffer that drops the oldest must cost the same either way; host noise only ever
+adds to a single raw reading, so each minimum, taken independently, is the cleanest reading of its
+own side.` -- 27x the 256 KB bound. Restored, the suite returns to green.
+
+**The capacity-inflation regression, re-tested as a cheap confirmation the fix is real.** The
+paragraph above records that inflating `capacity` to 1,000,000 on the still-bounded channel did
+*not* regress the old, flawed estimator -- later same-run samples land near-zero once the channel's
+backing storage has already grown once, hiding the regression from a minimum taken over
+differences. Re-run with the same inflated capacity against the *corrected* estimator: **it now
+does falsify**, `Retention grew by at least 6.23 MB (6,531,416 B)` -- 25x the 256 KB bound, and
+comparable in magnitude to the `Channel.CreateUnbounded<T>()` failure above. `min(large)` and
+`min(small)` are no longer forced through a shared subtraction that lets one late, unrepresentative
+sample cancel the regression out, so this is real confirmation the fix changed what is measured,
+not merely how it is phrased.
+
+Both falsifiers were applied and reverted before committing: the `Channel.CreateUnbounded<T>()`
+swap in `src/`, and the inflated `capacity` argument in the test itself. `git diff --stat -- src/`
+is empty on the commit this correction ships with, matching the discipline "Why this task's
+deliverable is the regression, not the number" set at the top of this file; `tests/` does carry a
+diff on that commit, which is the estimator fix itself (`min(large_i) - min(small_i)` replacing
+`min(large_i - small_i)`) rather than a leftover falsifier.
+
+**Verified clean across 8 consecutive full-project runs under `dotnet test`** with the corrected
+estimator in place -- zero failures, 234 tests each run. The stability this file already claimed
+for the isolation fix (12 consecutive runs, above) was never in question; this is the same
+confirmation repeated for the estimator correction specifically, since the whole point of that
+earlier fix was a stable gate, and a change to what the gate compares is exactly the kind of edit
+that could have silently reopened it.
 
 ## What this does not check
 
