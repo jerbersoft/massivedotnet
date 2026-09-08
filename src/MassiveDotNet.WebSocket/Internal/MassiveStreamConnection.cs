@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using MassiveDotNet.Serialization;
@@ -11,19 +12,16 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 {
     private readonly MassiveStreamOptions _options;
     private readonly MassiveWebSocketFactory _factory;
-    // Read by Task 11's reconnect backoff, not by the handshake, so IDE0052 sees an unused private
-    // field until that lands. Suppressed narrowly rather than exposed through an accessor: this type
-    // is partial, so the later half reads _clock directly from its own file, and an internal property
-    // minted to satisfy the analyzer would be dead surface the analyzer can never flag again --
-    // IDE0052 only sees private members.
-#pragma warning disable IDE0052
     private readonly IClock _clock;
-#pragma warning restore IDE0052
 
     private IMassiveWebSocket? _socket;
     private FrameReader? _reader;
     private readonly CancellationTokenSource _shutdown = new();
     private bool _disposed;
+
+    // Reset to zero after every message this connection reads and after every successful
+    // reconnect; BackoffFor uses it to size the next reconnect attempt's delay.
+    private int _reconnectAttempt;
 
     // One subscribe (or unsubscribe) in flight at a time: acknowledgements carry no correlation
     // id, so two overlapping requests could not tell whose acknowledgement arrived. Both
@@ -113,41 +111,220 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         ReadLoopTask = Task.Run(() => ReadLoopAsync(_shutdown.Token), _shutdown.Token);
     }
 
+    /// <summary>How many times this connection has been re-established.</summary>
+    /// <remarks>
+    /// A reconnect means messages were missed while the socket was down. The protocol offers no
+    /// cursor, so the gap cannot be repaired -- only reported, which is why this counter exists
+    /// beside <see cref="MassiveTopicSubscription{T}.DroppedCount"/> (D-W7).
+    /// </remarks>
+    public int ReconnectCount { get; private set; }
+
+    /// <summary>When the connection was last re-established.</summary>
+    public Instant? LastReconnected { get; private set; }
+
+    /// <summary>Raised after a successful reconnect, carrying the running count.</summary>
+    public event Action<int>? Reconnected;
+
+    /// <summary>Raised when the stream has stopped for good.</summary>
+    public event Action<Exception>? Faulted;
+
+    /// <summary>The delay before a given attempt, exposed for testing.</summary>
+    /// <param name="options">The backoff configuration.</param>
+    /// <param name="attempt">The zero-based attempt number.</param>
+    /// <param name="jitterFactor">Between -1 and 1; the tests pass the extremes, the loop randomizes.</param>
+    internal static Duration BackoffFor(MassiveStreamReconnectOptions options, int attempt, double jitterFactor)
+    {
+        double growth = Math.Pow(options.BackoffMultiplier, attempt);
+        Duration raw = options.InitialBackoff * growth;
+        Duration capped = raw > options.MaxBackoff ? options.MaxBackoff : raw;
+
+        return capped * (1.0 + (options.Jitter * jitterFactor));
+    }
+
     private async Task ReadLoopAsync(CancellationToken cancellationToken)
     {
         byte[] buffer = GC.AllocateUninitializedArray<byte>(_options.MaxMessageBytes);
 
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    int length = await _reader!.ReadMessageAsync(buffer, cancellationToken);
+
+                    // Every control message -- a subscribe or unsubscribe acknowledgement -- arrives
+                    // through this same loop, so each payload is checked for status events first. Dispatch
+                    // to the registered sinks then runs unconditionally: a status object routes to no sink
+                    // (nothing registers one under "status"), so nothing is handled twice, and a frame
+                    // carrying BOTH a status event and tick data must still reach whichever sink the tick
+                    // belongs to -- ruling T1 on Task 10, and exactly the silent data loss this SDK
+                    // refuses everywhere else.
+                    DispatchStatusEvents(buffer.AsSpan(0, length));
+                    Dispatch(buffer.AsSpan(0, length));
+
+                    // OnMessage is a separate observer seam, independent of the dispatch above -- it is
+                    // not how an event reaches its sink, so it is never what gates or substitutes for that
+                    // (F2, Task 10 review round 1: an earlier version only defaulted OnMessage to drive
+                    // dispatch, which meant a caller who set OnMessage for their own purposes silently
+                    // suppressed every sink). Handed the whole message, not a reader the handler could
+                    // hold across an await.
+                    if (OnMessage is { } handler)
+                    {
+                        await handler(buffer.AsMemory(0, length));
+                    }
+
+                    _reconnectAttempt = 0;
+                }
+                // Only WebSocketException and MassiveStreamException are read-loop faults treated as
+                // reconnectable -- an unexpected close (D-W7). A JsonException out of Dispatch (a
+                // malformed event, see ReadEventCode) is deliberately NOT one of them: the socket is
+                // healthy, the server will resend the same shape on the next message, and
+                // reconnecting to "fix" a parse failure would tear down every other topic's live data
+                // and hammer the service in a backoff loop over nothing the drop caused -- the same
+                // posture D-W6 refuses for a rejected key. Do not widen this filter to catch it (G3,
+                // Task 11 review).
+                catch (Exception error) when (error is WebSocketException or MassiveStreamException)
+                {
+                    if (await TryReconnectAsync(error, cancellationToken))
+                    {
+                        continue;
+                    }
+
+                    throw;
+                }
+            }
+
+            // The loop only reaches here if cancellation was requested but the receive that would have
+            // observed it never came (nothing pending). Throwing here, rather than returning, keeps
+            // every exit ReadLoopTask can report consistent: cancellation always ends the task Canceled,
+            // never RanToCompletion, so a caller never has to ask which kind of "done" this was.
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation is a caller-requested exit, not a fault: DisposeAsync completes the sinks.
+            throw;
+        }
+        catch (Exception error)
+        {
+            // Every path that reaches here is terminal -- nothing further will ever arrive on this
+            // connection: reconnect was declined (disabled, or exhausted its own retry loop), an
+            // authentication failure surfaced during a reconnect attempt (rethrown from
+            // TryReconnectAsync rather than the drop that triggered the attempt, so the caller learns
+            // WHY the stream stopped, D-W6/G5), or the fault never entered the reconnect filter above
+            // at all (a JsonException, G3). Exactly one of those three stops reaches here, and this is
+            // the only place that raises Faulted, so a consumer never sees it twice (G4).
+            StopPermanently(error);
+            throw;
+        }
+    }
+
+    private async Task<bool> TryReconnectAsync(Exception cause, CancellationToken cancellationToken)
+    {
+        if (_options.Reconnect is not { } reconnect)
+        {
+            // Faulted is raised by ReadLoopAsync's own outer catch, once, after this returns false
+            // and the caller rethrows `cause` unchanged -- never here, and never with a substitute
+            // exception (G4/G5, Task 11 review).
+            return false;
+        }
+
         while (!cancellationToken.IsCancellationRequested)
         {
-            int length = await _reader!.ReadMessageAsync(buffer, cancellationToken);
+            Duration delay = BackoffFor(reconnect, _reconnectAttempt++, Random.Shared.NextDouble() * 2.0 - 1.0);
+            // Boundary crossing (produce): the Duration converts here, naming no BCL type.
+            await Task.Delay(delay.ToTimeSpan(), cancellationToken);
 
-            // Every control message -- a subscribe or unsubscribe acknowledgement -- arrives
-            // through this same loop, so each payload is checked for status events first. Dispatch
-            // to the registered sinks then runs unconditionally: a status object routes to no sink
-            // (nothing registers one under "status"), so nothing is handled twice, and a frame
-            // carrying BOTH a status event and tick data must still reach whichever sink the tick
-            // belongs to -- ruling T1 on Task 10, and exactly the silent data loss this SDK
-            // refuses everywhere else.
-            DispatchStatusEvents(buffer.AsSpan(0, length));
-            Dispatch(buffer.AsSpan(0, length));
-
-            // OnMessage is a separate observer seam, independent of the dispatch above -- it is
-            // not how an event reaches its sink, so it is never what gates or substitutes for that
-            // (F2, Task 10 review round 1: an earlier version only defaulted OnMessage to drive
-            // dispatch, which meant a caller who set OnMessage for their own purposes silently
-            // suppressed every sink). Handed the whole message, not a reader the handler could
-            // hold across an await.
-            if (OnMessage is { } handler)
+            try
             {
-                await handler(buffer.AsMemory(0, length));
+                if (_socket is { } previous)
+                {
+                    await previous.DisposeAsync();
+                }
+
+                await ConnectAsync(cancellationToken);
+                _reader = new FrameReader(_socket!, _options.MaxMessageBytes);
+
+                // Replay before reporting success: a caller told the stream is back has every
+                // right to assume their subscriptions came back with it.
+                foreach (string parameters in Registry.Parameters)
+                {
+                    await SendActionAsync("subscribe", parameters, cancellationToken);
+                }
+
+                ReconnectCount++;
+                LastReconnected = _clock.GetCurrentInstant();
+                Reconnected?.Invoke(ReconnectCount);
+
+                return true;
+            }
+            catch (MassiveStreamAuthenticationException)
+            {
+                // Terminal, and rethrown rather than reported through `cause`: retrying a refused
+                // key hammers the service until the account is limited, and the server closes
+                // abruptly after auth_failed, so every further attempt would reconnect straight
+                // into the same refusal (D-W6). Propagating THIS exception -- not the original drop
+                // -- is what lets ReadLoopAsync's outer catch report the auth failure, not the
+                // transient close that triggered this attempt, as why the stream stopped (G5).
+                throw;
+            }
+            catch (Exception error) when (error is WebSocketException or MassiveStreamException)
+            {
+                // Transient: fall through and back off again.
             }
         }
 
-        // The loop only reaches here if cancellation was requested but the receive that would have
-        // observed it never came (nothing pending). Throwing here, rather than returning, keeps
-        // every exit ReadLoopTask can report consistent: cancellation always ends the task Canceled,
-        // never RanToCompletion, so a caller never has to ask which kind of "done" this was.
-        cancellationToken.ThrowIfCancellationRequested();
+        return false;
+    }
+
+    // The single place that ends a connection for good, called from ReadLoopAsync's outer catch.
+    // Three terminal stops reach it: reconnect declined (disabled, or the drop's own retry loop
+    // exhausted), an authentication failure surfacing during a reconnect attempt, and a fault the
+    // reconnect filter never treats as transient at all (a JsonException out of Dispatch, G3).
+    // Faulted is raised first, then every sink is completed -- both before the exception leaves the
+    // loop. Completing sinks here matters as much as raising Faulted does: without it, every one of
+    // those three stops leaves a consumer's `await foreach` parked on a sequence nothing is left
+    // alive to end, which is exactly the hang Task 10's F5 closed, arriving through a third door
+    // (G4, Task 11 review). This is deliberately NOT called for a transient fault that reconnects
+    // successfully -- F5's rule ("never complete on a transient read-loop fault") is unchanged by
+    // this: the distinction that matters is terminal vs transient, not fault vs dispose, and a
+    // transient drop's sequence must survive the reconnect that resumes it.
+    private void StopPermanently(Exception cause)
+    {
+        Faulted?.Invoke(cause);
+        CompleteAllSinks();
+    }
+
+    // Shared by StopPermanently and DisposeAsync: both are the same "nothing further will ever
+    // arrive" moment from a sink's point of view, just reached by different callers -- one when the
+    // read loop stops for good, the other when the caller asks to stop. Complete() on an
+    // already-completed channel, and TryWrite racing a Complete() from the loop's own last
+    // iteration, are both no-ops/false rather than exceptions, so no lock is needed against
+    // Dispatch here, and TopicSink.Complete() is TryComplete() underneath, so calling this a second
+    // time (a terminal stop followed by disposal, or the reverse) is a harmless no-op too, not a
+    // double-completion error.
+    //
+    // The SNAPSHOT is taken under _sinksLock even though the completing is not: an unlocked read
+    // could miss a registration landing concurrently, and that sink would then be completed by
+    // nobody -- this method has already passed this point -- hanging its consumer for good. Taking
+    // the lock pairs with AddSink's _disposed check so every sink AddSink ever accepts is either in
+    // this array or refused outright. Complete() is called outside the lock because it can run
+    // arbitrary continuations on the consumer's side, which is not work to do while holding a lock
+    // the read loop's dispatch may want.
+    private void CompleteAllSinks()
+    {
+        ITopicSink[] pending;
+
+        lock (_sinksLock)
+        {
+            pending = [.. Volatile.Read(ref _sinks).Values];
+        }
+
+        foreach (ITopicSink sink in pending)
+        {
+            sink.Complete();
+        }
     }
 
     /// <summary>
@@ -630,32 +807,14 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             // chose to stop the stream; Faulted (Task 11) is where a consumer learns why it stopped.
         }
 
-        // Every registered sink's sequence ends here, and only here -- never on a transient
-        // read-loop fault above, which Task 11's reconnect resumes through, so a sequence must
-        // survive that. Without this, TopicSink.Complete() existed since Task 10 but nothing ever
-        // called it, so a consumer's `await foreach` never ended even after the connection it was
-        // reading from had been disposed (F5, review round 1). Complete() on an already-completed
-        // channel, and TryWrite racing a Complete() from the loop's own last iteration, are both
-        // no-ops/false rather than exceptions, so no lock is needed against Dispatch here.
-        //
-        // The SNAPSHOT is taken under _sinksLock even though the completing is not: an unlocked read
-        // could miss a registration landing concurrently, and that sink would then be completed by
-        // nobody -- disposal has already passed this point -- hanging its consumer for good. Taking
-        // the lock pairs with AddSink's _disposed check so every sink is either in this array or
-        // refused outright. Complete() is called outside the lock because it can run arbitrary
-        // continuations on the consumer's side, which is not work to do while holding a lock the
-        // read loop's dispatch may want.
-        ITopicSink[] pending;
-
-        lock (_sinksLock)
-        {
-            pending = [.. Volatile.Read(ref _sinks).Values];
-        }
-
-        foreach (ITopicSink sink in pending)
-        {
-            sink.Complete();
-        }
+        // Every registered sink's sequence ends on disposal -- and, since Task 11, on a TERMINAL
+        // read-loop stop too (StopPermanently), never on a TRANSIENT one, which reconnect resumes
+        // through, so a sequence must survive that (F5's rule, unchanged: see StopPermanently and
+        // CompleteAllSinks for the terminal-vs-transient distinction and why calling this twice is
+        // safe). Without completing sinks somewhere, TopicSink.Complete() existed since Task 10 but
+        // nothing ever called it, so a consumer's `await foreach` never ended even after the
+        // connection it was reading from had been disposed (F5, review round 1).
+        CompleteAllSinks();
 
         if (_socket is not null)
         {

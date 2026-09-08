@@ -196,6 +196,8 @@ public class ReadLoopTests
     // "the stream closed while a message was being read" from its point of view (Step 3). So a
     // clean close ends the loop the same way an abrupt drop does: the task faults rather than
     // completing, and a caller learns which happened from the exception type, not the task status.
+    // Reconnect = null: this pins how the drop is REPORTED when it is not being reconnected --
+    // ReconnectTests.ACleanCloseReconnectsJustLikeAnAbruptDrop covers the reconnect-on case.
     [Fact]
     public async Task ACleanCloseFaultsTheLoopTaskWithAStreamException()
     {
@@ -204,7 +206,7 @@ public class ReadLoopTests
         socket.EnqueueText(AuthSuccess);
         socket.EnqueueClose(WebSocketCloseStatus.NormalClosure, "bye");
 
-        await using MassiveStreamConnection connection = CreateConnection(socket);
+        await using MassiveStreamConnection connection = CreateConnection(socket, reconnect: null);
         await connection.ConnectAsync(TestContext.Current.CancellationToken);
 
         connection.StartReading();
@@ -216,6 +218,8 @@ public class ReadLoopTests
 
     // An abrupt drop is a fault: the loop's task must fault rather than vanish, so a caller awaiting
     // ReadLoopTask observes the failure instead of a loop that silently stopped delivering messages.
+    // Reconnect = null: this pins how the drop is REPORTED when it is not being reconnected --
+    // ReconnectTests covers the reconnect-on case.
     [Fact]
     public async Task AnAbruptDropFaultsTheLoopTask()
     {
@@ -224,7 +228,7 @@ public class ReadLoopTests
         socket.EnqueueText(AuthSuccess);
         socket.AbortNext();
 
-        await using MassiveStreamConnection connection = CreateConnection(socket);
+        await using MassiveStreamConnection connection = CreateConnection(socket, reconnect: null);
         await connection.ConnectAsync(TestContext.Current.CancellationToken);
 
         connection.StartReading();
@@ -259,6 +263,19 @@ public class ReadLoopTests
     private static MassiveStreamConnection CreateConnection(FakeWebSocket socket)
     {
         MassiveStreamOptions options = new() { ApiKey = "test-key" };
+
+        return new MassiveStreamConnection(options, MassiveMarket.Stocks, () => socket, SystemClock.Instance);
+    }
+
+    // Reconnect defaults to on (MassiveStreamOptions.Reconnect), so the two tests below that expect
+    // a drop to fault the loop's task outright need it off: otherwise the drop is reconnected
+    // rather than faulted, and each would need a second FakeWebSocket to reconnect onto instead of
+    // pinning how a drop is reported when it is NOT being reconnected -- which is what both have
+    // always asserted (ReconnectTests covers reconnect itself, including a clean close leading to
+    // one).
+    private static MassiveStreamConnection CreateConnection(FakeWebSocket socket, MassiveStreamReconnectOptions? reconnect)
+    {
+        MassiveStreamOptions options = new() { ApiKey = "test-key", Reconnect = reconnect };
 
         return new MassiveStreamConnection(options, MassiveMarket.Stocks, () => socket, SystemClock.Instance);
     }
