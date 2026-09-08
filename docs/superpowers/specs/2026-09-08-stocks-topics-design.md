@@ -67,28 +67,38 @@ One further observation, which this issue pins rather than acts on: `NOI` answer
 
 ## Decisions
 
-### D-W12 · The property walk is extracted into a `ref struct`, and every converter goes through it
+### D-W12 · The property walk is extracted into one cursor, and every converter goes through it
 
-A `ref struct` in `MassiveDotNet.WebSocket/Internal` holds a `ref Utf8JsonReader` and drives the
-walk. A converter reads as a list of properties and nothing else:
+A small mutable `struct` in `MassiveDotNet.WebSocket/Internal`, `StreamEventWalk`, holds the walk's
+state and every accessor. A converter reads as a list of properties and nothing else:
 
 ```csharp
-StreamEventReader properties = new(ref reader, Model);
+StreamEventWalk walk = new(ref reader, Model);
 
-while (properties.NextProperty())
+while (walk.NextProperty(ref reader))
 {
-    if (properties.Is("sym"u8))     { ticker = properties.Ticker(tickers); }
-    else if (properties.Is("v"u8))  { volume = properties.Int64("v"); }
-    else if (properties.Is("op"u8)) { officialOpen = properties.Double("op"); }
+    if (reader.ValueTextEquals("sym"u8))     { ticker = walk.Ticker(ref reader, tickers, "sym"); }
+    else if (reader.ValueTextEquals("v"u8))  { volume = walk.Int64(ref reader, "v"); }
+    else if (reader.ValueTextEquals("op"u8)) { officialOpen = walk.Double(ref reader, "op"); }
 }
 ```
 
-`NextProperty()` skips the previous property's value if no accessor consumed it, then advances to
-the next property name, returning `false` at the end of the object. There is no `else` arm, so the
+`NextProperty` skips the previous property's value if no accessor consumed it, then advances to the
+next property name, returning `false` at the end of the object. There is no `else` arm, so the
 missing-`Skip()` half of the defect has nowhere to live: it is not caught by review, it is
 unrepresentable. Every accessor delegates to `JsonValueReader`, so the other half — a value read
 straight off the reader, diverging in its number and null handling from every other converter — has
-nowhere to live either, because the walker never exposes the reader.
+nowhere to live either, because a converter that wants a value asks the walk for it.
+
+**The reader travels as a parameter rather than living in the cursor, and that is not a style
+choice.** The natural design is a `ref struct` holding a `ref Utf8JsonReader` field, so a converter
+writes `walk.Int64("v")`. The compiler refuses it: `CS9050`, a ref field cannot refer to a ref
+struct, and `Utf8JsonReader` is one. Making `StreamEventWalk` itself a `ref struct` and passing the
+reader in fails differently — `CS8350`, because a `ref struct` receiver *might* capture the
+reference even when it does not. Both were confirmed against the compiler on 2026-09-08 before this
+was written down. A plain `struct` receiver is what compiles, because it cannot hold a ref field at
+all, so there is nothing for ref-safety analysis to reject. The cost is `ref reader` at every call
+site, which is noise; the alternative is no extraction.
 
 `StockTradeConverter` and `StockQuoteConverter` move onto it in the same change. Leaving them on
 their own copies would defeat the extraction: two hand-written walks would survive to drift from the
@@ -101,7 +111,7 @@ locals before constructing its model, and those cannot cross a virtual call as l
 would need a mutable builder type, which is a new type per event introduced to avoid a duplicated
 loop.
 
-The walker is `internal` to `MassiveDotNet.WebSocket` rather than public in core beside
+The walk is `internal` to `MassiveDotNet.WebSocket` rather than public in core beside
 `JsonValueReader`. Every streaming converter lives in this assembly, and the generated REST
 converters cannot use it without a change to the generator that rules 5 and 6 make a separate piece
 of work. Promoting it later is additive; shipping it public now is a surface that cannot be withdrawn.
@@ -230,10 +240,10 @@ Three `readonly record struct` models in `MassiveDotNet.WebSocket.Events`:
 `IReadOnlyCollection<string> tickers` and a defaulted trailing `CancellationToken`, matching the two
 that exist.
 
-**New internal surface.** `StreamEventReader` (D-W12), `StockAggregateConverter`,
+**New internal surface.** `StreamEventWalk` (D-W12), `StockAggregateConverter`,
 `StockImbalanceConverter`, `StockLimitUpLimitDownConverter`.
 
-**Changed.** `StockTradeConverter` and `StockQuoteConverter` move onto `StreamEventReader`;
+**Changed.** `StockTradeConverter` and `StockQuoteConverter` move onto `StreamEventWalk`;
 `MassiveStockStream`'s sink creation and disposal collapse per D-W17; `CLAUDE.md` gains D36 and the
 `Layout` note for the new converters; `docs/performance/2026-09-07-streaming-allocation-figures.md`
 gains the new ceilings and their regressions.
@@ -291,5 +301,5 @@ regular hours, per D-W15.
 - **Launchpad topics.** #59, blocked on a host no exposed feed provides.
 - **Fixing the `not authorized` message.** #60, per D-W18.
 - **Generating streaming converters.** Refused in D-W13, not deferred.
-- **Promoting `StreamEventReader` to core for the generated REST converters.** Additive later;
+- **Promoting `StreamEventWalk` to core for the generated REST converters.** Additive later;
   rules 5 and 6 make it a separate piece of work.
