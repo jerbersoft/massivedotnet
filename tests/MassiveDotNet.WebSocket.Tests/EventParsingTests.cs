@@ -374,6 +374,21 @@ public class EventParsingTests
         Assert.Equal(50, bar.AverageTradeSize);
     }
 
+    // ThePublishedSecondAggregateSampleDeserializes above cannot catch a transposed OHLC binding:
+    // the SPCE sample carries 25.39 for all four of Open/High/Low/Close, so any consistent
+    // relabeling among them still satisfies that test. The live FCX capture carries four distinct
+    // values, so this test pins each one by its literal number.
+    [Fact]
+    public void TheLiveAggregateCaptureDistinguishesOpenHighLowClose()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregateLive, "A");
+
+        Assert.Equal(78.1, bar.Open);
+        Assert.Equal(78.125, bar.High);
+        Assert.Equal(78.07, bar.Low);
+        Assert.Equal(78.08, bar.Close);
+    }
+
     [Fact]
     public void ThePublishedMinuteAggregateSampleDeserializesThroughTheSameModel()
     {
