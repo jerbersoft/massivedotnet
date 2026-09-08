@@ -268,9 +268,10 @@ Both work identically under `AddMassive`, which reads the same options.
 ## Streaming
 
 `MassiveDotNet.WebSocket` is the fourth package in the SDK, alongside core, `.Rest`, and
-`.Extensions.DependencyInjection`. It streams trades and quotes over a persistent connection to
-the platform's stocks feed, reconnecting with backoff and replaying every subscription when the
-connection drops.
+`.Extensions.DependencyInjection`. It streams six stock topics — trades, NBBO quotes,
+second- and minute-aggregate bars, net order imbalances, and limit up-limit down bands — over a
+persistent connection to the platform's stocks feed, reconnecting with backoff and replaying every
+subscription when the connection drops.
 
 ```csharp
 using MassiveDotNet.WebSocket;
@@ -286,6 +287,10 @@ await foreach (StockTrade trade in trades)
     Console.WriteLine($"{trade.Ticker}  {trade.Price:N2} x {trade.Size}  at {trade.SipTimestamp}");
 }
 ```
+
+The other five topics follow the same shape: `SubscribeQuotesAsync`, `SubscribeSecondAggregatesAsync`,
+`SubscribeMinuteAggregatesAsync`, `SubscribeImbalancesAsync`, and `SubscribeLimitUpLimitDownAsync`,
+each returning a `MassiveTopicSubscription<T>` over its own event type.
 
 Topics are a typed enum, `StockTopic`, rather than a string: the server silently drops a topic code
 it does not recognise — no acknowledgement, no error — so a caller who mistypes a string would see
