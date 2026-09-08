@@ -38,7 +38,7 @@ ships with.
 | `ParsingATradeAllocatesNothingBeyondItsTradeId` | Parse one trade, ticker pooled, conditions inline | 32 B | 40 B | `tickers.Intern(ref reader)` → `reader.GetString()`: 64 B |
 | `TheTickerCostsNothingAfterTheFirstEvent` | 1,000 repeat interns of a pooled ticker | 0 B | exactly 0 | alternate lookup → `_pool.TryGetValue(new string(ticker), …)`: 32,000 B |
 | `ConditionsWithinTheInlineCapacityAllocateNothing` | Read a 3-code condition array (inline capacity is 8) | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 320 B |
-| `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, `min(large_i) - min(small_i)` across 8 samples of 200 vs. 20,000 events written | 107,136 B | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 7,187,416 B |
+| `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, `min(large_i) - min(small_i)` across 8 samples of 200 vs. 20,000 events written | 107,136 B (mostly fixture-array artefact, not retention -- see below) | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 7,187,416 B |
 | `ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes` | Parse one `A`/`AM` aggregate carrying `dv`/`dav`, ticker pooled | 64 B | 80 B | `walk.Ticker(…)` → `walk.String(…)`: 96 B |
 | `ParsingAnAggregateWithoutDecimalVolumesAllocatesNothing` | Parse the same bar without `dv`/`dav` | 0 B | exactly 0 | same unpooled-ticker change: 32 B |
 | `ParsingALimitUpLimitDownBandAllocatesNothing` | Parse one `LULD` band, ticker pooled, indicators inline | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 144 B |
@@ -220,22 +220,48 @@ comfortably under the 256 KB bound with headroom running the right direction. Th
 now recorded in the table above.
 
 Both raw minima are large in absolute terms because `GC.GetTotalMemory` is process-wide (see "The
-retention test's ceiling" above): host noise and whatever else is resident on the heap are baked
-into every raw reading, only the *delta* is meant to be clean. One candidate contributor to that
-absolute size was checked directly, because it sits in this test's own code rather than in host
-noise: `frame`, the fixture array `TradeFrame` returns, is a live local at the point
-`GC.GetTotalMemory` is called in `Retained` -- nothing reassigns or nulls it first, and for the
-1,000-event pass it is roughly 119 KB (121,781 content bytes plus array overhead), large enough to
-land on the large object heap. Nulling it immediately before the collection sequence, on this
-runtime (.NET 10.0.2, `TieredCompilation=false`, Debug configuration, measured through
-`dotnet test`), changed neither raw minimum nor the delta, repeatably across multiple runs -- so on
-this host and configuration `frame`'s continued lexical scope is not part of what either minimum
-measures; whatever narrows its GC-tracked liveness does so before the point that matters here. That
-contradicts the folk assumption that a Debug build's unoptimized JIT keeps every in-scope local
-rooted through its whole method, at least for a plain local reassigned to `null` ahead of an
-explicit `GC.Collect()` sequence -- recorded here, beside the baseline it was checked against, so a
-future reader is not misled into subtracting a ~110-120 KB "fixture array tax" that this
-measurement does not actually carry.
+retention test's ceiling" above). **Corrected, 2026-09-08 (whole-branch re-review): the previous
+version of this paragraph got the `frame` finding backwards, and the test behind it was unsound.**
+`frame`, the fixture array `TradeFrame` returns, is a live local at the point `GC.GetTotalMemory` is
+called in `Retained`; the earlier version nulled it immediately before the collection sequence, saw
+the reading unchanged, and concluded it was NOT counted. That reasoning does not follow: a
+null assignment a few instructions before `GC.Collect()` does not make the array it pointed to
+unreachable in this configuration (Debug, `TieredCompilation=false`) -- `GC.KeepAlive(frame)` in
+place of the null assignment gives an identical figure, and byte-identical results are exactly what
+a live-and-counted `frame` would also produce. Only a variant that never allocates the fixture array
+at all distinguishes the two hypotheses, and that variant reads **121,808 B lower** -- confirming
+`frame` *is* counted.
+
+The decisive measurement: the same 8-sample `min(large) - min(small)` probe, run over code that
+retains **nothing at all** (no `TopicSink`, no `Channel<T>` -- `TradeFrame` allocated and
+immediately discarded), reports **120,600 B**, matching `Frame(1,000) - Frame(10)`
+(121,781 - 1,181 content bytes) to the byte -- reproduced independently in a from-scratch
+no-retention console app: eight small/large pairs, `min(small)=100,328 B`, `min(large)=220,928 B`,
+delta **120,600 B**, identical to the figure above. So this test's 107,136 B baseline is not, as the
+previous version of this file said, evidence of near-zero retention with a `~110-120 KB` tax on top
+of it to ignore -- it is, to within the two figures' own gap, **almost entirely fixture-array
+artefact**. The 256 KB ceiling is therefore a bound on *artefact plus retention* combined, not on
+retention alone: this test does not show true `TopicSink` retention past its bounded capacity to be
+non-zero, only that the two together stay under 256 KB, and a regression materially smaller than
+the ~1,181-121,781 B the fixture arrays themselves already contribute would not be caught here. The
+"future reader is not misled" framing in the earlier version of this paragraph was itself the
+thing misleading a future reader; struck rather than left standing.
+
+**One more honest limitation, also found on re-review.** Because the process heap floor tends to
+drift upward within a run rather than jitter randomly, several of the eight samples routinely tie
+or nearly tie, so the estimator degenerates toward far fewer than eight independently-informative
+draws. Confirmed here on the minimal no-retention reproduction above: `min(small)` and `min(large)`
+both land on sample 0 every run, with samples 1-7 monotonically higher, so the estimator there is
+effectively `large_0 - small_0` and seven of the eight samples contribute nothing. On the real test,
+with the full `TopicSink`/`Channel<T>` machinery running underneath it, the same degeneracy shows in
+a milder shape: `large` ties across all 8 samples on every run measured, and `small` ties across
+samples 1-7 with sample 0 as the one outlier -- elevated rather than minimal, so on this path it is
+samples 1-7 collectively, not specifically sample 0, that decide `min(small)`. Either shape reaches
+the same practical conclusion: most of the eight samples add nothing. That is still strictly better
+than the old `min(large_i - small_i)`, which did not merely fail to use seven samples -- it
+*actively selected* whichever pairing was most contaminated (see above). The estimator itself is
+not being reopened for this; it is recorded so a future reader does not "simplify" eight samples
+down to one or two on the mistaken belief that would be equivalent to what is here today.
 
 **Re-proving the guard.** `Channel.CreateUnbounded<T>()` in `TopicSink.cs`, the same falsifier used
 above, reproduces cleanly under the corrected estimator: `Retention grew by at least 6.85 MB

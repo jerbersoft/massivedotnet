@@ -205,17 +205,34 @@ public sealed class AllocationTests
     /// <para>
     /// Re-measured 2026-09-08 with the corrected estimator, across repeated runs: <c>min(large)</c>
     /// and <c>min(small)</c> both land on the same values every time this was run --
-    /// 759,768 B and 652,632 B respectively, a delta of 107,136 B -- which is roughly the
-    /// +100 KB order of magnitude this test was originally written against, comfortably under the
-    /// 256 KB bound with headroom in the right direction this time. Both raw minima are large in
-    /// absolute terms because <c>GC.GetTotalMemory</c> is process-wide (see above); of that, the
-    /// per-<c>Retained</c>-call fixture array (<c>TradeFrame</c>'s return value, up to ~119 KB for
-    /// the 1,000-event pass) is a live local at every <c>GC.GetTotalMemory</c> call in this method,
-    /// which was checked directly as a possible confound: nulling it immediately before the
-    /// collection sequence changed neither raw minimum nor the delta, repeatably, so on this
-    /// runtime (.NET 10.0.2, <c>TieredCompilation=false</c>, Debug) its GC-safepoint liveness is
-    /// already narrowed by the time it matters here, and it is not part of what either minimum
-    /// measures.
+    /// 759,768 B and 652,632 B respectively, a delta of 107,136 B -- comfortably under the 256 KB
+    /// bound with headroom running the right direction. <b>Corrected on further re-review: this is
+    /// NOT, as an earlier version of this remark said, roughly the retention-only figure this test
+    /// was originally written against.</b> Both raw minima are large mostly because
+    /// <c>TradeFrame</c>'s return value is a live local at every <c>GC.GetTotalMemory</c> call in
+    /// this method, and it IS counted: the earlier version nulled <c>frame</c> before measuring, saw
+    /// the reading unchanged, and wrongly concluded it was not counted -- that result is exactly
+    /// what a live-and-counted array also produces (a null assignment a few instructions earlier
+    /// does not make it unreachable under this JIT/config; <c>GC.KeepAlive(frame)</c> gives the same
+    /// figure). The variant that actually distinguishes the two hypotheses -- never allocating the
+    /// array at all -- reads 121,808 B lower, and an isolated no-retention reproduction of this same
+    /// 8-sample estimator (no sink, no channel, just the fixture arrays) reports a delta of
+    /// 120,600 B, matching <c>Frame(1,000) - Frame(10)</c> to the byte. So the 107,136 B above is,
+    /// to within that gap, almost entirely fixture-array artefact: the 256 KB bound is a bound on
+    /// artefact plus retention together, not on retention alone. See
+    /// <c>docs/performance/2026-09-07-streaming-allocation-figures.md</c> for the full measurement.
+    /// </para>
+    /// <para>
+    /// One more limitation found on that same re-review: the process heap floor tends to drift
+    /// upward within a run, so several of the eight samples routinely tie or nearly tie and the
+    /// estimator is effectively decided by far fewer than eight independent draws (in the isolated
+    /// no-retention reproduction, <c>min(small)</c> and <c>min(large)</c> both land on sample 0
+    /// every run; on this test specifically, <c>large</c> ties across all 8 samples and
+    /// <c>small</c> ties across samples 1-7, with sample 0 the one elevated outlier). Still strictly
+    /// better than <c>min(large_i - small_i)</c>, which did not merely leave samples unused -- it
+    /// actively selected the most contaminated one (see above). Not a reason to reopen the
+    /// estimator; recorded so nobody "simplifies" eight samples down to one or two believing that
+    /// would be equivalent.
     /// </para>
     /// <para>
     /// <b>Inflating <c>capacity</c> alone does not regress the flawed estimator</b> -- tried first
