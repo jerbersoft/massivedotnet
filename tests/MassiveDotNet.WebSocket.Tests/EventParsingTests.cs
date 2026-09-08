@@ -90,6 +90,22 @@ public class EventParsingTests
         Assert.Equal("MSFT", trade.Ticker);
     }
 
+    // The existing unknown-property test uses a scalar, which a missed Skip() survives by accident:
+    // the reader lands on the value and the next Read finds the following property name anyway. An
+    // unknown OBJECT or ARRAY is what actually distinguishes a correct walk, so the assertion is on
+    // a field that comes after it.
+    [Theory]
+    [InlineData("""{"ev":"T","sym":"MSFT","future":{"nested":[1,2]},"i":"12345","q":7}""")]
+    [InlineData("""{"ev":"T","sym":"MSFT","future":[1,[2,{"x":3}]],"i":"12345","q":7}""")]
+    public void AnUnknownNestedPropertyIsSkippedWholesale(string json)
+    {
+        StockTrade trade = ReadTrade($"[{json}]");
+
+        Assert.Equal("MSFT", trade.Ticker);
+        Assert.Equal("12345", trade.TradeId);
+        Assert.Equal(7, trade.SequenceNumber);
+    }
+
     [Fact]
     public void ThePublishedQuoteSampleDeserializes()
     {

@@ -8,9 +8,10 @@ namespace MassiveDotNet.WebSocket.Internal;
 /// <summary>Reads a <see cref="StockTrade"/> straight off the reader's tokens.</summary>
 /// <remarks>
 /// Hand-written rather than generated, because there is no OpenAPI description for the streaming
-/// wire to generate from. The shape follows D32's generated struct converters exactly: ordinal
-/// matching, last value wins, unknown properties skipped wholesale, and scalars read through
-/// <see cref="JsonValueReader"/> so a malformed value surfaces as a <see cref="JsonException"/>.
+/// wire to generate from (D36). The object walk itself is <see cref="StreamEventWalk"/>, shared
+/// with every other streaming converter, so ordinal matching, last value wins, wholesale skipping
+/// of unknown properties, and scalars read through <see cref="JsonValueReader"/> are one
+/// implementation rather than one per converter.
 /// </remarks>
 internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<StockTrade>
 {
@@ -18,10 +19,7 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
 
     public override StockTrade Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType != JsonTokenType.StartObject)
-        {
-            throw new JsonException($"Expected an object for {Model}, but found a {reader.TokenType} token.");
-        }
+        StreamEventWalk walk = new(ref reader, Model);
 
         string? ticker = null;
         string? tradeId = null;
@@ -37,90 +35,23 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
         int? trfId = null;
         long? trfTimestamp = null;
 
-        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        // Every property the wire may carry, and nothing else: "ev" and anything Massive adds later
+        // are skipped by the walk itself, so this loop has no default arm to get wrong.
+        while (walk.NextProperty(ref reader))
         {
-            if (reader.ValueTextEquals("sym"u8))
-            {
-                reader.Read();
-
-                // tickers.Intern bypasses JsonValueReader (it reads the raw UTF-8 bytes directly
-                // for the pooling fast path), so a malformed "sym" is checked here instead: without
-                // this, a null or numeric "sym" would surface as Utf8JsonReader's own
-                // InvalidOperationException rather than the JsonException every other field throws.
-                if (reader.TokenType != JsonTokenType.String)
-                {
-                    throw new JsonException($"Expected a string for {Model}.sym, but found a {reader.TokenType} token.");
-                }
-
-                ticker = tickers.Intern(ref reader);
-            }
-            else if (reader.ValueTextEquals("i"u8))
-            {
-                reader.Read();
-                tradeId = JsonValueReader.ReadString(ref reader, Model, "i");
-            }
-            else if (reader.ValueTextEquals("x"u8))
-            {
-                reader.Read();
-                exchangeId = JsonValueReader.ReadInt32(ref reader, Model, "x");
-            }
-            else if (reader.ValueTextEquals("z"u8))
-            {
-                reader.Read();
-                tape = JsonValueReader.ReadNullableInt32(ref reader, Model, "z");
-            }
-            else if (reader.ValueTextEquals("p"u8))
-            {
-                reader.Read();
-                price = JsonValueReader.ReadDouble(ref reader, Model, "p");
-            }
-            else if (reader.ValueTextEquals("s"u8))
-            {
-                reader.Read();
-                size = JsonValueReader.ReadInt64(ref reader, Model, "s");
-            }
-            else if (reader.ValueTextEquals("ds"u8))
-            {
-                reader.Read();
-                decimalSize = JsonValueReader.ReadString(ref reader, Model, "ds");
-            }
-            else if (reader.ValueTextEquals("c"u8))
-            {
-                reader.Read();
-                conditions = ConditionSetSerialization.Read(ref reader, Model, "c");
-            }
-            else if (reader.ValueTextEquals("t"u8))
-            {
-                reader.Read();
-                sipTimestamp = JsonValueReader.ReadInt64(ref reader, Model, "t");
-            }
-            else if (reader.ValueTextEquals("pt"u8))
-            {
-                reader.Read();
-                participantTimestamp = JsonValueReader.ReadNullableInt64(ref reader, Model, "pt");
-            }
-            else if (reader.ValueTextEquals("q"u8))
-            {
-                reader.Read();
-                sequenceNumber = JsonValueReader.ReadInt64(ref reader, Model, "q");
-            }
-            else if (reader.ValueTextEquals("trfi"u8))
-            {
-                reader.Read();
-                trfId = JsonValueReader.ReadNullableInt32(ref reader, Model, "trfi");
-            }
-            else if (reader.ValueTextEquals("trft"u8))
-            {
-                reader.Read();
-                trfTimestamp = JsonValueReader.ReadNullableInt64(ref reader, Model, "trft");
-            }
-            else
-            {
-                // Includes "ev", which the dispatcher has already consumed to choose this
-                // converter, and anything Massive adds later.
-                reader.Read();
-                reader.Skip();
-            }
+            if (reader.ValueTextEquals("sym"u8)) { ticker = walk.Ticker(ref reader, tickers, "sym"); }
+            else if (reader.ValueTextEquals("i"u8)) { tradeId = walk.String(ref reader, "i"); }
+            else if (reader.ValueTextEquals("x"u8)) { exchangeId = walk.Int32(ref reader, "x"); }
+            else if (reader.ValueTextEquals("z"u8)) { tape = walk.NullableInt32(ref reader, "z"); }
+            else if (reader.ValueTextEquals("p"u8)) { price = walk.Double(ref reader, "p"); }
+            else if (reader.ValueTextEquals("s"u8)) { size = walk.Int64(ref reader, "s"); }
+            else if (reader.ValueTextEquals("ds"u8)) { decimalSize = walk.String(ref reader, "ds"); }
+            else if (reader.ValueTextEquals("c"u8)) { conditions = walk.Conditions(ref reader, "c"); }
+            else if (reader.ValueTextEquals("t"u8)) { sipTimestamp = walk.Int64(ref reader, "t"); }
+            else if (reader.ValueTextEquals("pt"u8)) { participantTimestamp = walk.NullableInt64(ref reader, "pt"); }
+            else if (reader.ValueTextEquals("q"u8)) { sequenceNumber = walk.Int64(ref reader, "q"); }
+            else if (reader.ValueTextEquals("trfi"u8)) { trfId = walk.NullableInt32(ref reader, "trfi"); }
+            else if (reader.ValueTextEquals("trft"u8)) { trfTimestamp = walk.NullableInt64(ref reader, "trft"); }
         }
 
         return new StockTrade
