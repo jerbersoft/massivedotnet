@@ -265,6 +265,62 @@ catch (MassiveRateLimitExceededException exception)
 
 Both work identically under `AddMassive`, which reads the same options.
 
+## Streaming
+
+`MassiveDotNet.WebSocket` is the fourth package in the SDK, alongside core, `.Rest`, and
+`.Extensions.DependencyInjection`. It streams trades and quotes over a persistent connection to
+the platform's stocks feed, reconnecting with backoff and replaying every subscription when the
+connection drops.
+
+```csharp
+using MassiveDotNet.WebSocket;
+using MassiveDotNet.WebSocket.Events;
+
+await using MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = apiKey });
+await using MassiveStockStream stream = await client.ConnectStocksAsync();
+
+MassiveTopicSubscription<StockTrade> trades = await stream.SubscribeTradesAsync(["AAPL"]);
+
+await foreach (StockTrade trade in trades)
+{
+    Console.WriteLine($"{trade.Ticker}  {trade.Price:N2} x {trade.Size}  at {trade.SipTimestamp}");
+}
+```
+
+Topics are a typed enum, `StockTopic`, rather than a string: the server silently drops a topic code
+it does not recognise — no acknowledgement, no error — so a caller who mistypes a string would see
+a healthy connection producing nothing, indefinitely. Every subscribe call is
+acknowledgement-counted for the same reason, and throws `MassiveStreamSubscriptionException` if the
+server accepted fewer pairs than were requested.
+
+Each topic owns one bounded buffer, `TopicBufferCapacity` events by default (1024). A slow consumer
+drops the **oldest** event rather than blocking the read loop — every topic shares one socket, so a
+writer that waits would stall every other topic on the same connection, not just its own. A drop is
+counted exactly, on `MassiveTopicSubscription<T>.DroppedCount`, and raised as an event:
+
+```csharp
+stream.DropObserved += (topicCode, droppedCount) =>
+    Console.Error.WriteLine($"{topicCode} dropped an event (total dropped: {droppedCount})");
+```
+
+Authentication travels in a message rather than a header, because the wire protocol has no concept
+of one. A refused key and a plan without WebSocket access for the market both answer `auth_failed`,
+distinguished only by the server's own prose, so `MassiveStreamAuthenticationException.ServerMessage`
+carries it verbatim rather than a guessed category. This failure is terminal — the stream does not
+retry it — unlike a dropped connection, which reconnects automatically by default.
+
+`AddMassiveStream` registers `MassiveStreamClient` as a singleton the same way `AddMassive` does for
+the REST client, and `LogStreamHealth` bridges reconnects and drops onto `ILogger` without core ever
+learning that logging exists:
+
+```csharp
+builder.Services.AddMassiveStream(options => options.ApiKey = builder.Configuration["Massive:ApiKey"]);
+```
+
+```csharp
+stream.LogStreamHealth(logger);
+```
+
 ## Native AOT
 
 The SDK is `IsAotCompatible` and `IsTrimmable`, and uses `System.Text.Json` source generation
@@ -426,7 +482,8 @@ Not yet mapped, each tracked by its own issue:
 [vendor datasets](https://github.com/jerbersoft/massivedotnet/issues/16) ·
 [cross-market snapshots](https://github.com/jerbersoft/massivedotnet/issues/17).
 
-WebSocket streams and S3 flat files are planned for v0.2 and v0.3.
+WebSocket streams ship today for the stocks market; the other five markets are tracked by
+[#21](https://github.com/jerbersoft/massivedotnet/issues/21). S3 flat files are planned for v0.3.
 
 ### Deprecated and experimental operations
 

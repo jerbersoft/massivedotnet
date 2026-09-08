@@ -234,6 +234,29 @@ public sealed class MassiveStockStream : IAsyncDisposable
         EventRaiser.Raise(DropObserved, topicCode, droppedCount);
     }
 
+    // L1 (Task 14 ruling): an internal escape hatch so a live test can send a topic StockTopic
+    // deliberately cannot express (D-W1) -- the enum exists precisely because the server silently
+    // ignores a topic code it does not recognise, and the highest-value test in the streaming tier
+    // proves that observation still holds. Internal so no consumer can reach it; #21's facades for
+    // the other five markets get their own typed topics rather than reusing this.
+    /// <summary>Subscribes by the raw wire topic code rather than the <see cref="StockTopic"/> enum.</summary>
+    /// <param name="topicCode">The wire code, such as <c>T</c>, or one the enum cannot express.</param>
+    /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
+    /// <param name="cancellationToken">Cancels the subscribe.</param>
+    /// <returns>A task completing once the server has acknowledged every pair.</returns>
+    /// <exception cref="ObjectDisposedException">The stream has been disposed.</exception>
+    /// <exception cref="MassiveStreamSubscriptionException">
+    /// The server acknowledged fewer subscriptions than were requested -- including every pair, when
+    /// it does not recognise <paramref name="topicCode"/> at all.
+    /// </exception>
+    internal Task SubscribeRawAsync(
+        string topicCode, IReadOnlyCollection<string> tickers, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        return _connection.SubscribeAsync(topicCode, tickers, cancellationToken);
+    }
+
     /// <summary>Stops receiving a topic for the given symbols.</summary>
     /// <param name="topic">The topic.</param>
     /// <param name="tickers">The symbols to drop.</param>

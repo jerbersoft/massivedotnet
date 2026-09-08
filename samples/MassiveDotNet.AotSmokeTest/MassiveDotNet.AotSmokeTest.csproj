@@ -28,6 +28,14 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
+    <!--
+      L3 (Task 14 ruling): without this, every "AOT publish clean" claim made while building the
+      streaming package proved nothing about it, since this sample referenced only .Rest through
+      Task 13. Program.cs below roots MassiveStreamClient, both hand-written event converters, and
+      the ConditionSet InlineArray; it never connects, since this project publishes in CI, which
+      has no key and no network (rule 13).
+    -->
+    <ProjectReference Include="../../src/MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj" />
   </ItemGroup>
 
 </Project>

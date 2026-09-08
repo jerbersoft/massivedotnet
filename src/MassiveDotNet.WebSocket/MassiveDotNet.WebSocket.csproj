@@ -22,6 +22,16 @@
          internal MassiveWebSocketFactory-driven ConnectStocksAsync overload to build a connected
          MassiveStockStream offline, the same way MassiveDotNet.WebSocket.Tests already does. -->
     <InternalsVisibleTo Include="MassiveDotNet.Extensions.DependencyInjection.Tests" />
+    <!-- L1 (Task 14 ruling): StockStreamTests' internal SubscribeRawAsync escape hatch, and
+         MassiveStreamClient's internal ConnectRawAsync, are what let the live tier pin the
+         entitlement message on markets #20 ships no facade for, and the silently-ignored-topic
+         observation D33 exists to guard, without adding either as public API. -->
+    <InternalsVisibleTo Include="MassiveDotNet.IntegrationTests" />
+    <!-- L3 (Task 14 ruling): the AOT smoke test constructs StockTradeConverter and
+         StockQuoteConverter directly to root the hand-written converters and the ConditionSet
+         InlineArray, since an unreached generic instantiation is trimmed away and a clean publish
+         would otherwise prove nothing about either. -->
+    <InternalsVisibleTo Include="MassiveDotNet.AotSmokeTest" />
   </ItemGroup>
 
 </Project>
