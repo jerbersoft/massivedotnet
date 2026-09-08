@@ -34,7 +34,7 @@ public sealed class MassiveStockStream : IAsyncDisposable
     private readonly Action? _onDisposed;
 
     // H3(c) (Task 12 pre-flight): guards the check-create-register sequence in
-    // GetOrCreateTradeSink/GetOrCreateQuoteSink below. Two concurrent first-time callers could
+    // GetOrCreateSink below. Two concurrent first-time callers could
     // otherwise both observe the field as null, each mint their own TopicSink, and each call
     // AddSink -- the second call silently overwrites the first in the connection's sink table,
     // which can leave the FIELD (written by whichever caller's assignment happened last) and the
@@ -175,15 +175,12 @@ public sealed class MassiveStockStream : IAsyncDisposable
         IReadOnlyCollection<string> tickers,
         CancellationToken cancellationToken = default)
     {
-        TopicSink<StockTrade> sink = GetOrCreateTradeSink();
+        TopicSink<StockTrade> sink = GetOrCreateSink(ref _trades, StockTopic.Trades, new StockTradeConverter(_tickers));
 
         await _connection.SubscribeAsync(StockTopic.Trades.ToCode(), tickers, cancellationToken);
 
         return sink.Subscription;
     }
-
-    private TopicSink<StockTrade> GetOrCreateTradeSink() =>
-        GetOrCreateSink(ref _trades, StockTopic.Trades, new StockTradeConverter(_tickers));
 
     /// <summary>Subscribes to NBBO quotes.</summary>
     /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
@@ -197,15 +194,12 @@ public sealed class MassiveStockStream : IAsyncDisposable
         IReadOnlyCollection<string> tickers,
         CancellationToken cancellationToken = default)
     {
-        TopicSink<StockQuote> sink = GetOrCreateQuoteSink();
+        TopicSink<StockQuote> sink = GetOrCreateSink(ref _quotes, StockTopic.Quotes, new StockQuoteConverter(_tickers));
 
         await _connection.SubscribeAsync(StockTopic.Quotes.ToCode(), tickers, cancellationToken);
 
         return sink.Subscription;
     }
-
-    private TopicSink<StockQuote> GetOrCreateQuoteSink() =>
-        GetOrCreateSink(ref _quotes, StockTopic.Quotes, new StockQuoteConverter(_tickers));
 
     // One creator for every topic. Holds the check-create-register sequence, the disposal refusal,
     // and the drop wiring in one place, so a new topic is a field and a call rather than another

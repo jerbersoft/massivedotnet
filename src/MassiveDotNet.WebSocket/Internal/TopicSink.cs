@@ -9,9 +9,9 @@ internal sealed class TopicSink<T> : ITopicSink
 {
     // JsonSerializerOptions.Default is annotated RequiresUnreferencedCode/RequiresDynamicCode --
     // reading it walks a reflection-based resolution path, which fails the AOT smoke publish (rule
-    // 3). An empty, unconfigured instance carries neither annotation, and is enough here: neither
-    // StockTradeConverter nor StockQuoteConverter's Read ever consults its options parameter, so no
-    // caller-supplied configuration could reach them regardless of what this holds.
+    // 3). An empty, unconfigured instance carries neither annotation, and is enough here: no
+    // streaming converter's Read ever consults its options parameter, so no caller-supplied
+    // configuration could reach them regardless of what this holds.
     private static readonly JsonSerializerOptions EmptyOptions = new();
 
     private readonly Channel<T> _channel;
@@ -68,8 +68,8 @@ internal sealed class TopicSink<T> : ITopicSink
     {
         // The null-forgiving operator matches JsonConverter{T}.Read's own signature, T? Read(...):
         // annotated that way because T is unconstrained and a converter for a reference-typed model
-        // COULD return null, but neither converter this SDK hands to a TopicSink ever does --
-        // StockTradeConverter and StockQuoteConverter either return a genuine value or throw.
+        // COULD return null, but no streaming converter this SDK hands to a TopicSink ever does --
+        // each one either returns a genuine value or throws.
         T value = _converter.Read(ref reader, typeof(T), EmptyOptions)!;
 
         // TryWrite, never WriteAsync. Every topic shares one read loop: a writer that waits stalls

@@ -171,6 +171,7 @@ boundary. NodaTime keeps them distinct types, so the wrong one does not compile.
 | A moment on the global timeline | `Instant` | `Agg.Timestamp`, `LastTrade.SipTimestamp`, `NewsArticle.PublishedUtc` |
 | A calendar date with no time or zone | `LocalDate` | Ex-dividend date, split execution date, IPO date |
 | A wall-clock time in a named zone | `ZonedDateTime` | Session open and close in `America/New_York` |
+| A wall-clock time with no date or zone attached | `LocalTime` | `StockImbalance.AuctionTime` |
 | A date and time with no zone attached | `LocalDateTime` | Rare; prefer `Instant` or `ZonedDateTime` |
 | An elapsed amount of time | `Duration` | `MassiveClientOptions.Timeout`, `RetryAfter` |
 | The current moment | `IClock` / `SystemClock.Instance` | Never `DateTime.UtcNow` — an injected clock is also testable |
