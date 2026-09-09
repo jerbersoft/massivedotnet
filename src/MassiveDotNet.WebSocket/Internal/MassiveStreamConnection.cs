@@ -67,6 +67,19 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private Dictionary<string, string>? _replayAcks;
     private TaskCompletionSource? _replayAcknowledgements;
 
+    // What the server SAID when it refused, kept beside whichever acknowledgement slot the refusal
+    // belongs to. A refused subscribe is answered rather than dropped -- observed live on
+    // 2026-09-08 as {"ev":"status","status":"error","message":"not authorized"} for a topic the
+    // key's plan does not include -- and OnStatus used to discard it, leaving the caller with the
+    // shortfall's inferred cause, which says the opposite of what the server said (#60, D37).
+    //
+    // Two slots for exactly the reason there are two acknowledgement slots: a caller subscribing
+    // inside a replay's verification window would otherwise erase the replay's refusal, or inherit
+    // one aimed at the replay. Null means the server gave no reason, which is a real and different
+    // answer -- see MassiveStreamSubscriptionException.ServerMessage.
+    private string? _pendingError;
+    private string? _replayError;
+
     public MassiveStreamConnection(
         MassiveStreamOptions options,
         MassiveMarket market,
@@ -427,6 +440,11 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         {
             _replayAcks = owed;
             _replayAcknowledgements = acknowledgements;
+
+            // Cleared on arming rather than only on teardown: VerifyReplayAsync returns early
+            // WITHOUT clearing when a later reconnect has taken the slot over, which is correct
+            // there but leaves the previous attempt's reason behind for this one to inherit.
+            _replayError = null;
         }
 
         try
@@ -497,6 +515,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         }
 
         string[] unacknowledged;
+        string? refusal;
 
         lock (_ackLock)
         {
@@ -510,8 +529,10 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             }
 
             unacknowledged = [.. owed.Values.Order(StringComparer.Ordinal)];
+            refusal = _replayError;
             _replayAcks = null;
             _replayAcknowledgements = null;
+            _replayError = null;
         }
 
         if (unacknowledged.Length == 0 || cancellationToken.IsCancellationRequested)
@@ -539,7 +560,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         // nobody awaits and starve every handler registered after it.
         EventRaiser.Raise(
             SubscriptionsLost,
-            new MassiveStreamSubscriptionException(string.Join(',', lost), lost.Length));
+            new MassiveStreamSubscriptionException(string.Join(',', lost), lost.Length, refusal));
     }
 
     // Clears the replay slot only if it is still the one the caller published. A later reconnect
@@ -553,6 +574,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             {
                 _replayAcks = null;
                 _replayAcknowledgements = null;
+                _replayError = null;
             }
         }
     }
@@ -729,6 +751,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     {
         if (status.Status != StatusMessage.Success)
         {
+            RecordRefusal(status);
             return;
         }
 
@@ -760,6 +783,44 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             if (_pendingAcks is { } pending && pending.Remove(message) && pending.Count == 0)
             {
                 _pendingAcknowledgements?.TrySetResult();
+            }
+        }
+    }
+
+    // Keeps the server's reason for a subscribe it will not honour, so the shortfall can report
+    // what happened instead of inferring it (#60, D37).
+    //
+    // Attribution is by who is SENDING, which is deliberately the inverse of the crediting order
+    // above. An acknowledgement names its pair, so order there only breaks a tie between two
+    // waiters owed byte-identical text; a refusal names nothing -- the observed frame carried no
+    // `params` and no topic, and arrived AHEAD of the acknowledgements for the pairs that were
+    // accepted -- so precedence has to come from somewhere other than content. _pendingAcks is
+    // armed only while SubscribeAsync holds _subscribeGate, which makes armed and sending the same
+    // thing, whereas the replay slot outlives its reconnect by design (see VerifyReplayAsync) and
+    // can sit armed with nothing in flight at all.
+    //
+    // Nothing is recorded when neither slot is armed: a refusal answering a request that has
+    // already finished belongs to nothing, and holding it would let it surface against whatever
+    // subscribes next.
+    //
+    // An empty message records nothing either. The cause the exception falls back to describes
+    // silence, and a status carrying no prose is silence with a label on it.
+    private void RecordRefusal(in StatusMessage status)
+    {
+        if (status.Message.Length == 0)
+        {
+            return;
+        }
+
+        lock (_ackLock)
+        {
+            if (_pendingAcks is not null)
+            {
+                _pendingError = status.Message;
+            }
+            else if (_replayAcks is not null)
+            {
+                _replayError = status.Message;
             }
         }
     }
@@ -940,10 +1001,12 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             }
 
             string[] unacknowledgedTickers;
+            string? refusal;
 
             lock (_ackLock)
             {
                 unacknowledgedTickers = [.. pending.Values];
+                refusal = _pendingError;
             }
 
             if (unacknowledgedTickers.Length > 0)
@@ -959,7 +1022,8 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                     Registry.Add(topicCode, acknowledgedTickers);
                 }
 
-                throw new MassiveStreamSubscriptionException(parameters, unacknowledgedTickers.Length);
+                throw new MassiveStreamSubscriptionException(
+                    parameters, unacknowledgedTickers.Length, refusal);
             }
 
             Registry.Add(topicCode, tickers);
@@ -970,6 +1034,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             {
                 _pendingAcks = null;
                 _pendingAcknowledgements = null;
+                _pendingError = null;
             }
 
             _subscribeGate.Release();

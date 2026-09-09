@@ -220,6 +220,11 @@ What this issue owes is the pin: a dated live test asserting the current behavio
 move it deliberately. That is D21's posture — an observation is pinned, dated, and flips the day the
 behaviour changes — applied to the SDK's own behaviour rather than the service's.
 
+**Resolved.** #60 landed as D37: the refusal is recorded against the acknowledgement slot that is
+armed and carried on the exception as `ServerMessage`, and `TheImbalanceTopicIsStillNotAuthorizedOnThisKey`
+now pins the server's words rather than avoiding them. The pin did its job — it had to be moved
+deliberately, and it named what was wrong with the message while the message was still wrong.
+
 ## Scope
 
 **New public surface.**

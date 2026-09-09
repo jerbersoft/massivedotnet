@@ -52,11 +52,12 @@ public sealed class StreamTopicsLiveTests : LiveApiTest
     /// D21's posture: the observation is pinned and dated so it flips the day the entitlement
     /// changes, where a skip would read as green.
     /// <para>
-    /// The exception's <b>message</b> is deliberately not asserted here. It currently says the
-    /// server "ignores a topic code it does not recognise", which is not what happened — the code
-    /// was recognised and the plan was not entitled. That is issue #60, and it will change this
-    /// message. Pinning the type and the parameter rather than the prose means #60 has to move
-    /// this test deliberately without it failing for the wrong reason first.
+    /// Moved by #60, which is what this test was written to force. It previously pinned only the
+    /// type and the parameter, because the message then claimed the server "ignores a topic code it
+    /// does not recognise" — the inference it makes from silence, and not what happened here. The
+    /// server's own words are now carried through verbatim, so they are what this asserts: this is
+    /// the test that flips the day Massive rewords the refusal, and the SDK reports what it says
+    /// rather than categorising it (D37).
     /// </para>
     /// </remarks>
     [Fact]
@@ -71,6 +72,11 @@ public sealed class StreamTopicsLiveTests : LiveApiTest
 
         Assert.Equal("NOI.AAPL", error.Parameters);
         Assert.Equal(1, error.Unacknowledged);
+
+        // Verbatim, as observed on 2026-09-08. A fixture cannot make this claim: it asserts the SDK
+        // agrees with a recording, where this asserts the service still says what it said.
+        Assert.Equal("not authorized", error.ServerMessage);
+        Assert.Contains("not authorized", error.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

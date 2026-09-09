@@ -555,6 +555,221 @@ public class ReplayVerificationTests
         Assert.Empty(reported);
     }
 
+    // Issue #60 on the replay's side. Nobody is awaiting a reconnect's replay, so its shortfall
+    // arrives through SubscriptionsLost rather than a throw -- but it is the same evidence and it
+    // has to carry the same correction. A consumer whose plan lost an entitlement mid-session
+    // learns it here, and the inferred wording would tell them their topic codes are wrong.
+    [Fact]
+    public async Task AReplayTheServerRefusesCarriesTheServersReason()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("NOI", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<MassiveStreamSubscriptionException> lost =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += error => lost.TrySetResult(error);
+
+        first.AbortNext();
+
+        await second.WaitForSendAsync("""{"action":"subscribe","params":"NOI.AAPL"}""")
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+        second.EnqueueText("""[{"ev":"status","status":"error","message":"not authorized"}]""");
+
+        MassiveStreamSubscriptionException reported = await lost.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal("not authorized", reported.ServerMessage);
+        Assert.Contains("not authorized", reported.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("ignores a topic code", reported.Message, StringComparison.Ordinal);
+    }
+
+    // The attribution rule, and the reason it is the INVERSE of OnStatus's acknowledgement
+    // crediting order. An acknowledgement names its pair, so the order there only breaks a tie
+    // between two waiters owed byte-identical text. A refusal names nothing -- the frame observed
+    // live carried no `params` and no topic, and arrived AHEAD of the acknowledgements for the
+    // pairs that were accepted -- so precedence has to come from somewhere other than content.
+    // "Whoever is sending" is that somewhere: _pendingAcks is armed only while SubscribeAsync
+    // holds _subscribeGate, so armed and sending are the same thing, while the replay slot
+    // deliberately outlives its reconnect and can be armed with nothing in flight at all.
+    //
+    // Getting this backwards is silent in both directions: the caller would be told the server
+    // ignored their topic code while a healthy replay was blamed for a refusal aimed at someone
+    // else. So both halves are asserted here, on DIFFERENT pairs, which is what stops either from
+    // passing by coincidence.
+    [Fact]
+    public async Task ARefusalGoesToTheCallerWhoSentItNotTheReplayStillWaiting()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("T", ["AAPL"], TestContext.Current.CancellationToken);
+
+        TaskCompletionSource<MassiveStreamSubscriptionException> lost =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.SubscriptionsLost += error => lost.TrySetResult(error);
+
+        TaskCompletionSource reconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Reconnected += _ => reconnected.TrySetResult();
+
+        // T.AAPL is replayed and never answered, so the replay slot is armed and counting down
+        // throughout everything below -- but it has finished sending.
+        first.AbortNext();
+        await reconnected.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Task subscribe = connection.SubscribeAsync("NOI", ["AAPL"], TestContext.Current.CancellationToken);
+
+        await second.WaitForSendAsync("""{"action":"subscribe","params":"NOI.AAPL"}""")
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        // The overlap is the whole point, so it is asserted rather than hoped for: had the replay's
+        // window already closed, the refusal would have only one slot to land in and this would
+        // pass without testing anything.
+        Assert.False(connection.ReplayVerification.IsCompleted);
+
+        second.EnqueueText("""[{"ev":"status","status":"error","message":"not authorized"}]""");
+
+        MassiveStreamSubscriptionException caller =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(() => subscribe);
+
+        Assert.Equal("NOI.AAPL", caller.Parameters);
+        Assert.Equal("not authorized", caller.ServerMessage);
+
+        // And the replay, which sent nothing while that refusal was in flight, reports its own
+        // shortfall with no reason attached -- because it genuinely was not given one.
+        MassiveStreamSubscriptionException reported = await lost.Task.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+
+        Assert.Equal("T.AAPL", reported.Parameters);
+        Assert.Null(reported.ServerMessage);
+    }
+
+    // The replay slot's own half of "a refusal is not carried forward". Clearing it when the
+    // verification tears down is not enough: VerifyReplayAsync returns early WITHOUT clearing when
+    // a later reconnect has taken the slot over, which is right there -- the slot is in use -- but
+    // leaves the previous attempt's reason for the new one to inherit. So the arming clears it.
+    //
+    // Reachable whenever two reconnects land inside one HandshakeTimeout: the first replay is
+    // refused out loud, the second is met with silence, and the second would report the first's
+    // reason to a consumer whose second attempt was never given one.
+    [Fact]
+    public async Task ARefusalIsNotCarriedFromOneReplayToTheNext()
+    {
+        FakeWebSocket first = new() { AutoAcknowledgeSubscribes = true };
+        FakeWebSocket second = new();
+        FakeWebSocket third = new();
+        FakeWebSocket[] sockets = [first, second, third];
+        int created = 0;
+
+        foreach (FakeWebSocket socket in sockets)
+        {
+            socket.EnqueueText(Connected);
+            socket.EnqueueText(AuthSuccess);
+        }
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => sockets[created++],
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await connection.SubscribeAsync("NOI", ["AAPL"], TestContext.Current.CancellationToken);
+
+        List<MassiveStreamSubscriptionException> reported = [];
+        connection.SubscriptionsLost += error => reported.Add(error);
+
+        // Gated at 3 -- Connected, AuthSuccess, and the refusal -- so awaiting it proves the
+        // refusal was processed and recorded against the FIRST replay before the second begins.
+        Task refusalConsumed = second.GateReceiveAfter(3);
+
+        first.AbortNext();
+
+        await second.WaitForSendAsync("""{"action":"subscribe","params":"NOI.AAPL"}""")
+            .WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+        second.EnqueueText("""[{"ev":"status","status":"error","message":"not authorized"}]""");
+
+        await refusalConsumed.WaitAsync(
+            Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+        second.ReleaseReceive();
+
+        // The first replay's window must still be open, or its own teardown would clear the reason
+        // and everything below would pass without testing anything. Asserted rather than assumed:
+        // this turns that race into a loud failure instead of a false pass.
+        Assert.Empty(reported);
+
+        // The second replay is met with silence. Its shortfall is real, but it was given no reason.
+        second.AbortNext();
+
+        MassiveStreamSubscriptionException last = await WaitForReportAsync(
+            reported, parameters: "NOI.AAPL", TestContext.Current.CancellationToken);
+
+        Assert.Null(last.ServerMessage);
+        Assert.Contains("ignores a topic code", last.Message, StringComparison.Ordinal);
+        Assert.Contains("""{"action":"subscribe","params":"NOI.AAPL"}""", third.Sent);
+    }
+
+    // Polls the collected reports for one carrying no server reason. The first replay's own report
+    // may or may not have landed by now -- it names the same pair and carries the refusal it
+    // genuinely was given -- so this waits for the one the test is about rather than assuming an
+    // ordering between two independent verification windows.
+    private static async Task<MassiveStreamSubscriptionException> WaitForReportAsync(
+        List<MassiveStreamSubscriptionException> reported, string parameters, CancellationToken cancellationToken)
+    {
+        Task<MassiveStreamSubscriptionException> poll = Task.Run(async () =>
+        {
+            while (true)
+            {
+                foreach (MassiveStreamSubscriptionException candidate in reported.ToArray())
+                {
+                    if (candidate.Parameters == parameters && candidate.ServerMessage is null)
+                    {
+                        return candidate;
+                    }
+                }
+
+                await Task.Delay(Duration.FromMilliseconds(10).ToTimeSpan(), cancellationToken);
+            }
+        }, cancellationToken);
+
+        return await poll.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), cancellationToken);
+    }
+
     // Bounded rather than awaited directly: a sink nothing ever writes to would otherwise hang
     // until the runner's own much longer timeout instead of failing fast and readably (the shape
     // ReconnectTests.ReadAllAsync already uses).

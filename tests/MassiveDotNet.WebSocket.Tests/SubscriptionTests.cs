@@ -12,10 +12,18 @@ public class SubscriptionTests
     private const string Connected = """[{"ev":"status","status":"connected","message":"Connected Successfully"}]""";
     private const string AuthSuccess = """[{"ev":"status","status":"auth_success","message":"authenticated"}]""";
 
-    private static async Task<MassiveStreamConnection> ConnectAsync(FakeWebSocket socket)
+    private static async Task<MassiveStreamConnection> ConnectAsync(
+        FakeWebSocket socket, string? afterHandshake = null)
     {
         socket.EnqueueText(Connected);
         socket.EnqueueText(AuthSuccess);
+
+        // Queued with the handshake rather than after it so the read loop meets it with nothing in
+        // flight -- see ARefusalWithNothingInFlightIsNotHeldAgainstTheNextSubscribe.
+        if (afterHandshake is not null)
+        {
+            socket.EnqueueText(afterHandshake);
+        }
 
         MassiveStreamConnection connection = new(
             // A short HandshakeTimeout, not the 10-second default: AShortfallOfAcknowledgementsThrows
@@ -154,6 +162,151 @@ public class SubscriptionTests
 
         Assert.Equal(1, error.Unacknowledged);
         Assert.Contains("T.AAPL,T.MSFT", error.Message, StringComparison.Ordinal);
+    }
+
+    // Issue #60. A subscribe the server refuses is answered -- {"ev":"status","status":"error",
+    // "message":"not authorized"} for a topic the key's plan does not include, observed live on
+    // 2026-09-08 -- and OnStatus discarded any status that was not `success`, so the caller was
+    // told the server "ignores a topic code it does not recognise". That is the inference D-W2
+    // makes from SILENCE, and repeating it here contradicts what the server actually said: it
+    // sends a consumer to check their topic spelling when the fix is their plan.
+    [Fact]
+    public async Task AServersRefusalIsReportedInsteadOfTheInferredSilence()
+    {
+        await using FakeWebSocket socket = new();
+        await using MassiveStreamConnection connection = await ConnectAsync(socket);
+
+        Task subscribeTask = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "NOI",
+            ["AAPL"],
+            """[{"ev":"status","status":"error","message":"not authorized"}]""");
+
+        MassiveStreamSubscriptionException error =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(async () => await subscribeTask);
+
+        // Verbatim, and retained as its own property rather than left only inside the prose: the
+        // SDK cannot categorise what the server said (D-W6's argument for auth_failed applies
+        // unchanged), so a consumer who wants to act on it gets the words without parsing a
+        // sentence this SDK is free to reword.
+        Assert.Equal("not authorized", error.ServerMessage);
+        Assert.Contains("not authorized", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("ignores a topic code", error.Message, StringComparison.Ordinal);
+
+        // The count is still real evidence and still what a handler acts on -- the refusal changes
+        // what the shortfall SAYS, never that there was one.
+        Assert.Equal(1, error.Unacknowledged);
+        Assert.Equal("NOI.AAPL", error.Parameters);
+    }
+
+    // The other half of #60, and the reason the wording is chosen rather than replaced: when the
+    // server says nothing at all, D-W2's inference is the only evidence there is and is exactly
+    // right. A fix that reworded unconditionally would trade one wrong message for another.
+    [Fact]
+    public async Task ASilentShortfallStillReportsTheInferredCause()
+    {
+        await using FakeWebSocket socket = new();
+        await using MassiveStreamConnection connection = await ConnectAsync(socket);
+
+        Task subscribeTask = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "T",
+            ["AAPL", "MSFT"],
+            """[{"ev":"status","status":"success","message":"subscribed to: T.AAPL"}]""");
+
+        MassiveStreamSubscriptionException error =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(async () => await subscribeTask);
+
+        Assert.Null(error.ServerMessage);
+        Assert.Contains("ignores a topic code", error.Message, StringComparison.Ordinal);
+    }
+
+    // A status event carrying no prose is silence with a label on it, so it must not switch the
+    // message onto the "the server refused with:" wording and then name nothing.
+    [Fact]
+    public async Task AnErrorStatusWithNoMessageFallsBackToTheInferredCause()
+    {
+        await using FakeWebSocket socket = new();
+        await using MassiveStreamConnection connection = await ConnectAsync(socket);
+
+        Task subscribeTask = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "NOI",
+            ["AAPL"],
+            """[{"ev":"status","status":"error"}]""");
+
+        MassiveStreamSubscriptionException error =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(async () => await subscribeTask);
+
+        Assert.Null(error.ServerMessage);
+        Assert.Contains("ignores a topic code", error.Message, StringComparison.Ordinal);
+    }
+
+    // A refusal that answers nothing belongs to nothing. The server can send one after a request
+    // has already timed out and given up, and holding it would let it surface against whatever
+    // subscribes next -- telling a caller their perfectly good request was refused, with a reason
+    // collected before they made it.
+    [Fact]
+    public async Task ARefusalWithNothingInFlightIsNotHeldAgainstTheNextSubscribe()
+    {
+        await using FakeWebSocket socket = new();
+
+        // The gate is only reached once the queue is genuinely empty, so awaiting it proves all
+        // three frames were delivered AND that the third was processed -- the read loop handles a
+        // frame before asking for the next one. Ordering, not a sleep.
+        Task consumed = socket.GateReceiveAfter(3);
+
+        await using MassiveStreamConnection connection = await ConnectAsync(
+            socket, """[{"ev":"status","status":"error","message":"not authorized"}]""");
+
+        await consumed.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), TestContext.Current.CancellationToken);
+        socket.ReleaseReceive();
+
+        Task subscribeTask = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "T",
+            ["AAPL", "MSFT"],
+            """[{"ev":"status","status":"success","message":"subscribed to: T.AAPL"}]""");
+
+        MassiveStreamSubscriptionException error =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(async () => await subscribeTask);
+
+        Assert.Null(error.ServerMessage);
+        Assert.Contains("ignores a topic code", error.Message, StringComparison.Ordinal);
+    }
+
+    // The same property one request later: a refusal is cleared with the slot it was collected
+    // against, so it cannot be reported a second time to a caller it has nothing to do with.
+    [Fact]
+    public async Task ARefusalIsNotCarriedFromOneSubscribeToTheNext()
+    {
+        await using FakeWebSocket socket = new();
+        await using MassiveStreamConnection connection = await ConnectAsync(socket);
+
+        Task refused = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "NOI",
+            ["AAPL"],
+            """[{"ev":"status","status":"error","message":"not authorized"}]""");
+
+        await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(async () => await refused);
+
+        Task subscribeTask = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "T",
+            ["AAPL", "MSFT"],
+            """[{"ev":"status","status":"success","message":"subscribed to: T.AAPL"}]""");
+
+        MassiveStreamSubscriptionException error =
+            await Assert.ThrowsAsync<MassiveStreamSubscriptionException>(async () => await subscribeTask);
+
+        Assert.Null(error.ServerMessage);
     }
 
     [Fact]
