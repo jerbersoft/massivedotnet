@@ -20,9 +20,9 @@ jobs:
     name: build and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -57,9 +57,9 @@ jobs:
     name: generated code is current
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -80,7 +80,7 @@ jobs:
     name: dependency boundaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Constitution rule 7: NodaTime (D12) and System.Threading.RateLimiting (D30) are the only
       # dependencies core may take. Adding a third is a constitution change, not a build fix.
@@ -110,7 +110,7 @@ jobs:
     name: no live credentials
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Constitution rule 13: the suite runs offline. A workflow referencing an API key secret
       # means a test somewhere expects to call the live service, which is what this forbids.
@@ -127,9 +127,9 @@ jobs:
     name: native aot
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 

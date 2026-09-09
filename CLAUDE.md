@@ -28,7 +28,7 @@ and does not belong in this section.
 | 10 | Every public member of a shipped library carries XML documentation. | `GenerateDocumentationFile`, set repo-wide because IDE0005 needs it, plus warnings-as-errors on CS1591 — which only `src` leaves unsuppressed |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
 | 13 | **CI runs entirely offline.** No live API key is ever placed in CI, and no test that calls the service executes there. Integration tests against the live API are committed and run locally; CI excludes them by category but still compiles them, so public API drift breaks the build. | CI holds no credential secret, asserts no workflow references one, and asserts the exclusion actually selected no live test |
-| 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails |
+| 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails. `BannedSymbols.txt` adds RS0030 at compile time, which covers *uses* only — see [How this is enforced](#how-this-is-enforced) |
 
 ---
 
@@ -83,6 +83,13 @@ reversing one of these, the "why" column is the argument you need to defeat.
 ## Layout
 
 ```
+BannedSymbols.txt           Rule 12's compile-time half, read by BannedApiAnalyzers from the root
+                            Directory.Build.props. Every line carries text: a bare `#` parses as an
+                            empty symbol and collides with the next one (RS0031).
+SECURITY.md                 Private vulnerability reporting, and what is in and out of scope.
+CONTRIBUTING.md             Signpost for contributors; the conventions stay here in CLAUDE.md.
+CODE_OF_CONDUCT.md          Contributor Covenant, naming the enforcement contact.
+.env.example                The one variable the live tier reads. Never carries a real key.
 specs/openapi.json          Vendored OpenAPI description. Refreshed by CI; never edited by hand.
 specs/endpoints.map.json    Curated map: what the spec does NOT say (asset class, method names,
                             .NET parameter names and types, property names for anonymous schemas).
@@ -256,13 +263,24 @@ Anticipated, for work not yet written:
 
 ### How this is enforced
 
-`TemporalTypeTests` runs two independent layers, because neither is sufficient alone:
+Three layers, because no one of them is sufficient. The first is a compile-time analyzer; the other
+two are `TemporalTypeTests`.
 
-1. **Reflection** over the exported surface of all four shipped assemblies — properties, fields,
+1. **`BannedSymbols.txt`**, read by `Microsoft.CodeAnalysis.BannedApiAnalyzers` and wired in the root
+   `Directory.Build.props` so no project can be created without it. It reports a banned type as
+   RS0030, which rule 9 turns into a build error, so the mistake arrives in the editor rather than
+   in a test run. What it covers was measured, not assumed: RS0030 fires on a **use** —
+   `TimeSpan.FromMinutes(2)`, or a `typeof` — and stays **silent on a declaration**, since both
+   `private static readonly TimeSpan x` and `private TimeSpan X => default` compile clean under it.
+   That is the inverse of what layer 3 is best at, which is why this is an addition and never a
+   reason to weaken the test. `TemporalTypeTests` takes a five-line `#pragma warning disable RS0030`
+   over its own list of forbidden types, the same exemption it already holds from the source scan
+   and for the same reason.
+2. **Reflection** over the exported surface of all four shipped assemblies — properties, fields,
    methods, operators, and constructors. Operators are deliberately included: an implicit
    conversion from a BCL type would reintroduce it into the public API.
-2. **A source scan** over `benchmarks`, `samples`, `src`, `tests`, and `tools`. Reflection cannot
-   see local variables or static calls, so this catches what layer 1 structurally cannot.
+3. **A source scan** over `benchmarks`, `samples`, `src`, `tests`, and `tools`. Reflection cannot
+   see local variables or static calls, so this catches what layer 2 structurally cannot.
    `EveryDirectoryHoldingSourceIsScanned` compares that list against the directories that actually
    hold C#, in both directions, so a new tree cannot be covered only by whoever remembers it. It strips comments,
    string literals (raw and verbatim included), and character literals before matching, preserving

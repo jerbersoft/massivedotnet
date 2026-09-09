@@ -20,6 +20,12 @@ namespace MassiveDotNet.Rest.Tests;
 /// </remarks>
 public sealed partial class TemporalTypeTests
 {
+    // The one place in the repository that names the banned types, for the one reason that
+    // justifies it: this is the list the rule is made of. BannedSymbols.txt enforces rule 12 as
+    // RS0030 at compile time, and it cannot distinguish the rule's own statement from a violation
+    // of it -- so this file takes the same exemption from the analyzer that it already takes from
+    // the source scan, scoped to these five lines rather than to the file.
+#pragma warning disable RS0030 // Do not use banned APIs
     private static readonly HashSet<Type> ForbiddenTypes =
     [
         typeof(DateTime),
@@ -28,6 +34,7 @@ public sealed partial class TemporalTypeTests
         typeof(TimeOnly),
         typeof(TimeSpan),
     ];
+#pragma warning restore RS0030
 
     /// <summary>
     /// Every tree the source scan reads. <see cref="EveryDirectoryHoldingSourceIsScanned"/> keeps

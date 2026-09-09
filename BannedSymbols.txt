@@ -1,0 +1,28 @@
+# Banned BCL date and time types. The full rationale is constitution rule 12 and D12 in CLAUDE.md,
+# plus the "Temporal types" section, which lists every sanctioned boundary crossing in the SDK.
+# The short version: market data is unforgiving about temporal ambiguity. An aggregate window is
+# Eastern Time, a tick timestamp is epoch nanoseconds, a dividend's ex-date is a calendar date with
+# no time and no zone, and a trading session crosses DST twice a year. DateTime collapses all of
+# these into one type whose meaning rides on a Kind flag that is trivially lost across a
+# serialization boundary, and DateOnly cannot express a zone at all. NodaTime keeps them distinct
+# types, so the wrong one does not compile.
+# The rule is strict rather than public-surface-only because a BCL type in a private field or a
+# local is the seed of the next one in a signature. The only sanctioned contact is an inline
+# conversion at a BCL call site, which names no type: `options.Timeout.ToTimeSpan()` produces one,
+# and `x?.Delta is { } d ? Duration.FromTimeSpan(d) : null` consumes one. Both keep compiling.
+# What RS0030 actually catches was measured rather than assumed, and it is half the rule. It fires
+# on a USE of a banned type -- `TimeSpan.FromMinutes(2)`, or a `typeof` -- and stays silent on a
+# DECLARATION: `private static readonly TimeSpan x` and `private TimeSpan X => default` both build
+# clean under it. TemporalTypeTests covers the other half, and covers it the other way round: its
+# source scan reads comment-stripped text and so sees declarations, and its reflection layer walks
+# the exported surface including operators. Neither mechanism alone covers both halves, so this
+# file is an addition to that test and never a reason to weaken it.
+# Format is `T:Full.Type.Name;message`, reported as RS0030, which TreatWarningsAsErrors (rule 9)
+# turns into a build error. Note that a comment line consisting of a bare `#` parses as an empty
+# symbol and collides with the next one (RS0031), so every line here carries text -- this file was
+# written with three such lines and failed exactly that way before they were filled in.
+T:System.DateTime;Use NodaTime.Instant for a point on the timeline, or NodaTime.LocalDateTime for a wall clock with no zone. Store the raw epoch value as a long and expose the NodaTime type as a computed property (D5).
+T:System.DateTimeOffset;Use NodaTime.Instant for a point on the timeline, or NodaTime.ZonedDateTime when the zone itself matters, as session open and close in America/New_York do.
+T:System.DateOnly;Use NodaTime.LocalDate. Ex-dividend dates, split execution dates and IPO dates are calendar dates carrying no time and no zone.
+T:System.TimeOnly;Use NodaTime.LocalTime, as StockImbalance.AuctionTime does.
+T:System.TimeSpan;Use NodaTime.Duration. At a BCL boundary convert inline, Duration.ToTimeSpan() to produce one and Duration.FromTimeSpan() to consume one, so the type is never named.

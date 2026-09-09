@@ -12,22 +12,27 @@ on:
         type: boolean
         default: false
 
+# Least privilege is the workflow-wide default; the one job that writes elevates itself below.
+# Declaring the write scopes here instead would hand them to every job added later, which is a
+# grant nobody would notice making -- a second job needs read, gets write, and nothing says so.
 permissions:
-  contents: write
-  pull-requests: write
-  # The fallback that makes a refused pull request visible opens an issue, and that needs its own
-  # scope. Without it the fallback dies with "Resource not accessible by integration (createIssue)"
-  # -- the blocked sync going unseen a second way, which is the whole of #45.
-  issues: write
+  contents: read
 
 jobs:
   sync:
     name: check upstream spec
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # pushes the sync branch
+      pull-requests: write   # opens the PR that makes the diff reviewable
+      # The fallback that makes a refused pull request visible opens an issue, and that needs its
+      # own scope. Without it the fallback dies with "Resource not accessible by integration
+      # (createIssue)" -- the blocked sync going unseen a second way, which is the whole of #45.
+      issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 

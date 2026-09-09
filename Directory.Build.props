@@ -20,6 +20,32 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!-- Rule 12's fast path, and only the fast path. BannedApiAnalyzers reports a banned BCL date or
+       time type as RS0030, which TreatWarningsAsErrors above turns into a build error, so the
+       mistake surfaces in the editor rather than after a test run.
+
+       What it covers was measured, not assumed. RS0030 fires on a USE of the type — a static call
+       such as TimeSpan.FromMinutes(2), or a typeof — and does NOT fire on a declaration: a field
+       typed `private static readonly TimeSpan x` and a property typed `private TimeSpan X => ...`
+       both compile clean under it. That is exactly inverted from what TemporalTypeTests catches
+       best, which is why this is an addition and not a replacement. The source scan there reads
+       comment-stripped text and so sees declarations; its reflection layer walks the exported
+       surface including operators, where an implicit conversion from a BCL type would put one back
+       into the public API. Between them the static call and the declaration are both covered;
+       neither mechanism covers both.
+
+       Declared here rather than per-project so that a new project cannot be created without it.
+       The omission would otherwise be silent, and rule 12 is the rule most likely to be broken by
+       someone reaching for a familiar type.
+
+       PrivateAssets="all" is what keeps this clear of rule 7: an analyzer never reaches a
+       consumer's restore graph, so core still ships referencing NodaTime and
+       System.Threading.RateLimiting and nothing else. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
+
   <PropertyGroup Label="Repository">
     <Authors>Herbert Sabanal</Authors>
     <Company>MassiveDotNet</Company>
