@@ -7,6 +7,7 @@ namespace MassiveDotNet.IntegrationTests;
 /// What a fixture structurally cannot verify: that the handshake works against the real service,
 /// and that the entitlements and hosts observed on 2026-09-07 still hold.
 /// </summary>
+[Collection(SharedStocksSocket.Name)]
 public sealed class StreamHandshakeLiveTests : LiveApiTest
 {
     private static MassiveStreamOptions Options()

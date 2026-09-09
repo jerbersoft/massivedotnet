@@ -15,6 +15,7 @@ namespace MassiveDotNet.IntegrationTests;
 /// (D33). A subscribe that returns rather than throwing is therefore a positive result, not the
 /// absence of a negative one.
 /// </remarks>
+[Collection(SharedStocksSocket.Name)]
 public sealed class StreamTopicsLiveTests : LiveApiTest
 {
     private static MassiveStreamOptions Options()
