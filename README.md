@@ -3,28 +3,42 @@
 A .NET 10 SDK for the **Massive** market data platform (formerly Polygon.io).
 
 [![ci](https://github.com/jerbersoft/massivedotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/jerbersoft/massivedotnet/actions/workflows/ci.yml)
+[![nuget](https://img.shields.io/nuget/vpre/MassiveDotNet.Rest?label=nuget)](https://www.nuget.org/packages/MassiveDotNet.Rest)
 
 Endpoints are generated from Massive's own OpenAPI description, so the surface tracks the platform
 rather than drifting from it. The design goals, in priority order, are **complete endpoint
 coverage**, **Native AOT compatibility**, and **minimal allocation** — then ergonomics.
 
-## Status
+## Install
 
-Pre-release, and **not yet published to NuGet** — packaging is [#19](https://github.com/jerbersoft/massivedotnet/issues/19).
-Until it lands, reference the projects directly:
+Four packages, all `net10.0`:
+
+| Package | Take it for |
+|---------|-------------|
+| [`MassiveDotNet.Rest`](https://www.nuget.org/packages/MassiveDotNet.Rest) | The REST API. This is the one most consumers want. |
+| [`MassiveDotNet.WebSocket`](https://www.nuget.org/packages/MassiveDotNet.WebSocket) | Live streaming. |
+| [`MassiveDotNet.Extensions.DependencyInjection`](https://www.nuget.org/packages/MassiveDotNet.Extensions.DependencyInjection) | `AddMassive` wiring for `IServiceCollection`. Brings both of the above. |
+| [`MassiveDotNet`](https://www.nuget.org/packages/MassiveDotNet) | Nothing directly — it is the shared core, and the others depend on it. |
+
+**Only prereleases exist today**, so the flag is not optional — without it NuGet finds no version
+to resolve and the command fails:
 
 ```bash
-git clone https://github.com/jerbersoft/massivedotnet.git
-cd massivedotnet
-dotnet build MassiveDotNet.slnx
+dotnet add package MassiveDotNet.Rest --prerelease
 ```
 
-```xml
-<ProjectReference Include="path/to/massivedotnet/src/MassiveDotNet.Rest/MassiveDotNet.Rest.csproj" />
-```
+Every push that passes CI on `master` publishes a `-ci.N` build, so the prerelease stream moves
+faster than the release notes do. Pin an exact version if you would rather it did not.
 
-**60 of the platform's 147 REST operations** ship today, across two groups. See
+## Status
+
+Pre-release. **60 of the platform's 147 REST operations** ship today, across two groups. See
 [Coverage](#coverage) for what is here and what is not.
+
+The public surface is a reviewed file rather than an accident — every public member has an entry in
+a checked-in `PublicAPI` baseline, so nothing appears, disappears, or changes type without showing
+up in a diff. What that buys you before 1.0 is that breaking changes are deliberate and land in
+[CHANGELOG.md](CHANGELOG.md); it is not a promise that none happen.
 
 ## Quickstart
 
