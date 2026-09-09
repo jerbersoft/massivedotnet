@@ -42,7 +42,7 @@ internal sealed class SnapshotDayJsonConverter : JsonConverter<SnapshotDay>
         double close = default;
         double volume = default;
         double volumeWeightedAveragePrice = default;
-        string? decimalVolume = null;
+        decimal? decimalVolume = null;
         bool isOtc = default;
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
@@ -80,7 +80,7 @@ internal sealed class SnapshotDayJsonConverter : JsonConverter<SnapshotDay>
             else if (reader.ValueTextEquals("dv"u8))
             {
                 reader.Read();
-                decimalVolume = JsonValueReader.ReadString(ref reader, "SnapshotDay", "dv");
+                decimalVolume = JsonValueReader.ReadNullableDecimal(ref reader, "SnapshotDay", "dv");
             }
             else if (reader.ValueTextEquals("otc"u8))
             {
@@ -120,7 +120,16 @@ internal sealed class SnapshotDayJsonConverter : JsonConverter<SnapshotDay>
         writer.WriteNumber("c", value.Close);
         writer.WriteNumber("v", value.Volume);
         writer.WriteNumber("vw", value.VolumeWeightedAveragePrice);
-        writer.WriteString("dv", value.DecimalVolume);
+
+        if (value.DecimalVolume is { } decimalVolume)
+        {
+            JsonValueWriter.WriteDecimalString(writer, "dv", decimalVolume);
+        }
+        else
+        {
+            writer.WriteNull("dv");
+        }
+
         writer.WriteBoolean("otc", value.IsOtc);
 
         writer.WriteEndObject();

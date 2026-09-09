@@ -192,6 +192,25 @@ internal struct StreamEventWalk
         return JsonValueReader.ReadDouble(ref reader, _model, property);
     }
 
+    /// <summary>
+    /// Reads a decimal the wire sent as a string, or <see langword="null"/> from a JSON null.
+    /// </summary>
+    /// <param name="reader">The reader this walk is driving.</param>
+    /// <param name="property">The wire property being read, named in a failure message.</param>
+    /// <returns>The decimal, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// The fractional-share family -- <c>dv</c>, <c>dav</c>, <c>ds</c> -- only. A value that cannot
+    /// be carried exactly is refused rather than rounded (D38), which on this side means the frame
+    /// is dropped by the read loop's own malformed-message handling rather than delivering a number
+    /// the server did not send.
+    /// </remarks>
+    public decimal? NullableDecimal(ref Utf8JsonReader reader, string property)
+    {
+        Advance(ref reader);
+
+        return JsonValueReader.ReadNullableDecimal(ref reader, _model, property);
+    }
+
     /// <summary>Reads an integer code array into a <see cref="ConditionSet"/>.</summary>
     /// <param name="reader">The reader this walk is driving.</param>
     /// <param name="property">The wire property being read, named in a failure message.</param>

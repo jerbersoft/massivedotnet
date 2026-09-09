@@ -406,7 +406,7 @@ internal sealed class Emitter(Spec spec, Map map)
                 {
                     using (writer.Block($"if ({access} is {{ }} {Naming.Camel(member.Name)})"))
                     {
-                        writer.Line($"writer.{WriteCall(member.Type[..^1])}(\"{wire}\", {Naming.Camel(member.Name)});");
+                        writer.Line(WriteStatement(member.Type[..^1], wire, Naming.Camel(member.Name)));
                     }
 
                     using (writer.Block("else"))
@@ -418,7 +418,7 @@ internal sealed class Emitter(Spec spec, Map map)
                 {
                     // WriteString writes a JSON null for a null string, which is what the reader
                     // accepts back, so the nullable and non-nullable string cases are the same line.
-                    writer.Line($"writer.{WriteCall(member.Type)}(\"{wire}\", {access});");
+                    writer.Line(WriteStatement(member.Type, wire, access));
                 }
             }
 
@@ -465,14 +465,23 @@ internal sealed class Emitter(Spec spec, Map map)
             : throw Unreadable(model, member, "it has no reader");
     }
 
-    /// <summary>The <see cref="System.Text.Json.Utf8JsonWriter"/> method that writes a property of this type.</summary>
+    /// <summary>The statement that writes one property of this type.</summary>
+    /// <remarks>
+    /// A whole statement rather than a method name, because <c>decimal</c> does not write through a
+    /// <see cref="System.Text.Json.Utf8JsonWriter"/> method at all: the description declares that
+    /// family as strings, so it has to leave as one, and <c>WriteNumber</c> would emit a shape the
+    /// service never sends and this SDK's own reader refuses (D38).
+    /// </remarks>
     /// <param name="type">A non-nullable supported property type.</param>
-    /// <returns>The method name.</returns>
-    private static string WriteCall(string type) => type switch
+    /// <param name="wire">The property's wire name.</param>
+    /// <param name="value">The expression holding the value.</param>
+    /// <returns>The C# statement.</returns>
+    private static string WriteStatement(string type, string wire, string value) => type switch
     {
-        "string" or "string?" => "WriteString",
-        "bool" => "WriteBoolean",
-        _ => "WriteNumber",
+        "string" or "string?" => $"writer.WriteString(\"{wire}\", {value});",
+        "bool" => $"writer.WriteBoolean(\"{wire}\", {value});",
+        "decimal" => $"JsonValueWriter.WriteDecimalString(writer, \"{wire}\", {value});",
+        _ => $"writer.WriteNumber(\"{wire}\", {value});",
     };
 
     /// <summary>
@@ -498,6 +507,8 @@ internal sealed class Emitter(Spec spec, Map map)
         "long?" => "ReadNullableInt64",
         "double" => "ReadDouble",
         "double?" => "ReadNullableDouble",
+        "decimal" => "ReadDecimal",
+        "decimal?" => "ReadNullableDecimal",
         _ => null,
     };
 
@@ -1208,6 +1219,7 @@ internal sealed class Emitter(Spec spec, Map map)
         "int",
         "long",
         "double",
+        "decimal",
         "bool",
         "LocalDate",
         "Instant",

@@ -53,7 +53,7 @@ public sealed class StocksLastTradeTests
         Assert.Equal("AAPL", trade.Ticker);
         Assert.Equal(129.8473, trade.Price);
         Assert.Equal(25d, trade.Size);
-        Assert.Equal("25.0", trade.DecimalSize);
+        Assert.Equal(25.0m, trade.DecimalSize);
         Assert.Equal(3135876, trade.SequenceNumber);
         Assert.Equal("118749", trade.TradeId);
         Assert.Equal(4, trade.ExchangeId);

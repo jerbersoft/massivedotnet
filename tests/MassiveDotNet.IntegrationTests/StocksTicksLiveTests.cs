@@ -78,6 +78,39 @@ public sealed class StocksTicksLiveTests : LiveApiTest
         }
     }
 
+    /// <summary>
+    /// Every <c>decimal_size</c> on a real page is a form the round-trip guard accepts.
+    /// </summary>
+    /// <remarks>
+    /// The one claim D38 rests on that a fixture structurally cannot make. The guard refuses a
+    /// decimal string that does not format back byte for byte, which means a leading <c>+</c>, a
+    /// redundant zero, a separator, or exponent notation throws at deserialization -- so if
+    /// Massive's wire is ever not canonical, this is where it surfaces, and a committed recording
+    /// of the past could never say so. Deserializing the page at all is the assertion; the loop
+    /// below is what keeps that from being vacuous, since a page of zeroes would also have parsed.
+    /// Observed canonical on 2026-09-09.
+    /// </remarks>
+    [Fact]
+    public async Task EveryRealTradeCarriesADecimalSizeTheGuardAccepts()
+    {
+        MassivePage<Trade> page = await Client.Stocks.ListTradesAsync(
+            "AAPL",
+            timestamp: DateOrNanoseconds.FromDate(Session),
+            limit: 50,
+            cancellationToken: Ct);
+
+        Assert.Equal(50, page.Results.Length);
+
+        foreach (Trade trade in page.Results)
+        {
+            // Size truncates the fractional part, so the decimal form is never the smaller of the
+            // two. Comparing them is what proves a real number arrived rather than a default.
+            Assert.True(
+                trade.DecimalSize >= (decimal)trade.Size && trade.DecimalSize > 0m,
+                $"Trade {trade.TradeId} reported a decimal size of {trade.DecimalSize} against a size of {trade.Size}.");
+        }
+    }
+
     [Fact]
     public async Task QuotesReturnAPage()
     {

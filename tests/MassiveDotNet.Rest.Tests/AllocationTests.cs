@@ -173,6 +173,63 @@ public sealed class AllocationTests
         }
     }
 
+    /// <summary>
+    /// The same measurement for a page of trades, which is the shape a decimal-typed
+    /// <c>decimal_size</c> was decided for (D38).
+    /// </summary>
+    /// <param name="rows">Rows in the response body.</param>
+    /// <param name="ceiling">Bytes this may allocate, with headroom over the measured figure.</param>
+    /// <remarks>
+    /// <para>
+    /// A trades page cannot reach the aggregates floor: <c>id</c> is unique per trade, so every row
+    /// allocates one string that nothing can pool away. What it can do is allocate exactly one --
+    /// <c>decimal_size</c> was a second until it became a <see cref="decimal"/> that lives in the
+    /// row. There was no ceiling on this path at all before then, which is why it is measured with
+    /// the change rather than after it.
+    /// </para>
+    /// <para>
+    /// Measured on 2026-09-09: 154,424 B for 1,000 rows, 1,522,432 B for 10,000, and 7,922,432 B
+    /// for 50,000. The headroom is 10%, not the 20% the aggregates ceilings above carry, and the
+    /// difference is deliberate: the regression these exist to catch is one more string per row,
+    /// which on this shape is itself about 20%, so a 20% ceiling could not see it. Confirmed by
+    /// putting <c>decimal_size</c> back to <c>string</c> and regenerating: 9,122,432 B at 50,000
+    /// rows, and all three go red. That comparison is worth reading in full, because the row itself
+    /// gets bigger: <c>Trade</c> grows from 112 to 120 bytes when an 8-byte reference becomes a
+    /// 16-byte value, so the array gains 400,000 B and the heap still loses 1,200,000 B along with
+    /// 50,000 objects the collector no longer has to track.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(1_000, 170_000L)]
+    [InlineData(10_000, 1_675_000L)]
+    [InlineData(50_000, 8_715_000L)]
+    public void DeserializingTradeRowsStaysUnderItsCeiling(int rows, long ceiling)
+    {
+        InlineStubHandler handler = new(TradesBody(rows));
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        using (client)
+        using (transport)
+        {
+            long allocated = Allocation.MeasureTask(async () =>
+            {
+                MassivePage<Trade> page = await client.Stocks.ListTradesAsync("AAPL", limit: rows, cancellationToken: Ct);
+
+                Assert.Equal(rows, page.Results.Length);
+            });
+
+            long floor = (long)rows * Unsafe.SizeOf<Trade>();
+
+            Assert.True(
+                allocated <= ceiling,
+                $"Deserializing {rows:N0} trade rows allocated {Allocation.Describe(allocated)} "
+                    + $"to return a {Allocation.Describe(floor)} array — "
+                    + $"{(double)allocated / floor:N1}x its floor — over the "
+                    + $"{Allocation.Describe(ceiling)} ceiling. Only the trade id should allocate "
+                    + "per row.");
+        }
+    }
+
     // ------------------------------------------------------------------------------- traversal
 
     /// <summary>
@@ -288,6 +345,32 @@ public sealed class AllocationTests
         builder.AppendQuery("limit", 1_000);
 
         return builder.ToUriString();
+    }
+
+    /// <summary>A trades envelope carrying <paramref name="rows"/> trades and no cursor.</summary>
+    private static string TradesBody(int rows)
+    {
+        StringBuilder body = new(rows * 160);
+
+        body.Append("""{"status":"OK","request_id":"alloc","results":[""");
+
+        for (int i = 0; i < rows; i++)
+        {
+            if (i > 0)
+            {
+                body.Append(',');
+            }
+
+            body.Append("{\"id\":\"t").Append(i)
+                .Append("\",\"sip_timestamp\":").Append(1517562000016036600L + i)
+                .Append(",\"participant_timestamp\":").Append(1517562000015577000L + i)
+                .Append(",\"sequence_number\":").Append(1000 + i)
+                .Append(",\"price\":170.15,\"size\":2,\"decimal_size\":\"2.0\",\"exchange\":11,\"tape\":3}");
+        }
+
+        body.Append("]}");
+
+        return body.ToString();
     }
 
     /// <summary>An aggregates envelope carrying <paramref name="rows"/> bars and no cursor.</summary>

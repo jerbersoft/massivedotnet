@@ -68,15 +68,21 @@ public readonly partial record struct SnapshotMinute
     public long AccumulatedVolume { get; init; }
 
     /// <summary>
-    /// The accumulated volume for the day so far as a decimal string. The description marks it
-    /// required; the service omits it on some tickers in the whole-market snapshot.
+    /// The accumulated volume for the day so far, including fractional shares. The wire sends this as a
+    /// decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the
+    /// scale the service wrote (decision D38). The description marks it required; the service omits it
+    /// on some tickers in the whole-market snapshot.
     /// </summary>
     [JsonPropertyName("dav")]
-    public string? DecimalAccumulatedVolume { get; init; }
+    public decimal? DecimalAccumulatedVolume { get; init; }
 
-    /// <summary>The volume including fractional shares, respresented as a string.</summary>
+    /// <summary>
+    /// The volume including fractional shares. The wire sends this as a decimal string; it is carried
+    /// as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote
+    /// (decision D38).
+    /// </summary>
     [JsonPropertyName("dv")]
-    public string? DecimalVolume { get; init; }
+    public decimal? DecimalVolume { get; init; }
 
     /// <summary>
     /// Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which

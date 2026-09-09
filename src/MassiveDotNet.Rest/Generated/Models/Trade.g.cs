@@ -76,11 +76,12 @@ public readonly partial record struct Trade
     public double Size { get; init; }
 
     /// <summary>
-    /// The size of the trade including the fractional component. This is represented as a decimal
-    /// string.
+    /// The size of the trade including its fractional component. The wire sends this as a decimal
+    /// string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the
+    /// service wrote (decision D38).
     /// </summary>
     [JsonPropertyName("decimal_size")]
-    public required string DecimalSize { get; init; }
+    public decimal DecimalSize { get; init; }
 
     /// <summary>The exchange ID. See Exchanges for Massive's mapping of exchange IDs.</summary>
     [JsonPropertyName("exchange")]

@@ -118,7 +118,7 @@ public sealed class StocksSnapshotsTests
         Assert.Equal(120.4229, day.Close);
         Assert.Equal(28727868d, day.Volume);
         Assert.Equal(119.725, day.VolumeWeightedAveragePrice);
-        Assert.Equal("28727868.0", day.DecimalVolume);
+        Assert.Equal(28727868.0m, day.DecimalVolume);
         Assert.False(day.IsOtc);
 
         Assert.NotNull(snapshot.PreviousDay);
@@ -129,8 +129,8 @@ public sealed class StocksSnapshotsTests
         Assert.NotNull(snapshot.Minute);
         SnapshotMinute minute = snapshot.Minute.Value;
         Assert.Equal(28724441L, minute.AccumulatedVolume);
-        Assert.Equal("28724441.0", minute.DecimalAccumulatedVolume);
-        Assert.Equal("270796.0", minute.DecimalVolume);
+        Assert.Equal(28724441.0m, minute.DecimalAccumulatedVolume);
+        Assert.Equal(270796.0m, minute.DecimalVolume);
         Assert.Equal(762L, minute.TransactionCount);
         Assert.Equal(120.4201, minute.Close);
         Assert.Equal(1684428720000, minute.TimestampMilliseconds);
@@ -150,7 +150,7 @@ public sealed class StocksSnapshotsTests
         Assert.Equal("4046", lastTrade.TradeId);
         Assert.Equal(120.47, lastTrade.Price);
         Assert.Equal(236, lastTrade.Size);
-        Assert.Equal("236.0", lastTrade.DecimalSize);
+        Assert.Equal(236.0m, lastTrade.DecimalSize);
         Assert.Equal(10, lastTrade.ExchangeId);
         Assert.Equal([14, 41], lastTrade.Conditions!);
         Assert.Equal(NodaConstants.UnixEpoch + Duration.FromNanoseconds(1605195918306274000), lastTrade.SipTimestamp);

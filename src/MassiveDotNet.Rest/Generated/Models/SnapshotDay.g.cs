@@ -17,7 +17,7 @@ namespace MassiveDotNet.Rest.Models;
 
 /// <summary>
 /// The current trading day's bar inside a snapshot: open, high, low, close, volume, and the day's
-/// volume as a decimal string.
+/// volume including fractional shares.
 /// </summary>
 /// <remarks>
 /// A struct like <see cref="Agg"/> (decision D4). It carries no timestamp: the day is the
@@ -51,9 +51,13 @@ public readonly partial record struct SnapshotDay
     [JsonPropertyName("vw")]
     public double VolumeWeightedAveragePrice { get; init; }
 
-    /// <summary>The volume including fractional shares, respresented as a string.</summary>
+    /// <summary>
+    /// The volume including fractional shares. The wire sends this as a decimal string; it is carried
+    /// as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote
+    /// (decision D38).
+    /// </summary>
     [JsonPropertyName("dv")]
-    public string? DecimalVolume { get; init; }
+    public decimal? DecimalVolume { get; init; }
 
     /// <summary>
     /// Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which

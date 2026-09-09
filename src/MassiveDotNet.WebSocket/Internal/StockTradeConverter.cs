@@ -27,7 +27,7 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
         int? tape = null;
         double price = 0;
         long size = 0;
-        string? decimalSize = null;
+        decimal? decimalSize = null;
         ConditionSet conditions = default;
         long sipTimestamp = 0;
         long? participantTimestamp = null;
@@ -45,7 +45,7 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
             else if (reader.ValueTextEquals("z"u8)) { tape = walk.NullableInt32(ref reader, "z"); }
             else if (reader.ValueTextEquals("p"u8)) { price = walk.Double(ref reader, "p"); }
             else if (reader.ValueTextEquals("s"u8)) { size = walk.Int64(ref reader, "s"); }
-            else if (reader.ValueTextEquals("ds"u8)) { decimalSize = walk.String(ref reader, "ds"); }
+            else if (reader.ValueTextEquals("ds"u8)) { decimalSize = walk.NullableDecimal(ref reader, "ds"); }
             else if (reader.ValueTextEquals("c"u8)) { conditions = walk.Conditions(ref reader, "c"); }
             else if (reader.ValueTextEquals("t"u8)) { sipTimestamp = walk.Int64(ref reader, "t"); }
             else if (reader.ValueTextEquals("pt"u8)) { participantTimestamp = walk.NullableInt64(ref reader, "pt"); }
@@ -93,7 +93,7 @@ internal sealed class StockTradeConverter(TickerPool tickers) : JsonConverter<St
 
         if (value.DecimalSize is { } decimalSize)
         {
-            writer.WriteString("ds", decimalSize);
+            JsonValueWriter.WriteDecimalString(writer, "ds", decimalSize);
         }
 
         ConditionSetSerialization.Write(writer, "c", value.Conditions);

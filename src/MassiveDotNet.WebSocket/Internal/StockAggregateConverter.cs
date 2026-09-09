@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MassiveDotNet.Serialization;
 using MassiveDotNet.WebSocket.Events;
 
 namespace MassiveDotNet.WebSocket.Internal;
@@ -27,9 +28,9 @@ internal sealed class StockAggregateConverter(TickerPool tickers, string topicCo
 
         string? ticker = null;
         long volume = 0;
-        string? decimalVolume = null;
+        decimal? decimalVolume = null;
         long accumulatedVolume = 0;
-        string? decimalAccumulatedVolume = null;
+        decimal? decimalAccumulatedVolume = null;
         double officialOpenPrice = 0;
         double volumeWeightedAveragePrice = 0;
         double open = 0;
@@ -46,9 +47,9 @@ internal sealed class StockAggregateConverter(TickerPool tickers, string topicCo
         {
             if (reader.ValueTextEquals("sym"u8)) { ticker = walk.Ticker(ref reader, tickers, "sym"); }
             else if (reader.ValueTextEquals("v"u8)) { volume = walk.Int64(ref reader, "v"); }
-            else if (reader.ValueTextEquals("dv"u8)) { decimalVolume = walk.String(ref reader, "dv"); }
+            else if (reader.ValueTextEquals("dv"u8)) { decimalVolume = walk.NullableDecimal(ref reader, "dv"); }
             else if (reader.ValueTextEquals("av"u8)) { accumulatedVolume = walk.Int64(ref reader, "av"); }
-            else if (reader.ValueTextEquals("dav"u8)) { decimalAccumulatedVolume = walk.String(ref reader, "dav"); }
+            else if (reader.ValueTextEquals("dav"u8)) { decimalAccumulatedVolume = walk.NullableDecimal(ref reader, "dav"); }
             else if (reader.ValueTextEquals("op"u8)) { officialOpenPrice = walk.Double(ref reader, "op"); }
             else if (reader.ValueTextEquals("vw"u8)) { volumeWeightedAveragePrice = walk.Double(ref reader, "vw"); }
             else if (reader.ValueTextEquals("o"u8)) { open = walk.Double(ref reader, "o"); }
@@ -100,14 +101,14 @@ internal sealed class StockAggregateConverter(TickerPool tickers, string topicCo
 
         if (value.DecimalVolume is { } decimalVolume)
         {
-            writer.WriteString("dv", decimalVolume);
+            JsonValueWriter.WriteDecimalString(writer, "dv", decimalVolume);
         }
 
         writer.WriteNumber("av", value.AccumulatedVolume);
 
         if (value.DecimalAccumulatedVolume is { } decimalAccumulatedVolume)
         {
-            writer.WriteString("dav", decimalAccumulatedVolume);
+            JsonValueWriter.WriteDecimalString(writer, "dav", decimalAccumulatedVolume);
         }
 
         writer.WriteNumber("op", value.OfficialOpenPrice);

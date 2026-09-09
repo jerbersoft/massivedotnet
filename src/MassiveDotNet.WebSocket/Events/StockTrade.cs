@@ -28,8 +28,13 @@ public readonly record struct StockTrade
     /// <summary>The trade size.</summary>
     public long Size { get; init; }
 
-    /// <summary>The trade size including fractional shares, as the wire's decimal string.</summary>
-    public string? DecimalSize { get; init; }
+    /// <summary>
+    /// The trade size including fractional shares. The wire sends this as a decimal string; it is
+    /// carried as a <see cref="decimal"/>, which holds the value exactly and keeps the scale the
+    /// service wrote (decision D38). Prefer it over <see cref="Size"/>, which truncates: a trade of
+    /// less than one share reports a size of zero.
+    /// </summary>
+    public decimal? DecimalSize { get; init; }
 
     /// <summary>The trade conditions.</summary>
     public ConditionSet Conditions { get; init; }

@@ -45,8 +45,8 @@ internal sealed class SnapshotMinuteJsonConverter : JsonConverter<SnapshotMinute
         double volumeWeightedAveragePrice = default;
         long transactionCount = default;
         long accumulatedVolume = default;
-        string? decimalAccumulatedVolume = null;
-        string? decimalVolume = null;
+        decimal? decimalAccumulatedVolume = null;
+        decimal? decimalVolume = null;
         bool isOtc = default;
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
@@ -99,12 +99,12 @@ internal sealed class SnapshotMinuteJsonConverter : JsonConverter<SnapshotMinute
             else if (reader.ValueTextEquals("dav"u8))
             {
                 reader.Read();
-                decimalAccumulatedVolume = JsonValueReader.ReadString(ref reader, "SnapshotMinute", "dav");
+                decimalAccumulatedVolume = JsonValueReader.ReadNullableDecimal(ref reader, "SnapshotMinute", "dav");
             }
             else if (reader.ValueTextEquals("dv"u8))
             {
                 reader.Read();
-                decimalVolume = JsonValueReader.ReadString(ref reader, "SnapshotMinute", "dv");
+                decimalVolume = JsonValueReader.ReadNullableDecimal(ref reader, "SnapshotMinute", "dv");
             }
             else if (reader.ValueTextEquals("otc"u8))
             {
@@ -151,8 +151,25 @@ internal sealed class SnapshotMinuteJsonConverter : JsonConverter<SnapshotMinute
         writer.WriteNumber("vw", value.VolumeWeightedAveragePrice);
         writer.WriteNumber("n", value.TransactionCount);
         writer.WriteNumber("av", value.AccumulatedVolume);
-        writer.WriteString("dav", value.DecimalAccumulatedVolume);
-        writer.WriteString("dv", value.DecimalVolume);
+
+        if (value.DecimalAccumulatedVolume is { } decimalAccumulatedVolume)
+        {
+            JsonValueWriter.WriteDecimalString(writer, "dav", decimalAccumulatedVolume);
+        }
+        else
+        {
+            writer.WriteNull("dav");
+        }
+
+        if (value.DecimalVolume is { } decimalVolume)
+        {
+            JsonValueWriter.WriteDecimalString(writer, "dv", decimalVolume);
+        }
+        else
+        {
+            writer.WriteNull("dv");
+        }
+
         writer.WriteBoolean("otc", value.IsOtc);
 
         writer.WriteEndObject();

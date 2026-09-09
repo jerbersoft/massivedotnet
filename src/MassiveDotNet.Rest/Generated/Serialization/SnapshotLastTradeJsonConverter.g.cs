@@ -43,7 +43,7 @@ internal sealed class SnapshotLastTradeJsonConverter : JsonConverter<SnapshotLas
         string? tradeId = null;
         double price = default;
         int size = default;
-        string? decimalSize = null;
+        decimal? decimalSize = null;
         int exchangeId = default;
         int[]? conditions = null;
         bool sawTradeId = false;
@@ -74,7 +74,7 @@ internal sealed class SnapshotLastTradeJsonConverter : JsonConverter<SnapshotLas
             else if (reader.ValueTextEquals("ds"u8))
             {
                 reader.Read();
-                decimalSize = JsonValueReader.ReadString(ref reader, "SnapshotLastTrade", "ds");
+                decimalSize = JsonValueReader.ReadNullableDecimal(ref reader, "SnapshotLastTrade", "ds");
             }
             else if (reader.ValueTextEquals("x"u8))
             {
@@ -121,7 +121,16 @@ internal sealed class SnapshotLastTradeJsonConverter : JsonConverter<SnapshotLas
         writer.WriteString("i", value.TradeId);
         writer.WriteNumber("p", value.Price);
         writer.WriteNumber("s", value.Size);
-        writer.WriteString("ds", value.DecimalSize);
+
+        if (value.DecimalSize is { } decimalSize)
+        {
+            JsonValueWriter.WriteDecimalString(writer, "ds", decimalSize);
+        }
+        else
+        {
+            writer.WriteNull("ds");
+        }
+
         writer.WriteNumber("x", value.ExchangeId);
 
         if (value.Conditions is { } conditions)

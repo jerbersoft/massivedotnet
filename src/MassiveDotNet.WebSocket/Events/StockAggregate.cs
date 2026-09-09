@@ -22,14 +22,22 @@ public readonly record struct StockAggregate
     /// <summary>The tick volume within this window.</summary>
     public long Volume { get; init; }
 
-    /// <summary>The tick volume including fractional shares, as the wire's decimal string.</summary>
-    public string? DecimalVolume { get; init; }
+    /// <summary>
+    /// The tick volume within this window including fractional shares. The wire sends this as a
+    /// decimal string; it is carried as a <see cref="decimal"/>, which holds the value exactly and
+    /// keeps the scale the service wrote (decision D38).
+    /// </summary>
+    public decimal? DecimalVolume { get; init; }
 
     /// <summary>Today's accumulated volume.</summary>
     public long AccumulatedVolume { get; init; }
 
-    /// <summary>Today's accumulated volume including fractional shares, as the wire's decimal string.</summary>
-    public string? DecimalAccumulatedVolume { get; init; }
+    /// <summary>
+    /// Today's accumulated volume including fractional shares. The wire sends this as a decimal
+    /// string; it is carried as a <see cref="decimal"/>, which holds the value exactly and keeps the
+    /// scale the service wrote (decision D38).
+    /// </summary>
+    public decimal? DecimalAccumulatedVolume { get; init; }
 
     /// <summary>Today's official opening price.</summary>
     public double OfficialOpenPrice { get; init; }

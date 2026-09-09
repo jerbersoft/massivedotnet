@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using MassiveDotNet.WebSocket.Events;
@@ -106,7 +107,7 @@ public class EventParsingTests
         StockTrade trade = ReadTrade(
             """[{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1,"ds":"0.5","trfi":202,"trft":1536036818700}]""");
 
-        Assert.Equal("0.5", trade.DecimalSize);
+        Assert.Equal(0.5m, trade.DecimalSize);
         Assert.Equal(202, trade.TrfId);
         Assert.Equal(1536036818700, trade.TrfTimestampMilliseconds);
         Assert.Equal(Instant.FromUnixTimeMilliseconds(1536036818700), trade.TrfTimestamp);
@@ -464,8 +465,30 @@ public class EventParsingTests
         StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregateLive, "A");
 
         Assert.Equal("FCX", bar.Ticker);
-        Assert.Equal("4989.0", bar.DecimalVolume);
-        Assert.Equal("4332125.038360", bar.DecimalAccumulatedVolume);
+        Assert.Equal(4989.0m, bar.DecimalVolume);
+        Assert.Equal(4332125.038360m, bar.DecimalAccumulatedVolume);
+    }
+
+    // decimal compares by value, so the assertion above passes whether or not the scale survived.
+    // The scale is the reason the binding is decimal rather than double (D38), so it gets an
+    // assertion that can actually see it.
+    [Fact]
+    public void TheDecimalVolumesKeepTheScaleTheServiceWrote()
+    {
+        StockAggregate bar = ReadAggregate(Fixtures.StockSecondAggregateLive, "A");
+
+        Assert.Equal("4989.0", bar.DecimalVolume?.ToString(CultureInfo.InvariantCulture));
+        Assert.Equal("4332125.038360", bar.DecimalAccumulatedVolume?.ToString(CultureInfo.InvariantCulture));
+    }
+
+    // The round-trip guard reaches the streaming wire too: an over-precise value is refused rather
+    // than silently rounded, which is the hazard the decimal binding was decided against.
+    [Fact]
+    public void AnAggregateWhoseDecimalVolumeCannotBeHeldExactlyThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(() => ReadAggregate(
+            """[{"ev":"A","sym":"MSFT","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"dv":"8827.8140001491929689677164477"}]""",
+            "A"));
     }
 
     [Fact]

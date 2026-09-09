@@ -62,6 +62,11 @@ lists both as decimal-string volumes. The sample response does not contain them;
 does: `"dv":"4989.0","dav":"4332125.038360"`. A fixture drawn only from the published sample would
 never exercise those two fields.
 
+*Resolved.* Both bound to `string?` here, which this spec noted in passing and never argued. Issue
+#61 argued it and #61's answer is `decimal?` (D38), so the live capture above is now what proves the
+scale survives — `4332125.038360` keeps its trailing zero, which is the property the binding rests
+on and which a `double` would have lost.
+
 One further observation, which this issue pins rather than acts on: `NOI` answered
 `{"ev":"status","status":"error","message":"not authorized"}`. See D-W18.
 
@@ -236,7 +241,7 @@ Three `readonly record struct` models in `MassiveDotNet.WebSocket.Events`:
 
 | Model | Topics | Ticker field | Notable fields |
 |---|---|---|---|
-| `StockAggregate` | `A`, `AM` | `sym` | `dv`/`dav` decimal-string volumes; `otc` absent means false |
+| `StockAggregate` | `A`, `AM` | `sym` | `dv`/`dav` decimal volumes, sent as strings (D38); `otc` absent means false |
 | `StockImbalance` | `NOI` | `T` | `at` raw code plus `LocalTime?`; `a` auction type as `string` |
 | `StockLimitUpLimitDown` | `LULD` | `T` | `i` indicators as `ConditionSet`; nanosecond `t` |
 

@@ -47,7 +47,7 @@ internal sealed class LastTradeJsonConverter : JsonConverter<LastTrade>
         string? tradeId = null;
         double price = default;
         double? size = null;
-        string? decimalSize = null;
+        decimal decimalSize = default;
         int exchangeId = default;
         int? trfId = null;
         int[]? conditions = null;
@@ -55,7 +55,6 @@ internal sealed class LastTradeJsonConverter : JsonConverter<LastTrade>
         int? tape = null;
         bool sawTicker = false;
         bool sawTradeId = false;
-        bool sawDecimalSize = false;
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
@@ -104,8 +103,7 @@ internal sealed class LastTradeJsonConverter : JsonConverter<LastTrade>
             else if (reader.ValueTextEquals("ds"u8))
             {
                 reader.Read();
-                decimalSize = JsonValueReader.ReadString(ref reader, "LastTrade", "ds");
-                sawDecimalSize = true;
+                decimalSize = JsonValueReader.ReadDecimal(ref reader, "LastTrade", "ds");
             }
             else if (reader.ValueTextEquals("x"u8))
             {
@@ -152,11 +150,6 @@ internal sealed class LastTradeJsonConverter : JsonConverter<LastTrade>
             throw new JsonException("LastTrade is missing the required property 'i'.");
         }
 
-        if (!sawDecimalSize)
-        {
-            throw new JsonException("LastTrade is missing the required property 'ds'.");
-        }
-
         return new LastTrade
         {
             Ticker = ticker!,
@@ -167,7 +160,7 @@ internal sealed class LastTradeJsonConverter : JsonConverter<LastTrade>
             TradeId = tradeId!,
             Price = price,
             Size = size,
-            DecimalSize = decimalSize!,
+            DecimalSize = decimalSize,
             ExchangeId = exchangeId,
             TrfId = trfId,
             Conditions = conditions,
@@ -206,7 +199,7 @@ internal sealed class LastTradeJsonConverter : JsonConverter<LastTrade>
             writer.WriteNull("s");
         }
 
-        writer.WriteString("ds", value.DecimalSize);
+        JsonValueWriter.WriteDecimalString(writer, "ds", value.DecimalSize);
         writer.WriteNumber("x", value.ExchangeId);
 
         if (value.TrfId is { } trfId)

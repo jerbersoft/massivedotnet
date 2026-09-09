@@ -88,7 +88,7 @@ public sealed class StocksTradesTests
         Assert.Equal("1", first.TradeId);
         Assert.Equal(171.55, first.Price);
         Assert.Equal(100d, first.Size);
-        Assert.Equal("100.0", first.DecimalSize);
+        Assert.Equal(100.0m, first.DecimalSize);
         Assert.Equal(11, first.ExchangeId);
         Assert.Equal(1063L, first.SequenceNumber);
         Assert.Equal(3, first.Tape);

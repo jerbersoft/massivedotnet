@@ -320,21 +320,30 @@ public sealed class AllocationTests
     /// number or a bool read straight off the tokens.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Regressed on 2026-09-08 by replacing the pooled <c>walk.Ticker(…)</c> call with
-    /// <c>walk.String(…)</c>: measured allocation rose from 64 B to 96 B, the difference being a
-    /// fresh, unpooled "MSFT". Confirmed to fail under the regression before this ceiling was
-    /// committed.
+    /// <c>walk.String(…)</c>: measured allocation rose, the difference being a fresh, unpooled
+    /// "MSFT". Confirmed to fail under the regression before this was committed.
+    /// </para>
+    /// <para>
+    /// This measured 64 B until <c>dv</c> and <c>dav</c> stopped being strings -- two of them, at
+    /// 32 B each -- which is the whole of what D38 bought on this path. It is now the same claim as
+    /// its sibling below, deliberately: the two shapes reach the heap by different routes, and a
+    /// test that only covered the absent case would not notice the present one regressing.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes()
+    public void ParsingAnAggregateCarryingDecimalVolumesAllocatesNothing()
     {
-        // Measured 64 B on 2026-09-08: two strings, "1.0" and "2.0", for dv and dav.
-        const long Ceiling = 80;
-
         TickerPool pool = new(16);
         StockAggregateConverter converter = new(pool, "A");
         byte[] frame = Encoding.UTF8.GetBytes(
             """[{"ev":"A","sym":"MSFT","v":1,"av":2,"op":1.0,"vw":1.0,"o":1.0,"c":1.0,"h":1.0,"l":1.0,"a":1.0,"z":1,"s":1,"e":2,"dv":"1.0","dav":"2.0"}]""");
+
+        Utf8JsonReader warm = new(frame);
+        warm.Read();
+        warm.Read();
+        _ = converter.Read(ref warm, typeof(StockAggregate), JsonSerializerOptions.Default);
 
         long allocated = Allocation.Measure(() =>
         {
@@ -344,11 +353,13 @@ public sealed class AllocationTests
             _ = converter.Read(ref reader, typeof(StockAggregate), JsonSerializerOptions.Default);
         });
 
+        // Strict equality rather than a ceiling, for the reason the sibling test below gives:
+        // headroom on a zero claim defeats the claim (D31).
         Assert.True(
-            allocated <= Ceiling,
-            $"Parsing one aggregate allocated {Allocation.Describe(allocated)}, over its "
-                + $"{Allocation.Describe(Ceiling)} ceiling. The ticker is pooled, so only the two "
-                + "decimal-volume strings should remain.");
+            allocated == 0,
+            $"Parsing one aggregate with decimal volumes allocated {Allocation.Describe(allocated)}. "
+                + "The ticker is pooled and dv/dav are decimals read off the tokens, so nothing on "
+                + "this shape should reach the heap.");
     }
 
     /// <summary>

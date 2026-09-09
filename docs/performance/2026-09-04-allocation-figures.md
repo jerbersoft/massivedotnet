@@ -208,6 +208,9 @@ these was verified by deliberately regressing its path and watching the assertio
 | Deserialize 10,000 rows | 882,864 B | 1,059,000 B | converter emission disabled: 5,442,864 B |
 | Deserialize 50,000 rows | 4,402,864 B | 5,283,000 B | converter emission disabled: 27,202,864 B |
 | Traverse 100 pages x 10 rows | 2,909 B/page | 3,490 B/page | converter emission disabled: 7,469 B/page |
+| Deserialize 1,000 trade rows | 154,424 B | 170,000 B | `decimal_size` back to `string`: 186,424 B |
+| Deserialize 10,000 trade rows | 1,522,432 B | 1,675,000 B | `decimal_size` back to `string`: 1,762,432 B |
+| Deserialize 50,000 trade rows | 7,922,432 B | 8,715,000 B | `decimal_size` back to `string`: 9,122,432 B |
 
 The four deserialization rows were re-measured on 2026-09-04 after issue #47 was fixed. Their
 earlier figures, against which the same ceilings were first set, were 727,040 B, 8,326,496 B,
@@ -216,7 +219,18 @@ string, which cost 988,552 B, 10,940,008 B, 51,910,808 B, and 54,738 B/page. Bot
 fail all four, and the current column names the cheaper one to reproduce -- turning off the
 generator's converter emission and regenerating.
 
-The last row is the one worth keeping. Under an accumulating traversal,
+The three trade rows were added on 2026-09-09 with D38, and their headroom is 10% rather than the
+20% every row above them carries. That is deliberate and is the whole reason they can catch
+anything: a trades page allocates one unpoolable string per row for `id`, so the regression these
+guard against -- a second string per row, which is what `decimal_size` was -- is itself about 20%
+of the total. A 20% ceiling would sit exactly on top of the defect and never see it.
+
+The comparison is worth reading in full, because the row gets *bigger*: `Trade` grows from 112 to
+120 bytes when an 8-byte reference becomes a 16-byte value, so at 50,000 rows the returned array
+gains 400,000 B. The heap still loses 1,200,000 B, and 50,000 objects the collector no longer has
+to track. A string for a number costs more than the number, even when the number is 16 bytes wide.
+
+The traversal row is the one worth keeping. Under an accumulating traversal,
 `CursorTraversalTests.RetainsNoMemoryProportionalToThePagesTraversed` **still passed** — it measures
 what survives a traversal, and an accumulator released at the end survives nothing. Allocation is
 what catches quadratic work that memory profiling cannot see.

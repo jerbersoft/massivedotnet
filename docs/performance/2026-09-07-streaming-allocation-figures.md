@@ -39,7 +39,7 @@ ships with.
 | `TheTickerCostsNothingAfterTheFirstEvent` | 1,000 repeat interns of a pooled ticker | 0 B | exactly 0 | alternate lookup → `_pool.TryGetValue(new string(ticker), …)`: 32,000 B |
 | `ConditionsWithinTheInlineCapacityAllocateNothing` | Read a 3-code condition array (inline capacity is 8) | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 320 B |
 | `RetainsNoMemoryProportionalToTheEventsReceived` | `TopicSink<StockTrade>` retention, capacity-8 channel, `min(large_i) - min(small_i)` across 8 samples of 200 vs. 20,000 events written | 107,136 B (mostly fixture-array artefact, not retention -- see below) | 256 KB | `Channel.CreateBounded` → `Channel.CreateUnbounded<T>()`: 7,187,416 B |
-| `ParsingAnAggregateAllocatesNothingBeyondItsDecimalVolumes` | Parse one `A`/`AM` aggregate carrying `dv`/`dav`, ticker pooled | 64 B | 80 B | `walk.Ticker(…)` → `walk.String(…)`: 96 B |
+| `ParsingAnAggregateCarryingDecimalVolumesAllocatesNothing` | Parse one `A`/`AM` aggregate carrying `dv`/`dav`, ticker pooled | 0 B | exactly 0 | `walk.NullableDecimal(…)` → `walk.String(…)` with `string?` fields: 64 B |
 | `ParsingAnAggregateWithoutDecimalVolumesAllocatesNothing` | Parse the same bar without `dv`/`dav` | 0 B | exactly 0 | same unpooled-ticker change: 32 B |
 | `ParsingALimitUpLimitDownBandAllocatesNothing` | Parse one `LULD` band, ticker pooled, indicators inline | 0 B | exactly 0 | `ConditionSetSerialization.Read` forced to always spill: 144 B |
 | `ParsingAnImbalanceAllocatesNothingBeyondItsAuctionType` | Parse one `NOI` imbalance, ticker pooled | 24 B | 32 B | `walk.Ticker(…)` → `walk.String(…)`: 56 B |
@@ -56,15 +56,20 @@ The last four rows were measured on 2026-09-08 alongside issue #21, gating the t
 paths (`StockAggregate`, `StockImbalance`, `StockLimitUpLimitDown`) the same way. Both exactly-zero
 claims — the aggregate without `dv`/`dav`, and the limit up-limit down band — are asserted with
 strict equality for the same reason the two pre-existing zero claims above are: headroom on a zero
-would defeat the point (D31). The two ceilings carry roughly 20% headroom rounded up to the next
-multiple of 8: 64 B → 80 B for the aggregate's two decimal-volume strings, and 24 B → 32 B for the
-imbalance's one-character auction type. The imbalance ceiling's 33% headroom is the same
-mechanical effect as the trade ceiling's 25% above: 20% of 24 B (4.8 B) is under one allocator
-size-class step, so rounding the 20% target up to the next multiple of 8 lands a full step (8 B)
-above the measured figure rather than the fractional amount 20% alone would give. The aggregate
-ceiling's 25% is a plainer case of the same rounding rule rather than extra slack: 64 B + 20% is
-76.8 B, and the nearest multiple of 8 at or above that is 80 B. Each of the four was watched failing under its own
-regression before being committed, one at a time, restoring in between; the same
+would defeat the point (D31).
+
+The aggregate row carrying `dv`/`dav` measured 64 B and held an 80 B ceiling until 2026-09-09, when
+those two fields stopped being strings (D38); the 64 B was exactly the two of them, 32 B each. It is
+now the same exactly-zero claim as its sibling, deliberately: the two shapes reach the heap by
+different routes, and a test covering only the absent case would not notice the present one
+regressing. Its regression was re-run for the new claim, not inherited.
+
+The one ceiling left among those four carries roughly 20% headroom rounded up to the next multiple
+of 8: 24 B → 32 B for the imbalance's one-character auction type. That 33% is the same mechanical
+effect as the trade ceiling's 25% above: 20% of 24 B (4.8 B) is under one allocator size-class step,
+so rounding the 20% target up to the next multiple of 8 lands a full step (8 B) above the measured
+figure rather than the fractional amount 20% alone would give. Each of the four was watched failing
+under its own regression before being committed, one at a time, restoring in between; the same
 `ConditionSetSerialization.Read` regression used for `ConditionsWithinTheInlineCapacityAllocateNothing`
 also reddens `ParsingALimitUpLimitDownBandAllocatesNothing`, since one implementation serves the
 trade, quote, and limit up-limit down converters alike (see `ConditionSetSerialization`'s own

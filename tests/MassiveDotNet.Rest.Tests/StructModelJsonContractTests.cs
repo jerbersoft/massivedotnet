@@ -70,7 +70,7 @@ public sealed class StructModelJsonContractTests
         Assert.Equal(1063, trade.SequenceNumber);
         Assert.Equal(170.15, trade.Price);
         Assert.Equal(2, trade.Size);
-        Assert.Equal("2.0", trade.DecimalSize);
+        Assert.Equal(2.0m, trade.DecimalSize);
         Assert.Equal(11, trade.ExchangeId);
         Assert.Equal(2, trade.TrfId);
         Assert.Equal<int>([14, 41], trade.Conditions!);
@@ -166,15 +166,36 @@ public sealed class StructModelJsonContractTests
     public async Task ReadsAnEmptyArrayAsAnEmptyPage() => Assert.Empty(await ReadAsync(""));
 
     /// <summary>
-    /// A missing required property is rejected. The schema calls these fields required, and the
-    /// SDK's own signature says <c>string</c>, not <c>string?</c>; accepting the row would hand a
-    /// caller a null through a non-nullable property.
+    /// A missing required reference property is rejected. The schema calls these fields required,
+    /// and the SDK's own signature says <c>string</c>, not <c>string?</c>; accepting the row would
+    /// hand a caller a null through a non-nullable property.
     /// </summary>
     [Theory]
     [InlineData("""{"decimal_size":"2.0"}""")]
-    [InlineData("""{"id":"t1"}""")]
     [InlineData("{}")]
-    public async Task RejectsARowMissingARequiredProperty(string row) => await RejectsAsync(row);
+    public async Task RejectsARowMissingARequiredReferenceProperty(string row) => await RejectsAsync(row);
+
+    /// <summary>
+    /// A required value-typed property carries no presence check, so an absent one reads as its
+    /// default rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// This is the rule every number on a struct model has always followed -- <c>price</c> below is
+    /// required by the description too -- and <c>decimal_size</c> joined them when it stopped being
+    /// a <see cref="string"/> (D38). The check it lost was never backed by anything trustworthy:
+    /// the description's requiredness is unreliable (D17), and this very model's siblings are typed
+    /// nullable in the map precisely because the service omits fields the description marks
+    /// required. The check existed only because a required reference type needs the <c>required</c>
+    /// modifier to satisfy CS8618, and the modifier needs a value to construct with.
+    /// </remarks>
+    [Fact]
+    public async Task ReadsARowMissingARequiredValueTypedPropertyAsItsDefault()
+    {
+        Trade trade = Assert.Single(await ReadAsync("""{"id":"t1"}"""));
+
+        Assert.Equal(0m, trade.DecimalSize);
+        Assert.Equal(0d, trade.Price);
+    }
 
     /// <summary>A null in a non-nullable value type is a malformed row, not a zero.</summary>
     [Fact]

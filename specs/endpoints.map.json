@@ -155,7 +155,7 @@
         "i":  { "name": "TradeId" },
         "p":  { "name": "Price" },
         "s":  { "name": "Size" },
-        "ds": { "name": "DecimalSize" },
+        "ds": { "name": "DecimalSize", "type": "decimal", "summary": "The size of the trade including its fractional component. The wire sends this as a decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote (decision D38)." },
         "x":  { "name": "ExchangeId" },
         "r":  { "name": "TrfId" },
         "c":  { "name": "Conditions" },
@@ -269,7 +269,7 @@
         "sequence_number":       { "name": "SequenceNumber" },
         "price":                 { "name": "Price" },
         "size":                  { "name": "Size" },
-        "decimal_size":          { "name": "DecimalSize" },
+        "decimal_size":          { "name": "DecimalSize", "type": "decimal", "summary": "The size of the trade including its fractional component. The wire sends this as a decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote (decision D38)." },
         "exchange":              { "name": "ExchangeId" },
         "trf_id":                { "name": "TrfId" },
         "conditions":            { "name": "Conditions" },
@@ -302,7 +302,7 @@
 
     "SnapshotDay": {
       "kind": "struct",
-      "summary": "The current trading day's bar inside a snapshot: open, high, low, close, volume, and the day's volume as a decimal string.",
+      "summary": "The current trading day's bar inside a snapshot: open, high, low, close, volume, and the day's volume including fractional shares.",
       "remarks": "A struct like <see cref=\"Agg\"/> (decision D4). It carries no timestamp: the day is the snapshot's own. <see cref=\"SnapshotPreviousDay\"/> is the same shape without <see cref=\"DecimalVolume\"/>, which is why the two are separate models (decision D16).",
       "schema": { "operationId": "GetStocksSnapshotTicker", "pointer": "ticker/day" },
       "properties": {
@@ -312,7 +312,7 @@
         "c":   { "name": "Close" },
         "v":   { "name": "Volume" },
         "vw":  { "name": "VolumeWeightedAveragePrice" },
-        "dv":  { "name": "DecimalVolume" },
+        "dv":  { "name": "DecimalVolume", "type": "decimal?", "summary": "The volume including fractional shares. The wire sends this as a decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote (decision D38)." },
         "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
       }
     },
@@ -348,8 +348,8 @@
         "vw":  { "name": "VolumeWeightedAveragePrice" },
         "n":   { "name": "TransactionCount", "type": "long" },
         "av":  { "name": "AccumulatedVolume", "type": "long", "summary": "The accumulated volume for the day so far. The description declares a bare integer; a busy session overflows int32." },
-        "dav": { "name": "DecimalAccumulatedVolume", "type": "string?", "summary": "The accumulated volume for the day so far as a decimal string. The description marks it required; the service omits it on some tickers in the whole-market snapshot." },
-        "dv":  { "name": "DecimalVolume" },
+        "dav": { "name": "DecimalAccumulatedVolume", "type": "decimal?", "summary": "The accumulated volume for the day so far, including fractional shares. The wire sends this as a decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote (decision D38). The description marks it required; the service omits it on some tickers in the whole-market snapshot." },
+        "dv":  { "name": "DecimalVolume", "type": "decimal?", "summary": "The volume including fractional shares. The wire sends this as a decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote (decision D38)." },
         "otc": { "name": "IsOtc", "type": "bool", "summary": "Whether this aggregate is for an OTC ticker. The API omits the field entirely when false, which deserializes to false here." }
       }
     },
@@ -378,7 +378,7 @@
         "i":  { "name": "TradeId" },
         "p":  { "name": "Price" },
         "s":  { "name": "Size" },
-        "ds": { "name": "DecimalSize", "type": "string?", "summary": "The size of the trade as a decimal string. The description marks it required; the service omits it on some tickers in the whole-market snapshot." },
+        "ds": { "name": "DecimalSize", "type": "decimal?", "summary": "The size of the trade including its fractional component. The wire sends this as a decimal string; it is carried as a <c>decimal</c>, which holds the value exactly and keeps the scale the service wrote (decision D38). The description marks it required; the service omits it on some tickers in the whole-market snapshot." },
         "x":  { "name": "ExchangeId" },
         "c":  { "name": "Conditions", "type": "int[]?", "summary": "The condition codes of the trade. The description marks it required; the service omits it when the trade carried no conditions." }
       }

@@ -186,6 +186,68 @@ public sealed class ModelConverterTests
         Assert.Contains("UTF-8 literals", message, StringComparison.Ordinal);
     }
 
+    /// <summary>A wire string the map types <c>decimal</c>, required and optional (D38).</summary>
+    private const string DecimalShape = """
+        {
+          "type": "object",
+          "required": ["ds"],
+          "properties": {
+            "ds": { "type": "string" },
+            "dv": { "type": "string" }
+          }
+        }
+        """;
+
+    private const string DecimalProperties = """
+        {
+          "ds": { "name": "DecimalSize", "type": "decimal" },
+          "dv": { "name": "DecimalVolume", "type": "decimal?" }
+        }
+        """;
+
+    /// <summary>
+    /// The fractional-share family is a number the description declares as a string, so the map
+    /// types it <c>decimal</c> and the converter reads it through the round-trip-guarded reader
+    /// rather than through <c>ReadString</c> (D38).
+    /// </summary>
+    [Fact]
+    public void ReadsAMapTypedDecimalThroughTheDecimalReader()
+    {
+        string converter = Harness.Generate(Document(DecimalShape), MapDocument(properties: DecimalProperties))[ConverterPath];
+
+        Assert.Contains("""decimalSize = JsonValueReader.ReadDecimal(ref reader, "Thing", "ds");""", converter, StringComparison.Ordinal);
+        Assert.Contains("""decimalVolume = JsonValueReader.ReadNullableDecimal(ref reader, "Thing", "dv");""", converter, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// It has to go back out as a string. <c>WriteNumber</c> would emit a shape the service never
+    /// sends and this SDK's own reader refuses, so a model a caller serialized would not
+    /// deserialize.
+    /// </summary>
+    [Fact]
+    public void WritesADecimalBackAsTheStringTheWireSent()
+    {
+        string converter = Harness.Generate(Document(DecimalShape), MapDocument(properties: DecimalProperties))[ConverterPath];
+
+        Assert.Contains("""JsonValueWriter.WriteDecimalString(writer, "ds", value.DecimalSize);""", converter, StringComparison.Ordinal);
+        Assert.Contains("""JsonValueWriter.WriteDecimalString(writer, "dv", decimalVolume);""", converter, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteNumber", converter, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>decimal</c> is a value type, so a required one already has a non-null default and takes
+    /// no <c>required</c> modifier -- the same reading every other number on a struct model gets.
+    /// </summary>
+    [Fact]
+    public void TreatsDecimalAsAValueTypeOnTheModel()
+    {
+        Dictionary<string, string> files = Harness.Generate(Document(DecimalShape), MapDocument(properties: DecimalProperties));
+
+        Assert.Contains("public decimal DecimalSize { get; init; }", files[Path.Combine("Models", "Thing.g.cs")], StringComparison.Ordinal);
+        Assert.Contains("public decimal? DecimalVolume { get; init; }", files[Path.Combine("Models", "Thing.g.cs")], StringComparison.Ordinal);
+        Assert.DoesNotContain("required decimal", files[Path.Combine("Models", "Thing.g.cs")], StringComparison.Ordinal);
+    }
+
     /// <summary>Round-tripping is preserved: the converter writes every property it reads.</summary>
     [Fact]
     public void WritesEveryPropertyItReads()

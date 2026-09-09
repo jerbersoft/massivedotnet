@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using MassiveDotNet.Serialization;
@@ -192,6 +193,116 @@ public sealed class JsonValueReaderTests
     {
         Utf8JsonReader reader = At(json);
         Assert.Equal(expected, JsonValueReader.ReadNullableDouble(ref reader, Model, Property));
+    }
+
+    /// <summary>
+    /// The wire sends this family as a string, so the scale it wrote is part of the value and has
+    /// to survive: <c>decimal</c> carries scale, which is the property that makes the binding
+    /// possible at all (D38).
+    /// </summary>
+    [Theory]
+    [InlineData("\"4989.0\"", "4989.0")]
+    [InlineData("\"4332125.038360\"", "4332125.038360")]
+    [InlineData("\"0\"", "0")]
+    [InlineData("\"-1.5\"", "-1.5")]
+    [InlineData("\"79228162514264337593543950335\"", "79228162514264337593543950335")]
+    [InlineData("\"12345678901234567890123456789\"", "12345678901234567890123456789")]
+    public void ReadsADecimalStringKeepingTheScaleTheWireWrote(string json, string expected)
+    {
+        Utf8JsonReader reader = At(json);
+        decimal value = JsonValueReader.ReadDecimal(ref reader, Model, Property);
+
+        Assert.Equal(expected, value.ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// The hazard the binding was decided against, and the reason the reader round-trips rather
+    /// than counts digits: <c>decimal.TryParse</c> drops a digit and returns <see langword="true"/>
+    /// on the first two of these, so nothing downstream could notice the number changed.
+    /// </summary>
+    [Theory]
+    [InlineData("\"8827.8140001491929689677164477\"")]
+    [InlineData("\"1.2345678901234567890123456789012\"")]
+    [InlineData("\"79228162514264337593543950336\"")]
+    public void RefusesADecimalItCannotCarryExactly(string json) =>
+        Rejects(json, (ref Utf8JsonReader reader) => JsonValueReader.ReadDecimal(ref reader, Model, Property));
+
+    /// <summary>
+    /// The round-trip guard enforces canonical spelling as a side effect, which is a stricter
+    /// contract than "never rounds" and is accepted deliberately (D38): Massive's wire is canonical,
+    /// and a refusal is visible where a silent normalisation is not.
+    /// </summary>
+    [Theory]
+    [InlineData("\".5\"")]
+    [InlineData("\"+4989.0\"")]
+    [InlineData("\"004989.0\"")]
+    [InlineData("\"4989.\"")]
+    [InlineData("\"1e5\"")]
+    [InlineData("\" 4989.0\"")]
+    [InlineData("\"1,000.5\"")]
+    [InlineData("\"\"")]
+    [InlineData("\"nope\"")]
+    public void RefusesANonCanonicalDecimalString(string json) =>
+        Rejects(json, (ref Utf8JsonReader reader) => JsonValueReader.ReadDecimal(ref reader, Model, Property));
+
+    /// <summary>
+    /// A JSON number is refused exactly as it was when this family bound to <c>string</c>: the
+    /// description declares these fields strings, and reading a number here would accept a form the
+    /// service does not send.
+    /// </summary>
+    [Theory]
+    [InlineData("4989.0")]
+    [InlineData("true")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    public void RejectsAValueThatIsNotADecimalString(string json) =>
+        Rejects(json, (ref Utf8JsonReader reader) => JsonValueReader.ReadDecimal(ref reader, Model, Property));
+
+    [Theory]
+    [InlineData("null", null)]
+    [InlineData("\"4989.0\"", "4989.0")]
+    public void ReadsANullableDecimal(string json, string? expected)
+    {
+        Utf8JsonReader reader = At(json);
+        decimal? value = JsonValueReader.ReadNullableDecimal(ref reader, Model, Property);
+
+        Assert.Equal(expected, value?.ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Escaping is a transport detail, not part of the value, so the copying path decodes first and
+    /// judges the decoded text -- accepting a canonical value however it was spelled on the wire,
+    /// and refusing a non-canonical one that escaping might otherwise have hidden.
+    /// </summary>
+    [Theory]
+    [InlineData("\"\\u0034989.0\"", "4989.0")]
+    [InlineData("\"4989.\\u0030\"", "4989.0")]
+    public void ReadsADecimalThroughTheCopyingPath(string json, string expected)
+    {
+        Utf8JsonReader reader = At(json);
+
+        Assert.Equal(expected, JsonValueReader.ReadDecimal(ref reader, Model, Property).ToString(CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void RefusesANonCanonicalDecimalThroughTheCopyingPath() =>
+        Rejects("\"\\u002B4989.0\"", (ref Utf8JsonReader reader) => JsonValueReader.ReadDecimal(ref reader, Model, Property));
+
+    /// <summary>
+    /// A refused decimal names its model and property like every other failure here. The value
+    /// itself is not echoed: the response body is not ours to quote back, and the two names are
+    /// enough to find it.
+    /// </summary>
+    [Fact]
+    public void NamesTheModelAndPropertyWhenADecimalIsRefused()
+    {
+        JsonException thrown = Rejects(
+            "\"1e5\"",
+            (ref Utf8JsonReader reader) => JsonValueReader.ReadDecimal(ref reader, "Trade", "decimal_size"));
+
+        Assert.Contains("Trade", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("decimal_size", thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("1e5", thrown.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
