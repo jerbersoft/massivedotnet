@@ -133,8 +133,23 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Ubuntu's own archive is the only repository this installs from. The runner image also
+      # carries third-party ones -- Google Chrome, Microsoft -- and `apt-get update` fails as a
+      # WHOLE when any single configured repository fails, so an index we never read can fail this
+      # job. On 2026-09-09 Google's served a hash-sum mismatch and did exactly that, twice in a row,
+      # blocking a release over a browser nothing here uses.
+      #
+      # Dropping those repositories is deliberately narrower than tolerating an update failure with
+      # `|| true`: that would also swallow a real failure of the archive clang comes from, and the
+      # install would then fail with a confusing "no such package" instead of the fetch error that
+      # explains it.
       - name: Install AOT toolchain
-        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+        run: |
+          set -euo pipefail
+          sudo find /etc/apt/sources.list.d -type f \
+            ! -name 'ubuntu.sources' ! -name 'ubuntu.list' -print -delete
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
 
       # Constitution rules 3 and 4. The sample project sets
       # JsonSerializerIsReflectionEnabledByDefault=false, so any reflection fallback fails here.
