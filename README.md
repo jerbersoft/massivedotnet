@@ -20,15 +20,13 @@ Four packages, all `net10.0`:
 | [`MassiveDotNet.Extensions.DependencyInjection`](https://www.nuget.org/packages/MassiveDotNet.Extensions.DependencyInjection) | `AddMassive` wiring for `IServiceCollection`. Brings both of the above. |
 | [`MassiveDotNet`](https://www.nuget.org/packages/MassiveDotNet) | Nothing directly — it is the shared core, and the others depend on it. |
 
-**Only prereleases exist today**, so the flag is not optional — without it NuGet finds no version
-to resolve and the command fails:
-
 ```bash
-dotnet add package MassiveDotNet.Rest --prerelease
+dotnet add package MassiveDotNet.Rest
 ```
 
-Every push that passes CI on `master` publishes a `-ci.N` build, so the prerelease stream moves
-faster than the release notes do. Pin an exact version if you would rather it did not.
+Every push that passes CI on `master` also publishes a `-ci.N` prerelease, so there is a faster
+stream than the releases if you want it — `--prerelease` opts in, and pinning an exact version opts
+back out.
 
 ## Status
 

@@ -27,7 +27,7 @@
     are published together from one run.
   -->
   <PropertyGroup Label="Package identity">
-    <VersionPrefix>0.2.0</VersionPrefix>
+    <VersionPrefix>0.3.0</VersionPrefix>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- An SPDX expression rather than PackageLicenseFile: NuGet renders it as a link to the
          canonical licence text, so a client reads the terms without unpacking anything. The LICENSE
