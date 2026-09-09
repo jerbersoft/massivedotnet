@@ -19,7 +19,7 @@ Two conventions worth knowing before reading a breaking-change entry:
 
 ## [Unreleased]
 
-## [0.2.0] — unreleased
+## [0.2.0] — 2026-09-09
 
 **The first version published to nuget.org.** The `0.1`/`0.2` numbering follows the project's own
 milestones rather than a release history: everything below has been in the repository for some
@@ -27,9 +27,12 @@ time, and 0.2.0 is the first version anyone can `dotnet add package`.
 
 ### Added
 
-- **`MassiveDotNet.Rest`** — 147 REST operations across stocks, reference data, financials and SEC
-  filings, generated from Massive's OpenAPI description. Every non-deprecated operation is reachable
-  from the public API, and a contract test fails the build if one is not.
+- **`MassiveDotNet.Rest`** — **60 of the platform's 147 REST operations**, generated from Massive's
+  OpenAPI description: 21 under `Stocks` (aggregates, trades, quotes, snapshots, indicators) and 39
+  under `Reference` (tickers, news, corporate actions, financials, SEC filings, exchanges and
+  conditions). Options, crypto, forex, futures, indices and the vendor datasets are not in this
+  release. Coverage is contract-tested and cannot regress: an endpoint may be added, never removed,
+  except when Massive retires the route from the description itself.
   - Paginated endpoints get `ListXxxAsync` (one page) and `EnumerateXxxAsync`
     (`IAsyncEnumerable<T>`, every page, one in flight at a time, retaining no memory proportional to
     the pages traversed).

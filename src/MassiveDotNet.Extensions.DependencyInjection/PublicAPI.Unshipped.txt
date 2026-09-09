@@ -1,8 +1,1 @@
 #nullable enable
-const Microsoft.Extensions.DependencyInjection.MassiveServiceCollectionExtensions.HttpClientName = "MassiveDotNet" -> string!
-Microsoft.Extensions.DependencyInjection.MassiveServiceCollectionExtensions
-Microsoft.Extensions.DependencyInjection.MassiveStreamServiceCollectionExtensions
-static Microsoft.Extensions.DependencyInjection.MassiveServiceCollectionExtensions.AddMassive(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! apiKey) -> Microsoft.Extensions.DependencyInjection.IHttpClientBuilder!
-static Microsoft.Extensions.DependencyInjection.MassiveServiceCollectionExtensions.AddMassive(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<MassiveDotNet.MassiveClientOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IHttpClientBuilder!
-static Microsoft.Extensions.DependencyInjection.MassiveStreamServiceCollectionExtensions.AddMassiveStream(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<MassiveDotNet.WebSocket.MassiveStreamOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static Microsoft.Extensions.DependencyInjection.MassiveStreamServiceCollectionExtensions.LogStreamHealth(this MassiveDotNet.WebSocket.MassiveStockStream! stream, Microsoft.Extensions.Logging.ILogger! logger) -> void
