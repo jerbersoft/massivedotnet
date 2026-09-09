@@ -1,0 +1,258 @@
+name: Publish to NuGet
+
+# The only path to nuget.org, and deliberately the ENTRY workflow on every trigger.
+#
+# nuget.org's Trusted Publishing policy binds to a workflow FILE -- repository owner, repository,
+# and a file name with no path. Neither NuGet's documentation nor the NuGet/login action states
+# whether that name is matched against the entry workflow or a called one, so this file is never a
+# reusable workflow: whatever the answer is, one policy naming publish.yml covers every run.
+#
+# WHAT CAN PUBLISH WHAT. A published GitHub Release packs with no suffix and is the ONLY way a
+# stable version can be produced. A CI run that passed on master packs
+# `<VersionPrefix>-ci.<that run's number>`. A manual dispatch must supply a suffix and is refused
+# without one. The "Work out the version suffix" step enforces this; it is not a convention.
+#
+# WHY workflow_run RATHER THAN A JOB IN ci.yml. Publishing has to happen under this file's name for
+# the policy above, and it has to happen only after every check passes. `workflow_run` buys both. It
+# does not fire for runs that started before this file reached the default branch, which is what the
+# one-off workflow_dispatch is for.
+#
+# There is no API key secret anywhere in this file, and that is the point: authentication is an OIDC
+# token exchanged at the moment of the push for a credential valid for one hour. Rule 13 forbids a
+# Massive credential in CI; this keeps the nuget.org credential out too, so the repository holds no
+# long-lived secret of any kind.
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      suffix:
+        description: 'Prerelease suffix, e.g. ci.90. Required -- a manual run cannot publish a stable version.'
+        required: true
+
+# A publish that has started is never cancelled: half a push is worse than a late one, and
+# nuget.org keeps whatever arrived.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Ordered, and the order is load-bearing: core is pushed before the packages that depend on it, and
+# .Rest and .WebSocket before the DI package that depends on both. A refused push then never leaves
+# a package on the feed declaring a dependency on one that is not there. PublishWorkflowTests pins
+# this list against the projects under src/.
+env:
+  PACKAGES: MassiveDotNet MassiveDotNet.Rest MassiveDotNet.WebSocket MassiveDotNet.Extensions.DependencyInjection
+
+jobs:
+  publish:
+    name: Publish to NuGet
+    # THREE CONDITIONS ON A workflow_run, AND EACH ONE IS LOAD-BEARING.
+    #
+    # conclusion == 'success' -- workflow_run fires on completion, success or not. A package that
+    # exists is a package someone can restore, so an unverified one is worse than none.
+    #
+    # head_repository == this repository -- workflow_run ALSO fires for a CI run started by a pull
+    # request from a fork, and GitHub's documentation is explicit that a workflow started by it "is
+    # able to access secrets and write tokens, even if the previous workflow was not". This job
+    # holds id-token: write and exchanges it for a live nuget.org credential, and the checkout below
+    # takes its ref from the triggering run rather than from master. Without this line the only
+    # barrier is the `branches: [master]` filter above, and that filter matches head_branch, which
+    # for a fork's pull request is the branch name the contributor chose in their own fork. A fork's
+    # default branch is called master. A value the attacker picks is not a gate.
+    #
+    # event == 'push' -- defence in depth, and it narrows the trigger to what is actually meant to
+    # publish: a merge landing on master.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      id-token: write       # the OIDC token NuGet/login exchanges; the only privilege above default
+
+    steps:
+      # For a workflow_run the default ref is master's tip, which may already be a later commit than
+      # the one CI tested. head_sha is that commit. For a release it is null and the default, the
+      # tag, is right.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Values arrive through env rather than being interpolated into the script, so nothing a
+      # dispatcher types is ever evaluated as shell.
+      - name: Work out the version suffix
+        id: suffix
+        env:
+          EVENT: ${{ github.event_name }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          INPUT_SUFFIX: ${{ inputs.suffix }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            release)           suffix="" ;;
+            workflow_run)      suffix="ci.$RUN_NUMBER" ;;
+            workflow_dispatch) suffix="$INPUT_SUFFIX" ;;
+            *) echo "::error::Unexpected event $EVENT."; exit 1 ;;
+          esac
+          if [ "$EVENT" != "release" ] && [ -z "$suffix" ]; then
+            echo "::error::Only a published GitHub Release may produce a stable version. Every other trigger has to carry a prerelease suffix, and this one is empty."
+            exit 1
+          fi
+          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
+          echo "Suffix: ${suffix:-<none, this is a release>}"
+
+      # One line per package rather than `dotnet pack MassiveDotNet.slnx`, so a fifth package starts
+      # shipping by being named here rather than by appearing in the solution. Packing a dependent
+      # builds core again as a ProjectReference but emits a dependency on it at this same version
+      # rather than a second MassiveDotNet.nupkg. Each pack also produces a .snupkg beside its
+      # .nupkg.
+      - name: Pack
+        env:
+          SUFFIX: ${{ steps.suffix.outputs.suffix }}
+        run: |
+          set -euo pipefail
+          args=(-c Release -o ./artifacts)
+          if [ -n "$SUFFIX" ]; then
+            args+=("-p:VersionSuffix=$SUFFIX")
+          fi
+          for id in $PACKAGES; do
+            dotnet pack "src/$id/$id.csproj" "${args[@]}"
+          done
+
+      # The version comes from what was packed, never from a literal in this file. A literal is a
+      # defect that hides rather than fails: at any other version it would operate on something this
+      # run did not produce and still go green. The glob cannot match a sibling package -- the
+      # character after "MassiveDotNet." has to be a digit -- nor a .snupkg.
+      - name: Resolve the packed version
+        id: packed
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(artifacts/MassiveDotNet.[0-9]*.nupkg)
+          if [ ${#files[@]} -ne 1 ]; then
+            echo "::error::Expected exactly one artifacts/MassiveDotNet.<version>.nupkg, found ${#files[@]}."
+            ls -la artifacts/ || true
+            exit 1
+          fi
+          version="${files[0]#artifacts/MassiveDotNet.}"
+          version="${version%.nupkg}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Packed version: $version"
+
+      # Tagging v0.3.0 against a tree whose VersionPrefix still reads 0.2.0 publishes a version
+      # nobody asked for, permanently. This is the cheapest place to catch it.
+      - name: Assert the tag matches the packed version
+        if: github.event_name == 'release'
+        env:
+          VERSION: ${{ steps.packed.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected="refs/tags/v$VERSION"
+          if [ "$GITHUB_REF" != "$expected" ]; then
+            echo "::error::This release is $GITHUB_REF but the tree packs $VERSION, so the tag should be $expected. Either VersionPrefix in src/Directory.Build.props is wrong for this release, or the tag is."
+            exit 1
+          fi
+          echo "$GITHUB_REF matches the packed version."
+
+      # Makes PACKAGES govern the artefacts rather than merely describe them, in both directions:
+      # nothing unaccounted for survives to the push, and nothing the list names may go missing from
+      # it. The push below relies on the second loop, since it pushes one file per id by name.
+      - name: Partition the packed output against PACKAGES
+        env:
+          VERSION: ${{ steps.packed.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for file in artifacts/*.nupkg; do
+            id="${file#artifacts/}"
+            id="${id%.$VERSION.nupkg}"
+            if [[ " $PACKAGES " != *" $id "* ]]; then
+              echo "::error::$file is not named by PACKAGES. Add $id to PACKAGES in this workflow to publish it, or move the project out of src/ if it should not ship -- PublishWorkflowTests requires every project under src/ to be named here, so IsPackable alone will not settle it. A file that does not end in .$VERSION.nupkg lands here too, which means it packed at a version this run did not produce."
+              exit 1
+            fi
+          done
+          for id in $PACKAGES; do
+            if [ ! -f "artifacts/$id.$VERSION.nupkg" ]; then
+              echo "::error::PACKAGES names $id but artifacts/$id.$VERSION.nupkg does not exist. It either failed to pack, changed its PackageId, or set IsPackable false."
+              exit 1
+            fi
+          done
+          echo "Publishing:$(for id in $PACKAGES; do printf ' %s' "$id"; done) at $VERSION."
+
+      # Requested immediately before the push: the key it returns is valid for one hour.
+      - name: NuGet login (OIDC Trusted Publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: jerbersoft
+
+      # One invocation per id, in PACKAGES order, rather than a glob. dotnet nuget push derives each
+      # .snupkg from the .nupkg path it is handed and pushes it after the primary push succeeds, so
+      # symbols need no separate step, and nuget.org runs a symbol server to receive them.
+      - name: Push
+        env:
+          VERSION: ${{ steps.packed.outputs.version }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          pushed=""
+          for id in $PACKAGES; do
+            echo "::group::Pushing $id $VERSION"
+            if ! dotnet nuget push "artifacts/$id.$VERSION.nupkg" \
+                   --source https://api.nuget.org/v3/index.json \
+                   --api-key "$NUGET_API_KEY" \
+                   --skip-duplicate; then
+              echo "::endgroup::"
+              echo "::error::Pushing $id $VERSION failed. A 403 naming permission is the Trusted Publishing policy rather than the package: widen it for jerbersoft at https://www.nuget.org/account/trustedpublishing so that it covers $id -- including the new-packages scope if $id has never been published -- then re-run. --skip-duplicate makes the re-run complete rather than abort on what already went out. Published before this failure:${pushed:- nothing}."
+              exit 1
+            fi
+            echo "::endgroup::"
+            pushed="$pushed $id"
+          done
+
+      # A green push exit code is not evidence a version is live: nuget.org validates after the push
+      # returns. This reads the public feed rather than trusting the exit code.
+      - name: Verify every package reached the feed
+        env:
+          VERSION: ${{ steps.packed.outputs.version }}
+        run: |
+          set -euo pipefail
+          pending="$PACKAGES"
+          for attempt in $(seq 1 30); do
+            remaining=""
+            for id in $pending; do
+              lower="$(echo "$id" | tr '[:upper:]' '[:lower:]')"
+              if curl -sfL "https://api.nuget.org/v3-flatcontainer/$lower/index.json" -o index.json \
+                 && jq -e --arg v "$VERSION" '.versions | index($v) != null' index.json > /dev/null; then
+                echo "$id $VERSION is live."
+              else
+                remaining="$remaining $id"
+              fi
+            done
+            pending="$(echo "$remaining" | xargs || true)"
+            if [ -z "$pending" ]; then
+              break
+            fi
+            echo "Attempt $attempt/30 -- still waiting for:$pending"
+            sleep 30
+          done
+          if [ -n "$pending" ]; then
+            echo "::error::After 15 minutes these were still not on the feed at $VERSION:$pending. nuget.org validation can lag, so check https://www.nuget.org/profiles/jerbersoft before doing anything else -- once they appear, a re-run is refused as a duplicate."
+            exit 1
+          fi
+          echo "Every package is live at $VERSION."

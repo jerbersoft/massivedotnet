@@ -1,0 +1,272 @@
+#nullable enable
+~override MassiveDotNet.WebSocket.Events.StockAggregate.Equals(object obj) -> bool
+~override MassiveDotNet.WebSocket.Events.StockAggregate.ToString() -> string
+~override MassiveDotNet.WebSocket.Events.StockImbalance.Equals(object obj) -> bool
+~override MassiveDotNet.WebSocket.Events.StockImbalance.ToString() -> string
+~override MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Equals(object obj) -> bool
+~override MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.ToString() -> string
+~override MassiveDotNet.WebSocket.Events.StockQuote.Equals(object obj) -> bool
+~override MassiveDotNet.WebSocket.Events.StockQuote.ToString() -> string
+~override MassiveDotNet.WebSocket.Events.StockTrade.Equals(object obj) -> bool
+~override MassiveDotNet.WebSocket.Events.StockTrade.ToString() -> string
+const MassiveDotNet.WebSocket.Events.ConditionSet.InlineCapacity = 8 -> int
+MassiveDotNet.WebSocket.Events.ConditionSet
+MassiveDotNet.WebSocket.Events.ConditionSet.AsSpan() -> System.ReadOnlySpan<int>
+MassiveDotNet.WebSocket.Events.ConditionSet.ConditionSet() -> void
+MassiveDotNet.WebSocket.Events.ConditionSet.Count.get -> int
+MassiveDotNet.WebSocket.Events.ConditionSet.Equals(MassiveDotNet.WebSocket.Events.ConditionSet other) -> bool
+MassiveDotNet.WebSocket.Events.ConditionSet.this[int index].get -> int
+MassiveDotNet.WebSocket.Events.StockAggregate
+MassiveDotNet.WebSocket.Events.StockAggregate.AccumulatedVolume.get -> long
+MassiveDotNet.WebSocket.Events.StockAggregate.AccumulatedVolume.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.AverageTradeSize.get -> long
+MassiveDotNet.WebSocket.Events.StockAggregate.AverageTradeSize.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Close.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.Close.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.DailyVolumeWeightedAveragePrice.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.DailyVolumeWeightedAveragePrice.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.DecimalAccumulatedVolume.get -> decimal?
+MassiveDotNet.WebSocket.Events.StockAggregate.DecimalAccumulatedVolume.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.DecimalVolume.get -> decimal?
+MassiveDotNet.WebSocket.Events.StockAggregate.DecimalVolume.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.End.get -> NodaTime.Instant
+MassiveDotNet.WebSocket.Events.StockAggregate.EndTimestampMilliseconds.get -> long
+MassiveDotNet.WebSocket.Events.StockAggregate.EndTimestampMilliseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Equals(MassiveDotNet.WebSocket.Events.StockAggregate other) -> bool
+MassiveDotNet.WebSocket.Events.StockAggregate.High.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.High.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Low.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.Low.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.OfficialOpenPrice.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.OfficialOpenPrice.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Open.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.Open.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Otc.get -> bool
+MassiveDotNet.WebSocket.Events.StockAggregate.Otc.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Start.get -> NodaTime.Instant
+MassiveDotNet.WebSocket.Events.StockAggregate.StartTimestampMilliseconds.get -> long
+MassiveDotNet.WebSocket.Events.StockAggregate.StartTimestampMilliseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.StockAggregate() -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Ticker.get -> string!
+MassiveDotNet.WebSocket.Events.StockAggregate.Ticker.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.Volume.get -> long
+MassiveDotNet.WebSocket.Events.StockAggregate.Volume.init -> void
+MassiveDotNet.WebSocket.Events.StockAggregate.VolumeWeightedAveragePrice.get -> double
+MassiveDotNet.WebSocket.Events.StockAggregate.VolumeWeightedAveragePrice.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance
+MassiveDotNet.WebSocket.Events.StockImbalance.AuctionTime.get -> NodaTime.LocalTime?
+MassiveDotNet.WebSocket.Events.StockImbalance.AuctionTimeCode.get -> int
+MassiveDotNet.WebSocket.Events.StockImbalance.AuctionTimeCode.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.AuctionType.get -> string?
+MassiveDotNet.WebSocket.Events.StockImbalance.AuctionType.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.BookClearingPrice.get -> double
+MassiveDotNet.WebSocket.Events.StockImbalance.BookClearingPrice.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.Equals(MassiveDotNet.WebSocket.Events.StockImbalance other) -> bool
+MassiveDotNet.WebSocket.Events.StockImbalance.ExchangeId.get -> int
+MassiveDotNet.WebSocket.Events.StockImbalance.ExchangeId.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.ImbalanceQuantity.get -> long
+MassiveDotNet.WebSocket.Events.StockImbalance.ImbalanceQuantity.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.PairedQuantity.get -> long
+MassiveDotNet.WebSocket.Events.StockImbalance.PairedQuantity.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.StockImbalance() -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.SymbolSequence.get -> long
+MassiveDotNet.WebSocket.Events.StockImbalance.SymbolSequence.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.Ticker.get -> string!
+MassiveDotNet.WebSocket.Events.StockImbalance.Ticker.init -> void
+MassiveDotNet.WebSocket.Events.StockImbalance.Timestamp.get -> NodaTime.Instant
+MassiveDotNet.WebSocket.Events.StockImbalance.TimestampNanoseconds.get -> long
+MassiveDotNet.WebSocket.Events.StockImbalance.TimestampNanoseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Equals(MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown other) -> bool
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.HighPrice.get -> double
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.HighPrice.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Indicators.get -> MassiveDotNet.WebSocket.Events.ConditionSet
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Indicators.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.LowPrice.get -> double
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.LowPrice.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.SequenceNumber.get -> long
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.SequenceNumber.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.StockLimitUpLimitDown() -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Tape.get -> int?
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Tape.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Ticker.get -> string!
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Ticker.init -> void
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.Timestamp.get -> NodaTime.Instant
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.TimestampNanoseconds.get -> long
+MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.TimestampNanoseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote
+MassiveDotNet.WebSocket.Events.StockQuote.AskExchangeId.get -> int
+MassiveDotNet.WebSocket.Events.StockQuote.AskExchangeId.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.AskPrice.get -> double
+MassiveDotNet.WebSocket.Events.StockQuote.AskPrice.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.AskSize.get -> long
+MassiveDotNet.WebSocket.Events.StockQuote.AskSize.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.BidExchangeId.get -> int
+MassiveDotNet.WebSocket.Events.StockQuote.BidExchangeId.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.BidPrice.get -> double
+MassiveDotNet.WebSocket.Events.StockQuote.BidPrice.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.BidSize.get -> long
+MassiveDotNet.WebSocket.Events.StockQuote.BidSize.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.Condition.get -> int?
+MassiveDotNet.WebSocket.Events.StockQuote.Condition.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.Equals(MassiveDotNet.WebSocket.Events.StockQuote other) -> bool
+MassiveDotNet.WebSocket.Events.StockQuote.Indicators.get -> MassiveDotNet.WebSocket.Events.ConditionSet
+MassiveDotNet.WebSocket.Events.StockQuote.Indicators.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.SequenceNumber.get -> long
+MassiveDotNet.WebSocket.Events.StockQuote.SequenceNumber.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.SipTimestamp.get -> NodaTime.Instant
+MassiveDotNet.WebSocket.Events.StockQuote.SipTimestampMilliseconds.get -> long
+MassiveDotNet.WebSocket.Events.StockQuote.SipTimestampMilliseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.StockQuote() -> void
+MassiveDotNet.WebSocket.Events.StockQuote.Tape.get -> int?
+MassiveDotNet.WebSocket.Events.StockQuote.Tape.init -> void
+MassiveDotNet.WebSocket.Events.StockQuote.Ticker.get -> string!
+MassiveDotNet.WebSocket.Events.StockQuote.Ticker.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade
+MassiveDotNet.WebSocket.Events.StockTrade.Conditions.get -> MassiveDotNet.WebSocket.Events.ConditionSet
+MassiveDotNet.WebSocket.Events.StockTrade.Conditions.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.DecimalSize.get -> decimal?
+MassiveDotNet.WebSocket.Events.StockTrade.DecimalSize.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.Equals(MassiveDotNet.WebSocket.Events.StockTrade other) -> bool
+MassiveDotNet.WebSocket.Events.StockTrade.ExchangeId.get -> int
+MassiveDotNet.WebSocket.Events.StockTrade.ExchangeId.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.ParticipantTimestamp.get -> NodaTime.Instant?
+MassiveDotNet.WebSocket.Events.StockTrade.ParticipantTimestampMilliseconds.get -> long?
+MassiveDotNet.WebSocket.Events.StockTrade.ParticipantTimestampMilliseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.Price.get -> double
+MassiveDotNet.WebSocket.Events.StockTrade.Price.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.SequenceNumber.get -> long
+MassiveDotNet.WebSocket.Events.StockTrade.SequenceNumber.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.SipTimestamp.get -> NodaTime.Instant
+MassiveDotNet.WebSocket.Events.StockTrade.SipTimestampMilliseconds.get -> long
+MassiveDotNet.WebSocket.Events.StockTrade.SipTimestampMilliseconds.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.Size.get -> long
+MassiveDotNet.WebSocket.Events.StockTrade.Size.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.StockTrade() -> void
+MassiveDotNet.WebSocket.Events.StockTrade.Tape.get -> int?
+MassiveDotNet.WebSocket.Events.StockTrade.Tape.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.Ticker.get -> string!
+MassiveDotNet.WebSocket.Events.StockTrade.Ticker.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.TradeId.get -> string!
+MassiveDotNet.WebSocket.Events.StockTrade.TradeId.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.TrfId.get -> int?
+MassiveDotNet.WebSocket.Events.StockTrade.TrfId.init -> void
+MassiveDotNet.WebSocket.Events.StockTrade.TrfTimestamp.get -> NodaTime.Instant?
+MassiveDotNet.WebSocket.Events.StockTrade.TrfTimestampMilliseconds.get -> long?
+MassiveDotNet.WebSocket.Events.StockTrade.TrfTimestampMilliseconds.init -> void
+MassiveDotNet.WebSocket.MassiveFeeds
+MassiveDotNet.WebSocket.MassiveFeeds.Legacy
+MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveMarket.Crypto = 4 -> MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveMarket.Forex = 3 -> MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveMarket.Futures = 5 -> MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveMarket.Indices = 2 -> MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveMarket.Options = 1 -> MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveMarket.Stocks = 0 -> MassiveDotNet.WebSocket.MassiveMarket
+MassiveDotNet.WebSocket.MassiveStockStream
+MassiveDotNet.WebSocket.MassiveStockStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+MassiveDotNet.WebSocket.MassiveStockStream.DropObserved -> System.Action<string!, long>?
+MassiveDotNet.WebSocket.MassiveStockStream.Faulted -> System.Action<System.Exception!>?
+MassiveDotNet.WebSocket.MassiveStockStream.LastReconnected.get -> NodaTime.Instant?
+MassiveDotNet.WebSocket.MassiveStockStream.ReconnectCount.get -> int
+MassiveDotNet.WebSocket.MassiveStockStream.Reconnected -> System.Action<int>?
+MassiveDotNet.WebSocket.MassiveStockStream.SubscribeImbalancesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockImbalance>!>!
+MassiveDotNet.WebSocket.MassiveStockStream.SubscribeLimitUpLimitDownAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown>!>!
+MassiveDotNet.WebSocket.MassiveStockStream.SubscribeMinuteAggregatesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockAggregate>!>!
+MassiveDotNet.WebSocket.MassiveStockStream.SubscribeQuotesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockQuote>!>!
+MassiveDotNet.WebSocket.MassiveStockStream.SubscribeSecondAggregatesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockAggregate>!>!
+MassiveDotNet.WebSocket.MassiveStockStream.SubscribeTradesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockTrade>!>!
+MassiveDotNet.WebSocket.MassiveStockStream.SubscriptionsLost -> System.Action<MassiveDotNet.WebSocket.MassiveStreamSubscriptionException!>?
+MassiveDotNet.WebSocket.MassiveStockStream.UnsubscribeAsync(MassiveDotNet.WebSocket.StockTopic topic, System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+MassiveDotNet.WebSocket.MassiveStreamAuthenticationException
+MassiveDotNet.WebSocket.MassiveStreamAuthenticationException.MassiveStreamAuthenticationException(string! serverMessage) -> void
+MassiveDotNet.WebSocket.MassiveStreamAuthenticationException.ServerMessage.get -> string!
+MassiveDotNet.WebSocket.MassiveStreamClient
+MassiveDotNet.WebSocket.MassiveStreamClient.ConnectStocksAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveStockStream!>!
+MassiveDotNet.WebSocket.MassiveStreamClient.DisposeAsync() -> System.Threading.Tasks.ValueTask
+MassiveDotNet.WebSocket.MassiveStreamClient.MassiveStreamClient(MassiveDotNet.WebSocket.MassiveStreamOptions! options) -> void
+MassiveDotNet.WebSocket.MassiveStreamException
+MassiveDotNet.WebSocket.MassiveStreamException.MassiveStreamException(string! message, System.Exception! innerException) -> void
+MassiveDotNet.WebSocket.MassiveStreamException.MassiveStreamException(string! message) -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions
+MassiveDotNet.WebSocket.MassiveStreamOptions.ApiKey.get -> string?
+MassiveDotNet.WebSocket.MassiveStreamOptions.ApiKey.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.Feed.get -> System.Uri!
+MassiveDotNet.WebSocket.MassiveStreamOptions.Feed.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.HandshakeTimeout.get -> NodaTime.Duration
+MassiveDotNet.WebSocket.MassiveStreamOptions.HandshakeTimeout.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.KeepAliveInterval.get -> NodaTime.Duration
+MassiveDotNet.WebSocket.MassiveStreamOptions.KeepAliveInterval.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.MassiveStreamOptions() -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.MaxMessageBytes.get -> int
+MassiveDotNet.WebSocket.MassiveStreamOptions.MaxMessageBytes.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.Reconnect.get -> MassiveDotNet.WebSocket.MassiveStreamReconnectOptions?
+MassiveDotNet.WebSocket.MassiveStreamOptions.Reconnect.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.TickerPoolCapacity.get -> int
+MassiveDotNet.WebSocket.MassiveStreamOptions.TickerPoolCapacity.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.TopicBufferCapacity.get -> int
+MassiveDotNet.WebSocket.MassiveStreamOptions.TopicBufferCapacity.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.UserAgent.get -> string?
+MassiveDotNet.WebSocket.MassiveStreamOptions.UserAgent.set -> void
+MassiveDotNet.WebSocket.MassiveStreamOptions.Validate() -> void
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.BackoffMultiplier.get -> double
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.BackoffMultiplier.set -> void
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.InitialBackoff.get -> NodaTime.Duration
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.InitialBackoff.set -> void
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.Jitter.get -> double
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.Jitter.set -> void
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.MassiveStreamReconnectOptions() -> void
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.MaxBackoff.get -> NodaTime.Duration
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.MaxBackoff.set -> void
+MassiveDotNet.WebSocket.MassiveStreamReconnectOptions.Validate() -> void
+MassiveDotNet.WebSocket.MassiveStreamSubscriptionException
+MassiveDotNet.WebSocket.MassiveStreamSubscriptionException.MassiveStreamSubscriptionException(string! parameters, int unacknowledged, string? serverMessage = null) -> void
+MassiveDotNet.WebSocket.MassiveStreamSubscriptionException.Parameters.get -> string!
+MassiveDotNet.WebSocket.MassiveStreamSubscriptionException.ServerMessage.get -> string?
+MassiveDotNet.WebSocket.MassiveStreamSubscriptionException.Unacknowledged.get -> int
+MassiveDotNet.WebSocket.MassiveTopicSubscription<T>
+MassiveDotNet.WebSocket.MassiveTopicSubscription<T>.DroppedCount.get -> long
+MassiveDotNet.WebSocket.MassiveTopicSubscription<T>.GetAsyncEnumerator(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerator<T>!
+MassiveDotNet.WebSocket.StockTopic
+MassiveDotNet.WebSocket.StockTopic.Imbalances = 4 -> MassiveDotNet.WebSocket.StockTopic
+MassiveDotNet.WebSocket.StockTopic.LimitUpLimitDown = 5 -> MassiveDotNet.WebSocket.StockTopic
+MassiveDotNet.WebSocket.StockTopic.MinuteAggregates = 3 -> MassiveDotNet.WebSocket.StockTopic
+MassiveDotNet.WebSocket.StockTopic.Quotes = 1 -> MassiveDotNet.WebSocket.StockTopic
+MassiveDotNet.WebSocket.StockTopic.SecondAggregates = 2 -> MassiveDotNet.WebSocket.StockTopic
+MassiveDotNet.WebSocket.StockTopic.Trades = 0 -> MassiveDotNet.WebSocket.StockTopic
+override MassiveDotNet.WebSocket.Events.ConditionSet.Equals(object? obj) -> bool
+override MassiveDotNet.WebSocket.Events.ConditionSet.GetHashCode() -> int
+override MassiveDotNet.WebSocket.Events.StockAggregate.GetHashCode() -> int
+override MassiveDotNet.WebSocket.Events.StockImbalance.GetHashCode() -> int
+override MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.GetHashCode() -> int
+override MassiveDotNet.WebSocket.Events.StockQuote.GetHashCode() -> int
+override MassiveDotNet.WebSocket.Events.StockTrade.GetHashCode() -> int
+static MassiveDotNet.WebSocket.Events.ConditionSet.operator !=(MassiveDotNet.WebSocket.Events.ConditionSet left, MassiveDotNet.WebSocket.Events.ConditionSet right) -> bool
+static MassiveDotNet.WebSocket.Events.ConditionSet.operator ==(MassiveDotNet.WebSocket.Events.ConditionSet left, MassiveDotNet.WebSocket.Events.ConditionSet right) -> bool
+static MassiveDotNet.WebSocket.Events.StockAggregate.operator !=(MassiveDotNet.WebSocket.Events.StockAggregate left, MassiveDotNet.WebSocket.Events.StockAggregate right) -> bool
+static MassiveDotNet.WebSocket.Events.StockAggregate.operator ==(MassiveDotNet.WebSocket.Events.StockAggregate left, MassiveDotNet.WebSocket.Events.StockAggregate right) -> bool
+static MassiveDotNet.WebSocket.Events.StockImbalance.operator !=(MassiveDotNet.WebSocket.Events.StockImbalance left, MassiveDotNet.WebSocket.Events.StockImbalance right) -> bool
+static MassiveDotNet.WebSocket.Events.StockImbalance.operator ==(MassiveDotNet.WebSocket.Events.StockImbalance left, MassiveDotNet.WebSocket.Events.StockImbalance right) -> bool
+static MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.operator !=(MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown left, MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown right) -> bool
+static MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown.operator ==(MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown left, MassiveDotNet.WebSocket.Events.StockLimitUpLimitDown right) -> bool
+static MassiveDotNet.WebSocket.Events.StockQuote.operator !=(MassiveDotNet.WebSocket.Events.StockQuote left, MassiveDotNet.WebSocket.Events.StockQuote right) -> bool
+static MassiveDotNet.WebSocket.Events.StockQuote.operator ==(MassiveDotNet.WebSocket.Events.StockQuote left, MassiveDotNet.WebSocket.Events.StockQuote right) -> bool
+static MassiveDotNet.WebSocket.Events.StockTrade.operator !=(MassiveDotNet.WebSocket.Events.StockTrade left, MassiveDotNet.WebSocket.Events.StockTrade right) -> bool
+static MassiveDotNet.WebSocket.Events.StockTrade.operator ==(MassiveDotNet.WebSocket.Events.StockTrade left, MassiveDotNet.WebSocket.Events.StockTrade right) -> bool
+static MassiveDotNet.WebSocket.MassiveFeeds.Business.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Delayed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.DelayedBusiness.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.Business.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.Delayed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.DelayedBusiness.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.NasdaqFeed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.PolyFeed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.PolyFeedPlus.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.RealTime.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.Legacy.StarterFeed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.NasdaqFeed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.PolyFeed.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.PolyFeedPlus.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.RealTime.get -> System.Uri!
+static MassiveDotNet.WebSocket.MassiveFeeds.StarterFeed.get -> System.Uri!

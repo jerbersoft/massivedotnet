@@ -28,6 +28,7 @@ and does not belong in this section.
 | 10 | Every public member of a shipped library carries XML documentation. | `GenerateDocumentationFile`, set repo-wide because IDE0005 needs it, plus warnings-as-errors on CS1591 — which only `src` leaves unsuppressed |
 | 11 | API keys are never logged, echoed in exception messages, or written to disk. | Code review; see decision D2 |
 | 13 | **CI runs entirely offline.** No live API key is ever placed in CI, and no test that calls the service executes there. Integration tests against the live API are committed and run locally; CI excludes them by category but still compiles them, so public API drift breaks the build. | CI holds no credential secret, asserts no workflow references one, and asserts the exclusion actually selected no live test |
+| 14 | **The public API surface is a reviewed file.** Every public member of a shipped library has an entry in that project's `PublicAPI.Unshipped.txt`, so adding, removing or retyping anything public is a diff somebody reads. | `Microsoft.CodeAnalysis.PublicApiAnalyzers` — RS0016 on a member with no entry, RS0017 on an entry with no member, both promoted to errors by rule 9 |
 | 12 | **NodaTime is the SDK's only temporal vocabulary.** No BCL `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, or `TimeSpan` may be named anywhere in the repository's source. See [Temporal types](#temporal-types) for the vocabulary, the BCL boundary, and the required patterns. | `TemporalTypeTests` — reflection over the public surface, plus a comment- and literal-aware source scan; build fails. `BannedSymbols.txt` adds RS0030 at compile time, which covers *uses* only — see [How this is enforced](#how-this-is-enforced) |
 
 ---
@@ -86,6 +87,11 @@ reversing one of these, the "why" column is the argument you need to defeat.
 BannedSymbols.txt           Rule 12's compile-time half, read by BannedApiAnalyzers from the root
                             Directory.Build.props. Every line carries text: a bare `#` parses as an
                             empty symbol and collides with the next one (RS0031).
+CHANGELOG.md                Keep a Changelog format. A breaking change names what moved and why.
+src/*/PublicAPI.Shipped.txt  The locked public surface (rule 14). Unshipped.txt holds what is
+src/*/PublicAPI.Unshipped.txt  staged for the next release; cutting one moves the second into the
+                            first. Generated once by the analyzer, then hand-reviewed like a diff.
+src/*/README.md             Per-package readme, packed into that package's nuget.org page.
 SECURITY.md                 Private vulnerability reporting, and what is in and out of scope.
 CONTRIBUTING.md             Signpost for contributors; the conventions stay here in CLAUDE.md.
 CODE_OF_CONDUCT.md          Contributor Covenant, naming the enforcement contact.
@@ -139,6 +145,31 @@ then. Cross-market snapshots (#17) is the only endpoint group still open for wor
 3. Raise `CoverageBaseline` in `EndpointCoverageTests` to the new count.
 4. Add a deserialization test using the endpoint's **published sample response** as the fixture.
 5. `dotnet test` and confirm the AOT smoke test still publishes clean.
+
+### Cutting a release
+
+All four packages share one `VersionPrefix`, in `src/Directory.Build.props`, and it is **the version
+being prepared, not the one last released**.
+
+1. Confirm `master` is green and the live tier passes locally.
+2. Move each `PublicAPI.Unshipped.txt` into its `PublicAPI.Shipped.txt` — the surface being released
+   is, from that point, shipped. Keep `#nullable enable` as the first line of both.
+3. Update `CHANGELOG.md`: retitle the unreleased section to the version and the date.
+4. Publish a GitHub Release tagged `v<VersionPrefix>`. That is the **only** trigger that produces a
+   stable version; `publish.yml` refuses a stable publish from anything else, and asserts the tag
+   matches what the tree packs.
+5. **Then bump `VersionPrefix`** to the next version. This step is not optional and not cosmetic:
+   NuGet orders every prerelease of a version below the release of that version, so leaving it at a
+   released version publishes `-ci.N` builds that no consumer can ever resolve as latest —
+   permanently invisible, and occupying permanent public version slots, because nuget.org has no
+   delete.
+
+Every push that passes CI on `master` publishes `<VersionPrefix>-ci.<run number>` automatically, so
+the prerelease stream needs no action.
+
+Authentication is OIDC Trusted Publishing, not an API key. The repository holds **no** long-lived
+credential of any kind — `PublishWorkflowTests` fails if a `secrets.*` reference reappears in
+`publish.yml`.
 
 ### Constraints the generator must respect
 

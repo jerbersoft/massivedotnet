@@ -9,6 +9,73 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
+  <!--
+    VersionPrefix, not Version, and THE VALUE IS THE VERSION BEING PREPARED rather than the one last
+    released. publish.yml packs a GitHub Release with no suffix and every other trigger with
+    `-p:VersionSuffix=...`, so a push that passes CI on master publishes 0.2.0-ci.N and a published
+    release publishes plain 0.2.0.
+
+    Leaving this at a version already released is the trap worth naming: NuGet orders every
+    prerelease of a version BELOW the release of that version, so 0.2.0-ci.N builds published after
+    0.2.0 shipped could never resolve as the latest. They would be permanently invisible and would
+    occupy permanent public version slots, because nuget.org has no delete. Cutting a release is
+    therefore two steps: publish the release, then bump this.
+
+    One VersionPrefix across all four packages is also what keeps the set consistent. `dotnet pack`
+    of a project with a ProjectReference emits a dependency on the referenced package at the version
+    it was built with, so MassiveDotNet.Rest 0.2.0 depends on MassiveDotNet >= 0.2.0, and all four
+    are published together from one run.
+  -->
+  <PropertyGroup Label="Package identity">
+    <VersionPrefix>0.2.0</VersionPrefix>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- An SPDX expression rather than PackageLicenseFile: NuGet renders it as a link to the
+         canonical licence text, so a client reads the terms without unpacking anything. The LICENSE
+         file is packed as well, below, so the package is self-contained either way.
+
+         No PackageIcon. #19 lists an icon in scope, and this deliberately does not ship one:
+         nothing here is branded, and an invented mark would only have to be replaced later, which
+         costs a package page that changes identity between versions. fmpdotnet made the same call
+         for the same reason. Adding one later is a property and a file, not a redesign. -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+  <!--
+    Debuggability of a shipped build. A .snupkg carries the PDBs separately, so the main package
+    stays small and a consumer who never steps into the SDK downloads nothing extra. Source Link is
+    what makes those PDBs useful: it stamps the commit into the PDB so a debugger can fetch the
+    exact source for the binary being stepped through.
+
+    It needs no PackageReference. The .NET SDK has carried Microsoft.SourceLink.GitHub in-box since
+    .NET 8 and resolves the provider from the git remote, which is the reason rule 7's cap on core's
+    dependencies is untouched by any of this.
+
+    EmbedUntrackedSources is load-bearing here rather than incidental. Every REST model is
+    deserialized through code the JSON source generator emits from MassiveJsonContext, and the 199
+    committed .g.cs files are in git but the source-generated ones are not, so without this,
+    stepping into deserialization reaches a file Source Link cannot resolve.
+
+    ContinuousIntegrationBuild is set at the root, conditioned on CI, and deliberately not here: it
+    normalises source paths so the same commit packs to the same bytes anywhere, which is what makes
+    a build reproducible, and also what would replace a local developer's real paths with
+    placeholders and break stepping into a local `dotnet pack`.
+  -->
+  <ItemGroup Label="Public API lock">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+
+  <PropertyGroup Label="Source Link">
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
   <PropertyGroup Label="AOT and trimming">
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>

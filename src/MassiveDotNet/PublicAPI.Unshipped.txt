@@ -1,0 +1,246 @@
+#nullable enable
+~override MassiveDotNet.MassivePage<T>.Equals(object obj) -> bool
+~override MassiveDotNet.MassivePage<T>.ToString() -> string
+~override MassiveDotNet.MassivePagedResult<T>.Equals(object obj) -> bool
+~override MassiveDotNet.MassivePagedResult<T>.ToString() -> string
+MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Day = 3 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Hour = 2 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Minute = 1 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Month = 5 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Quarter = 6 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Second = 0 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Week = 4 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.AggregateTimespan.Year = 7 -> MassiveDotNet.AggregateTimespan
+MassiveDotNet.ArrayFilter
+MassiveDotNet.ArrayFilter<T>
+MassiveDotNet.ArrayFilter<T>.ArrayFilter() -> void
+MassiveDotNet.ContractType
+MassiveDotNet.ContractType.Call = 0 -> MassiveDotNet.ContractType
+MassiveDotNet.ContractType.Put = 1 -> MassiveDotNet.ContractType
+MassiveDotNet.DateOrNanoseconds
+MassiveDotNet.DateOrNanoseconds.DateOrNanoseconds() -> void
+MassiveDotNet.DateOrNanoseconds.Equals(MassiveDotNet.DateOrNanoseconds other) -> bool
+MassiveDotNet.DateOrTimestamp
+MassiveDotNet.DateOrTimestamp.DateOrTimestamp() -> void
+MassiveDotNet.DateOrTimestamp.Equals(MassiveDotNet.DateOrTimestamp other) -> bool
+MassiveDotNet.Epoch
+MassiveDotNet.Filter<T>
+MassiveDotNet.Filter<T>.Filter() -> void
+MassiveDotNet.Http.IPagedEnvelope<TItem>
+MassiveDotNet.Http.IPagedEnvelope<TItem>.NextUrl.get -> string?
+MassiveDotNet.Http.IPagedEnvelope<TItem>.Results.get -> TItem[]?
+MassiveDotNet.Http.MassiveAuthenticationHandler
+MassiveDotNet.Http.MassiveAuthenticationHandler.MassiveAuthenticationHandler(string! apiKey, MassiveDotNet.MassiveAuthenticationScheme scheme) -> void
+MassiveDotNet.Http.MassiveHttpTransport
+MassiveDotNet.Http.MassiveHttpTransport.Dispose() -> void
+MassiveDotNet.Http.MassiveHttpTransport.DownloadAsync(string! requestUri, System.IO.Stream! destination, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+MassiveDotNet.Http.MassiveHttpTransport.EnumerateAsync<TEnvelope, TItem>(string! requestUri, System.Text.Json.Serialization.Metadata.JsonTypeInfo<TEnvelope!>! typeInfo, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TItem>!
+MassiveDotNet.Http.MassiveHttpTransport.GetAsync<T>(string! requestUri, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>! typeInfo, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T?>!
+MassiveDotNet.Http.MassiveHttpTransport.MassiveHttpTransport(MassiveDotNet.MassiveClientOptions! options) -> void
+MassiveDotNet.Http.MassiveHttpTransport.MassiveHttpTransport(System.Net.Http.HttpClient! httpClient) -> void
+MassiveDotNet.Http.MassiveRateLimitHandler
+MassiveDotNet.Http.MassiveRateLimitHandler.AvailablePermits.get -> int
+MassiveDotNet.Http.MassiveRateLimitHandler.MassiveRateLimitHandler(MassiveDotNet.MassiveRateLimitOptions! options) -> void
+MassiveDotNet.Http.MassiveRetryHandler
+MassiveDotNet.Http.MassiveRetryHandler.MassiveRetryHandler(MassiveDotNet.MassiveRetryOptions! options) -> void
+MassiveDotNet.Http.RequestUriBuilder
+MassiveDotNet.Http.RequestUriBuilder.AppendPathLiteral(scoped System.ReadOnlySpan<char> value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendPathSegment(int value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendPathSegment(string! value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery(scoped System.ReadOnlySpan<char> name, bool? value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery(scoped System.ReadOnlySpan<char> name, double? value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery(scoped System.ReadOnlySpan<char> name, int? value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery(scoped System.ReadOnlySpan<char> name, long? value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery(scoped System.ReadOnlySpan<char> name, string? value) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery<T>(scoped System.ReadOnlySpan<char> name, MassiveDotNet.ArrayFilter<T>? filter) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery<T>(scoped System.ReadOnlySpan<char> name, MassiveDotNet.Filter<T>? filter) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery<T>(scoped System.ReadOnlySpan<char> name, MassiveDotNet.RangeFilter<T>? filter) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery<T>(scoped System.ReadOnlySpan<char> name, MassiveDotNet.SetFilter<T>? filter, bool hasExactForm = true) -> void
+MassiveDotNet.Http.RequestUriBuilder.AppendQuery<T>(scoped System.ReadOnlySpan<char> name, T[]? values) -> void
+MassiveDotNet.Http.RequestUriBuilder.Dispose() -> void
+MassiveDotNet.Http.RequestUriBuilder.RequestUriBuilder() -> void
+MassiveDotNet.Http.RequestUriBuilder.RequestUriBuilder(System.Span<char> initialBuffer) -> void
+MassiveDotNet.Http.RequestUriBuilder.ToUriString() -> string!
+MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Crypto = 2 -> MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Futures = 6 -> MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Fx = 3 -> MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Indices = 4 -> MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Options = 1 -> MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Otc = 5 -> MassiveDotNet.MarketType
+MassiveDotNet.MarketType.Stocks = 0 -> MassiveDotNet.MarketType
+MassiveDotNet.MassiveApiException
+MassiveDotNet.MassiveApiException.MassiveApiException(System.Net.HttpStatusCode statusCode, string! message, string? requestId = null, System.Exception? innerException = null) -> void
+MassiveDotNet.MassiveApiException.RequestId.get -> string?
+MassiveDotNet.MassiveApiException.StatusCode.get -> System.Net.HttpStatusCode
+MassiveDotNet.MassiveAuthenticationScheme
+MassiveDotNet.MassiveAuthenticationScheme.BearerToken = 0 -> MassiveDotNet.MassiveAuthenticationScheme
+MassiveDotNet.MassiveAuthenticationScheme.QueryString = 1 -> MassiveDotNet.MassiveAuthenticationScheme
+MassiveDotNet.MassiveClientOptions
+MassiveDotNet.MassiveClientOptions.ApiKey.get -> string?
+MassiveDotNet.MassiveClientOptions.ApiKey.set -> void
+MassiveDotNet.MassiveClientOptions.AuthenticationScheme.get -> MassiveDotNet.MassiveAuthenticationScheme
+MassiveDotNet.MassiveClientOptions.AuthenticationScheme.set -> void
+MassiveDotNet.MassiveClientOptions.BaseAddress.get -> System.Uri!
+MassiveDotNet.MassiveClientOptions.BaseAddress.set -> void
+MassiveDotNet.MassiveClientOptions.MassiveClientOptions() -> void
+MassiveDotNet.MassiveClientOptions.RateLimit.get -> MassiveDotNet.MassiveRateLimitOptions?
+MassiveDotNet.MassiveClientOptions.RateLimit.set -> void
+MassiveDotNet.MassiveClientOptions.Retry.get -> MassiveDotNet.MassiveRetryOptions?
+MassiveDotNet.MassiveClientOptions.Retry.set -> void
+MassiveDotNet.MassiveClientOptions.Timeout.get -> NodaTime.Duration
+MassiveDotNet.MassiveClientOptions.Timeout.set -> void
+MassiveDotNet.MassiveClientOptions.UserAgent.get -> string?
+MassiveDotNet.MassiveClientOptions.UserAgent.set -> void
+MassiveDotNet.MassiveClientOptions.Validate() -> void
+MassiveDotNet.MassiveEndpoints
+MassiveDotNet.MassiveEnumValues
+MassiveDotNet.MassivePage<T>
+MassiveDotNet.MassivePage<T>.Equals(MassiveDotNet.MassivePage<T> other) -> bool
+MassiveDotNet.MassivePage<T>.HasMore.get -> bool
+MassiveDotNet.MassivePage<T>.MassivePage() -> void
+MassiveDotNet.MassivePage<T>.MassivePage(T[]? results, bool hasMore, string? requestId) -> void
+MassiveDotNet.MassivePage<T>.RequestId.get -> string?
+MassiveDotNet.MassivePage<T>.Results.get -> T[]!
+MassiveDotNet.MassivePagedResult<T>
+MassiveDotNet.MassivePagedResult<T>.Equals(MassiveDotNet.MassivePagedResult<T> other) -> bool
+MassiveDotNet.MassivePagedResult<T>.HasMore.get -> bool
+MassiveDotNet.MassivePagedResult<T>.MassivePagedResult() -> void
+MassiveDotNet.MassivePagedResult<T>.MassivePagedResult(T result, bool hasMore, string? requestId) -> void
+MassiveDotNet.MassivePagedResult<T>.RequestId.get -> string?
+MassiveDotNet.MassivePagedResult<T>.Result.get -> T
+MassiveDotNet.MassiveRateLimitExceededException
+MassiveDotNet.MassiveRateLimitExceededException.MassiveRateLimitExceededException(string! message, NodaTime.Duration? retryAfter = null, string? requestId = null) -> void
+MassiveDotNet.MassiveRateLimitExceededException.RetryAfter.get -> NodaTime.Duration?
+MassiveDotNet.MassiveRateLimitOptions
+MassiveDotNet.MassiveRateLimitOptions.MassiveRateLimitOptions() -> void
+MassiveDotNet.MassiveRateLimitOptions.PermitsPerWindow.get -> int
+MassiveDotNet.MassiveRateLimitOptions.PermitsPerWindow.set -> void
+MassiveDotNet.MassiveRateLimitOptions.QueueLimit.get -> int
+MassiveDotNet.MassiveRateLimitOptions.QueueLimit.set -> void
+MassiveDotNet.MassiveRateLimitOptions.Window.get -> NodaTime.Duration
+MassiveDotNet.MassiveRateLimitOptions.Window.set -> void
+MassiveDotNet.MassiveRetryOptions
+MassiveDotNet.MassiveRetryOptions.BackoffMultiplier.get -> double
+MassiveDotNet.MassiveRetryOptions.BackoffMultiplier.set -> void
+MassiveDotNet.MassiveRetryOptions.InitialBackoff.get -> NodaTime.Duration
+MassiveDotNet.MassiveRetryOptions.InitialBackoff.set -> void
+MassiveDotNet.MassiveRetryOptions.MassiveRetryOptions() -> void
+MassiveDotNet.MassiveRetryOptions.MaxAttempts.get -> int
+MassiveDotNet.MassiveRetryOptions.MaxAttempts.set -> void
+MassiveDotNet.MassiveRetryOptions.MaxBackoff.get -> NodaTime.Duration
+MassiveDotNet.MassiveRetryOptions.MaxBackoff.set -> void
+MassiveDotNet.MassiveRetryOptions.UseJitter.get -> bool
+MassiveDotNet.MassiveRetryOptions.UseJitter.set -> void
+MassiveDotNet.RangeFilter
+MassiveDotNet.RangeFilter<T>
+MassiveDotNet.RangeFilter<T>.Gt(T value) -> MassiveDotNet.RangeFilter<T>
+MassiveDotNet.RangeFilter<T>.Gte(T value) -> MassiveDotNet.RangeFilter<T>
+MassiveDotNet.RangeFilter<T>.Lt(T value) -> MassiveDotNet.RangeFilter<T>
+MassiveDotNet.RangeFilter<T>.Lte(T value) -> MassiveDotNet.RangeFilter<T>
+MassiveDotNet.RangeFilter<T>.RangeFilter() -> void
+MassiveDotNet.Serialization.InstantJsonConverter
+MassiveDotNet.Serialization.InstantJsonConverter.InstantJsonConverter() -> void
+MassiveDotNet.Serialization.JsonValueReader
+MassiveDotNet.Serialization.JsonValueWriter
+MassiveDotNet.Serialization.LocalDateJsonConverter
+MassiveDotNet.Serialization.LocalDateJsonConverter.LocalDateJsonConverter() -> void
+MassiveDotNet.Serialization.PooledArrayConverter<T>
+MassiveDotNet.Serialization.PooledArrayConverter<T>.PooledArrayConverter() -> void
+MassiveDotNet.SeriesType
+MassiveDotNet.SeriesType.Close = 3 -> MassiveDotNet.SeriesType
+MassiveDotNet.SeriesType.High = 1 -> MassiveDotNet.SeriesType
+MassiveDotNet.SeriesType.Low = 2 -> MassiveDotNet.SeriesType
+MassiveDotNet.SeriesType.Open = 0 -> MassiveDotNet.SeriesType
+MassiveDotNet.SetFilter
+MassiveDotNet.SetFilter<T>
+MassiveDotNet.SetFilter<T>.SetFilter() -> void
+MassiveDotNet.SnapshotDirection
+MassiveDotNet.SnapshotDirection.Gainers = 0 -> MassiveDotNet.SnapshotDirection
+MassiveDotNet.SnapshotDirection.Losers = 1 -> MassiveDotNet.SnapshotDirection
+MassiveDotNet.SortOrder
+MassiveDotNet.SortOrder.Ascending = 0 -> MassiveDotNet.SortOrder
+MassiveDotNet.SortOrder.Descending = 1 -> MassiveDotNet.SortOrder
+override MassiveDotNet.DateOrNanoseconds.Equals(object? obj) -> bool
+override MassiveDotNet.DateOrNanoseconds.GetHashCode() -> int
+override MassiveDotNet.DateOrNanoseconds.ToString() -> string!
+override MassiveDotNet.DateOrTimestamp.Equals(object? obj) -> bool
+override MassiveDotNet.DateOrTimestamp.GetHashCode() -> int
+override MassiveDotNet.DateOrTimestamp.ToString() -> string!
+override MassiveDotNet.MassivePage<T>.GetHashCode() -> int
+override MassiveDotNet.MassivePagedResult<T>.GetHashCode() -> int
+override MassiveDotNet.Serialization.InstantJsonConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> NodaTime.Instant
+override MassiveDotNet.Serialization.InstantJsonConverter.Write(System.Text.Json.Utf8JsonWriter! writer, NodaTime.Instant value, System.Text.Json.JsonSerializerOptions! options) -> void
+override MassiveDotNet.Serialization.LocalDateJsonConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> NodaTime.LocalDate
+override MassiveDotNet.Serialization.LocalDateJsonConverter.Write(System.Text.Json.Utf8JsonWriter! writer, NodaTime.LocalDate value, System.Text.Json.JsonSerializerOptions! options) -> void
+override MassiveDotNet.Serialization.PooledArrayConverter<T>.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> T[]?
+override MassiveDotNet.Serialization.PooledArrayConverter<T>.Write(System.Text.Json.Utf8JsonWriter! writer, T[]! value, System.Text.Json.JsonSerializerOptions! options) -> void
+static MassiveDotNet.ArrayFilter.AllOf<T>(params T[]! values) -> MassiveDotNet.ArrayFilter<T>
+static MassiveDotNet.ArrayFilter.AnyOf<T>(params T[]! values) -> MassiveDotNet.ArrayFilter<T>
+static MassiveDotNet.ArrayFilter.Contains<T>(T value) -> MassiveDotNet.ArrayFilter<T>
+static MassiveDotNet.ArrayFilter<T>.implicit operator MassiveDotNet.ArrayFilter<T>(MassiveDotNet.SetFilter<T> filter) -> MassiveDotNet.ArrayFilter<T>
+static MassiveDotNet.ArrayFilter<T>.implicit operator MassiveDotNet.ArrayFilter<T>(T? value) -> MassiveDotNet.ArrayFilter<T>
+static MassiveDotNet.DateOrNanoseconds.FromDate(NodaTime.LocalDate value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.FromInstant(NodaTime.Instant value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.FromLiteral(string! value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.FromUnixNanoseconds(long epochNanoseconds) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.implicit operator MassiveDotNet.DateOrNanoseconds(long value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.implicit operator MassiveDotNet.DateOrNanoseconds(NodaTime.Instant value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.implicit operator MassiveDotNet.DateOrNanoseconds(NodaTime.LocalDate value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.implicit operator MassiveDotNet.DateOrNanoseconds(string! value) -> MassiveDotNet.DateOrNanoseconds
+static MassiveDotNet.DateOrNanoseconds.operator !=(MassiveDotNet.DateOrNanoseconds left, MassiveDotNet.DateOrNanoseconds right) -> bool
+static MassiveDotNet.DateOrNanoseconds.operator ==(MassiveDotNet.DateOrNanoseconds left, MassiveDotNet.DateOrNanoseconds right) -> bool
+static MassiveDotNet.DateOrTimestamp.FromDate(NodaTime.LocalDate value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.FromInstant(NodaTime.Instant value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.FromLiteral(string! value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.FromUnixMilliseconds(long epochMilliseconds) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.implicit operator MassiveDotNet.DateOrTimestamp(long value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.implicit operator MassiveDotNet.DateOrTimestamp(NodaTime.Instant value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.implicit operator MassiveDotNet.DateOrTimestamp(NodaTime.LocalDate value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.implicit operator MassiveDotNet.DateOrTimestamp(string! value) -> MassiveDotNet.DateOrTimestamp
+static MassiveDotNet.DateOrTimestamp.operator !=(MassiveDotNet.DateOrTimestamp left, MassiveDotNet.DateOrTimestamp right) -> bool
+static MassiveDotNet.DateOrTimestamp.operator ==(MassiveDotNet.DateOrTimestamp left, MassiveDotNet.DateOrTimestamp right) -> bool
+static MassiveDotNet.Epoch.FromMilliseconds(long milliseconds) -> NodaTime.Instant
+static MassiveDotNet.Epoch.FromNanoseconds(long nanoseconds) -> NodaTime.Instant
+static MassiveDotNet.Filter<T>.implicit operator MassiveDotNet.Filter<T>(MassiveDotNet.RangeFilter<T> filter) -> MassiveDotNet.Filter<T>
+static MassiveDotNet.Filter<T>.implicit operator MassiveDotNet.Filter<T>(MassiveDotNet.SetFilter<T> filter) -> MassiveDotNet.Filter<T>
+static MassiveDotNet.Filter<T>.implicit operator MassiveDotNet.Filter<T>(T? value) -> MassiveDotNet.Filter<T>
+static MassiveDotNet.Http.MassiveHttpTransport.CreateHandlerPipeline(MassiveDotNet.MassiveClientOptions! options, System.Net.Http.HttpMessageHandler! primaryHandler) -> System.Net.Http.HttpMessageHandler!
+static MassiveDotNet.Http.MassiveHttpTransport.ThrowIfUnfollowableCursor(string? nextUrl, string! requestUri, string? requestId) -> void
+static MassiveDotNet.MassiveEndpoints.Legacy.get -> System.Uri!
+static MassiveDotNet.MassiveEndpoints.Production.get -> System.Uri!
+static MassiveDotNet.MassiveEndpoints.Staging.get -> System.Uri!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this MassiveDotNet.AggregateTimespan value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this MassiveDotNet.ContractType value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this MassiveDotNet.MarketType value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this MassiveDotNet.SeriesType value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this MassiveDotNet.SnapshotDirection value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this MassiveDotNet.SortOrder value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this NodaTime.Instant value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValue(this NodaTime.LocalDate value) -> string!
+static MassiveDotNet.MassiveEnumValues.ToWireValueNanoseconds(this NodaTime.Instant value) -> string!
+static MassiveDotNet.MassivePage<T>.operator !=(MassiveDotNet.MassivePage<T> left, MassiveDotNet.MassivePage<T> right) -> bool
+static MassiveDotNet.MassivePage<T>.operator ==(MassiveDotNet.MassivePage<T> left, MassiveDotNet.MassivePage<T> right) -> bool
+static MassiveDotNet.MassivePagedResult<T>.operator !=(MassiveDotNet.MassivePagedResult<T> left, MassiveDotNet.MassivePagedResult<T> right) -> bool
+static MassiveDotNet.MassivePagedResult<T>.operator ==(MassiveDotNet.MassivePagedResult<T> left, MassiveDotNet.MassivePagedResult<T> right) -> bool
+static MassiveDotNet.RangeFilter.Between<T>(T lower, T upper) -> MassiveDotNet.RangeFilter<T>
+static MassiveDotNet.RangeFilter.Gt<T>(T value) -> MassiveDotNet.RangeFilter<T>
+static MassiveDotNet.RangeFilter.Gte<T>(T value) -> MassiveDotNet.RangeFilter<T>
+static MassiveDotNet.RangeFilter.Lt<T>(T value) -> MassiveDotNet.RangeFilter<T>
+static MassiveDotNet.RangeFilter.Lte<T>(T value) -> MassiveDotNet.RangeFilter<T>
+static MassiveDotNet.RangeFilter<T>.implicit operator MassiveDotNet.RangeFilter<T>(T? value) -> MassiveDotNet.RangeFilter<T>
+static MassiveDotNet.Serialization.JsonValueReader.ReadBoolean(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> bool
+static MassiveDotNet.Serialization.JsonValueReader.ReadDecimal(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> decimal
+static MassiveDotNet.Serialization.JsonValueReader.ReadDouble(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> double
+static MassiveDotNet.Serialization.JsonValueReader.ReadInt32(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> int
+static MassiveDotNet.Serialization.JsonValueReader.ReadInt64(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> long
+static MassiveDotNet.Serialization.JsonValueReader.ReadNullableBoolean(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> bool?
+static MassiveDotNet.Serialization.JsonValueReader.ReadNullableDecimal(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> decimal?
+static MassiveDotNet.Serialization.JsonValueReader.ReadNullableDouble(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> double?
+static MassiveDotNet.Serialization.JsonValueReader.ReadNullableInt32(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> int?
+static MassiveDotNet.Serialization.JsonValueReader.ReadNullableInt64(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> long?
+static MassiveDotNet.Serialization.JsonValueReader.ReadString(ref System.Text.Json.Utf8JsonReader reader, string! model, string! property) -> string?
+static MassiveDotNet.Serialization.JsonValueWriter.WriteDecimalString(System.Text.Json.Utf8JsonWriter! writer, string! property, decimal value) -> void
+static MassiveDotNet.SetFilter.AnyOf<T>(params T[]! values) -> MassiveDotNet.SetFilter<T>
+static MassiveDotNet.SetFilter<T>.implicit operator MassiveDotNet.SetFilter<T>(T? value) -> MassiveDotNet.SetFilter<T>
