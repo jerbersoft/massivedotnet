@@ -17,3 +17,11 @@ appsettings.Development.json
 
 # Subagent-driven development scratch (ledger, briefs, review packages)
 .superpowers/
+
+# The documentation site. docs/_site/ is the built site and docs/api/*.yml the generated API reference;
+# both are rebuilt by `dotnet docfx docs/docfx.json` and by docs.yml, and a generated directory in version
+# control is a merge conflict waiting for the next doc-comment fix. docs/api/index.md is hand-written and
+# stays tracked.
+docs/_site/
+docs/api/*.yml
+docs/api/.manifest

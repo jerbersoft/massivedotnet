@@ -1,0 +1,82 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+
+  "metadata": [
+    {
+      "//": [
+        "The four shipping projects, named one by one rather than globbed as ../src/**/*.csproj. A glob would",
+        "silently pick up a fifth project the day one is added -- .FlatFiles is already planned (#22) -- and",
+        "whether it belongs in the published reference is a decision somebody should make in a diff. DocsSiteTests",
+        "pins this list to the projects under src/, so the decision cannot be skipped by omission in either",
+        "direction, the same bargain PublishWorkflowTests makes for the PACKAGES list.",
+        "",
+        "TargetFramework is pinned because DocFX loads these through MSBuildWorkspace and a multi-targeted project",
+        "would otherwise be ambiguous. D7 says net10.0 only; the property keeps this honest if that ever changes."
+      ],
+      "src": [
+        {
+          "src": "../src",
+          "files": [
+            "MassiveDotNet/MassiveDotNet.csproj",
+            "MassiveDotNet.Extensions.DependencyInjection/MassiveDotNet.Extensions.DependencyInjection.csproj",
+            "MassiveDotNet.Rest/MassiveDotNet.Rest.csproj",
+            "MassiveDotNet.WebSocket/MassiveDotNet.WebSocket.csproj"
+          ]
+        }
+      ],
+      "dest": "api",
+      "properties": {
+        "TargetFramework": "net10.0",
+        "Configuration": "Release"
+      }
+    }
+  ],
+
+  "build": {
+    "//": [
+      "Content is enumerated rather than globbed as **/*.md for one concrete reason: docs/superpowers/ holds the",
+      "designs, plans and measurements, which are working material. A broad glob would publish the next plan",
+      "somebody writes. What is listed is what is meant for a reader.",
+      "",
+      "README.md and CHANGELOG.md are the repository's own files, rendered from the same source: one copy of each,",
+      "on GitHub, inside all four packages, and here. DocFX accepts the relative parent path (and rejects an",
+      "absolute one). A file pulled from .. lands at the site root, which is why README's own links to repository",
+      "files -- LICENSE, and the allocation figures -- are absolute URLs rather than relative paths: a relative",
+      "one cannot resolve from both the repository root and the site root, and it is already meaningless inside",
+      "the four packages this README is packed into. docs/performance/ is published on its own, at the path the",
+      "landing page links to. It cannot ride in the .. entry: DocFX aborts outright on a nested path there,",
+      "\"Relative to path has too many '../'\".",
+      "",
+      "docs/reconciliation/ is left out for the same reason superpowers/ is -- a spec-versus-docs-site diff and",
+      "the script that produced it are working material, not a page anybody should land on."
+    ],
+    "content": [
+      { "files": ["index.md", "toc.yml"] },
+      { "files": ["api/**.yml", "api/index.md"] },
+      { "files": ["performance/**.md"] },
+      { "files": ["README.md", "CHANGELOG.md"], "src": ".." }
+    ],
+    "output": "_site",
+    "template": ["default", "modern"],
+
+    "//sitemap": [
+      "The one place in this repository that spells out the public URL. DocFX emits relative links everywhere",
+      "else, which is why the site works unchanged under a /massivedotnet/ path -- but a sitemap has to carry",
+      "absolute ones. If this ever needs to change, the reason will be a Pages setting outside this repository."
+    ],
+    "sitemap": {
+      "baseUrl": "https://jerbersoft.github.io/massivedotnet/",
+      "changefreq": "weekly"
+    },
+    "globalMetadata": {
+      "_appName": "MassiveDotNet",
+      "_appTitle": "MassiveDotNet",
+      "_appFooter": "MassiveDotNet -- an independent .NET 10 SDK for the Massive market data platform. MIT. The README is the reference; where this site and the README disagree, the README wins.",
+      "_enableSearch": true,
+      "_gitContribute": {
+        "repo": "https://github.com/jerbersoft/massivedotnet",
+        "branch": "master"
+      }
+    }
+  }
+}

@@ -38,6 +38,11 @@
          costs a package page that changes identity between versions. fmpdotnet made the same call
          for the same reason. Adding one later is a property and a file, not a redesign. -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- The documentation site, so a package page's "Project website" lands on the API reference
+         rather than on the repository. The site renders the same README that is packed here and the
+         same XML comments that ship in the .nupkg, so a reader following either link sees one
+         source. It is built and deployed by docs.yml. -->
+    <PackageProjectUrl>https://jerbersoft.github.io/massivedotnet/</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>
@@ -65,10 +70,18 @@
     a build reproducible, and also what would replace a local developer's real paths with
     placeholders and break stepping into a local `dotnet pack`.
   -->
+  <!--
+    The two PublicAPI text files are deliberately NOT listed as AdditionalFiles here. The analyzer's
+    own buildTransitive targets already add both, so an explicit entry adds each file to the
+    compilation twice. Roslyn tolerates that silently; DocFX loads these projects through
+    MSBuildWorkspace, which does not, and reported it as eight "Duplicate source file" warnings that
+    the docs build turns into a failure.
+
+    Removing them changes nothing about the gate. RS0016 and RS0017 still fail the build, which was
+    verified by regressing the lock and watching it go red rather than assumed.
+  -->
   <ItemGroup Label="Public API lock">
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
-    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
-    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
 
   <PropertyGroup Label="Source Link">

@@ -386,7 +386,7 @@ a full 88-byte struct. That is [#47][issue-47]; the ceilings pin it so it cannot
 they come down with the fix.
 
 Full tables, baselines, and the reasoning behind every ceiling are in
-[`docs/performance/2026-09-04-allocation-figures.md`](docs/performance/2026-09-04-allocation-figures.md).
+[`docs/performance/2026-09-04-allocation-figures.md`](https://github.com/jerbersoft/massivedotnet/blob/master/docs/performance/2026-09-04-allocation-figures.md).
 
 ```bash
 dotnet run --project benchmarks/MassiveDotNet.Benchmarks -c Release
@@ -548,4 +548,4 @@ choices summarised here.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/jerbersoft/massivedotnet/blob/master/LICENSE).

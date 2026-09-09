@@ -1,0 +1,22 @@
+# The top navigation bar.
+#
+# Reference first, the member list second: a reader who lands here needs to be taught the library before a
+# member list is any use to them, and the README is what teaches it. Reference and Changelog are the
+# repository's own files rendered from the same source (see docfx.json), so neither has a page of its own
+# under docs/.
+#
+# href on a folder entry makes the folder's toc.yml the sidebar; topicHref is the page the nav link opens.
+# Without topicHref an entry lands on whichever page sorts first, and the hand-written index is built but
+# unreachable.
+
+- name: Reference
+  href: ../README.md
+- name: API reference
+  href: api/
+  topicHref: api/index.md
+- name: Changelog
+  href: ../CHANGELOG.md
+- name: NuGet
+  href: https://www.nuget.org/packages/MassiveDotNet.Rest
+- name: GitHub
+  href: https://github.com/jerbersoft/massivedotnet
