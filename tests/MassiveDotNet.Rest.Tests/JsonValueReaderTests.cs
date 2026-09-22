@@ -168,6 +168,76 @@ public sealed class JsonValueReaderTests
         Assert.Equal(expected, JsonValueReader.ReadNullableInt64(ref reader, Model, Property));
     }
 
+    // Issue #65. A production log said only "The number in StockAggregate.z does not fit a 64-bit
+    // integer". Utf8JsonReader.TryGetInt64 returns false for three unrelated reasons and that
+    // message distinguishes none of them: a non-integral value (the vendor violating its own
+    // schema), an integral value written in a non-integer JSON FORM -- 12.0, 1e3, both valid JSON
+    // numbers, both whole, both refused because the token is not an integer token -- and a value
+    // genuinely past long's range. Three causes, three different fixes, and the value itself is the
+    // only thing that tells them apart (D-W21).
+    [Theory]
+    [InlineData("12.0")]
+    [InlineData("1e3")]
+    [InlineData("123.45")]
+    [InlineData("9223372036854775808")]
+    public void AnOutOfRangeInt64NamesTheValueItRefused(string json)
+    {
+        JsonException thrown = Rejects(
+            json, (ref Utf8JsonReader reader) => JsonValueReader.ReadInt64(ref reader, Model, Property));
+
+        Assert.Contains(json, thrown.Message, StringComparison.Ordinal);
+        Assert.Contains(Model, thrown.Message, StringComparison.Ordinal);
+        Assert.Contains(Property, thrown.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnOutOfRangeInt32NamesTheValueItRefused()
+    {
+        JsonException thrown = Rejects(
+            "2147483648", (ref Utf8JsonReader reader) => JsonValueReader.ReadInt32(ref reader, Model, Property));
+
+        Assert.Contains("2147483648", thrown.Message, StringComparison.Ordinal);
+    }
+
+    // A JSON number token has no length limit, so an unbounded echo would put a value of any size
+    // into an exception message -- and from there, through the DI package's log bridge, into a log
+    // line. Capped at 32 bytes with a trailing ellipsis.
+    [Fact]
+    public void ALongNumberIsEchoedOnlyUpToTheCap()
+    {
+        JsonException thrown = Rejects(
+            new string('9', 120),
+            (ref Utf8JsonReader reader) => JsonValueReader.ReadInt64(ref reader, Model, Property));
+
+        Assert.Contains(new string('9', 32) + "...", thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('9', 33), thrown.Message, StringComparison.Ordinal);
+    }
+
+    // The other two failure messages deliberately do NOT echo, for two different reasons, and both
+    // are rule 11's argument rather than an oversight. The token-type failure names a token TYPE
+    // and has no value in hand at all. The decimal round-trip failure reads a String token, where
+    // "the bytes are provably a JSON number" does not hold and the class of value it could quote
+    // back is unbounded -- which is exactly the class an API key belongs to (D-W21).
+    [Fact]
+    public void AWrongTokenTypeDoesNotEchoTheValue()
+    {
+        JsonException thrown = Rejects(
+            "\"secret-value\"",
+            (ref Utf8JsonReader reader) => JsonValueReader.ReadInt64(ref reader, Model, Property));
+
+        Assert.DoesNotContain("secret-value", thrown.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARefusedDecimalDoesNotEchoTheValue()
+    {
+        JsonException thrown = Rejects(
+            "\"1e5\"",
+            (ref Utf8JsonReader reader) => JsonValueReader.ReadDecimal(ref reader, Model, Property));
+
+        Assert.DoesNotContain("1e5", thrown.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("170.15", 170.15)]
     [InlineData("2", 2.0)]

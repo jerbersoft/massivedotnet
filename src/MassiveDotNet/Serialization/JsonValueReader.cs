@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 namespace MassiveDotNet.Serialization;
@@ -23,9 +25,27 @@ namespace MassiveDotNet.Serialization;
 /// </para>
 /// <para>
 /// Every method leaves the reader on the value it read, so the caller's next
-/// <see cref="Utf8JsonReader.Read"/> advances to the following property name. No method echoes the
-/// offending value into its message; the model and property name are enough to locate it, and the
-/// response body is not ours to quote back.
+/// <see cref="Utf8JsonReader.Read"/> advances to the following property name.
+/// </para>
+/// <para>
+/// Exactly one failure message echoes the value that caused it: the range failure raised when a
+/// token is a number the target type cannot hold. This paragraph used to say that no method echoes
+/// anything, and issue #65 is what reversed it. A streaming <c>StockAggregate.z</c> was refused in
+/// production and the log said only that the number did not fit -- which cannot distinguish a
+/// non-integral value from an integral one written as <c>12.0</c> from one genuinely past the
+/// range. Those are three different causes with three different fixes, and the value is the only
+/// thing that tells them apart.
+/// </para>
+/// <para>
+/// The echo is confined to that one helper, and the confinement IS the rule 11 argument: it is
+/// reachable only after its caller has checked
+/// <c>reader.TokenType == JsonTokenType.Number</c>, which every caller does and no other path
+/// reaches it, so the bytes it quotes are provably a JSON number -- and an API key is not a JSON
+/// number. The safety is structural rather than a matter of care taken at each site. The
+/// wrong-token-type failure names a token type and has no value in hand; the decimal round-trip
+/// failure reads a <see cref="JsonTokenType.String"/>, where that proof does not hold and the class
+/// of value it could quote back is unbounded. Neither echoes, and neither is to be changed to
+/// (D-W21).
 /// </para>
 /// </remarks>
 public static class JsonValueReader
@@ -80,7 +100,9 @@ public static class JsonValueReader
             throw Expected("a number", reader.TokenType, model, property);
         }
 
-        return reader.TryGetInt32(out int value) ? value : throw OutOfRange("a 32-bit integer", model, property);
+        return reader.TryGetInt32(out int value)
+            ? value
+            : throw OutOfRange("a 32-bit integer", ref reader, model, property);
     }
 
     /// <summary>Reads a 32-bit integer, or <see langword="null"/> from a JSON null.</summary>
@@ -110,7 +132,9 @@ public static class JsonValueReader
             throw Expected("a number", reader.TokenType, model, property);
         }
 
-        return reader.TryGetInt64(out long value) ? value : throw OutOfRange("a 64-bit integer", model, property);
+        return reader.TryGetInt64(out long value)
+            ? value
+            : throw OutOfRange("a 64-bit integer", ref reader, model, property);
     }
 
     /// <summary>Reads a 64-bit integer, or <see langword="null"/> from a JSON null.</summary>
@@ -135,7 +159,9 @@ public static class JsonValueReader
             throw Expected("a number", reader.TokenType, model, property);
         }
 
-        return reader.TryGetDouble(out double value) ? value : throw OutOfRange("a double", model, property);
+        return reader.TryGetDouble(out double value)
+            ? value
+            : throw OutOfRange("a double", ref reader, model, property);
     }
 
     /// <summary>Reads a double, or <see langword="null"/> from a JSON null.</summary>
@@ -245,8 +271,46 @@ public static class JsonValueReader
     private static JsonException Expected(string expected, JsonTokenType found, string model, string property) =>
         new($"Expected {expected} for {model}.{property}, but the response carried a {found} token.");
 
-    private static JsonException OutOfRange(string expected, string model, string property) =>
-        new($"The number in {model}.{property} does not fit {expected}.");
+    /// <summary>
+    /// How much of an offending number reaches a range failure's message. A JSON number token has
+    /// no length limit, so without a cap a pathological value could produce an exception message
+    /// thousands of digits long -- and the DI package bridges these messages to a logger.
+    /// </summary>
+    private const int MaxEchoedTokenLength = 32;
+
+    private static JsonException OutOfRange(
+        string expected, ref Utf8JsonReader reader, string model, string property) =>
+        new($"The number in {model}.{property} ({EchoNumber(ref reader)}) does not fit {expected}.");
+
+    /// <summary>Renders the number token the reader is on, capped, for a failure message.</summary>
+    /// <param name="reader">A reader positioned on a <see cref="JsonTokenType.Number"/> token.</param>
+    /// <returns>The token's text, with a trailing ellipsis when it was longer than the cap.</returns>
+    /// <remarks>
+    /// Called only from <see cref="OutOfRange"/>, whose every caller has already refused a
+    /// non-number token, so every byte here comes from the JSON number grammar and is therefore
+    /// ASCII. That is what makes both the decode and the truncation safe: there is no multi-byte
+    /// character for a cut at <see cref="MaxEchoedTokenLength"/> to split in half. Do not call this
+    /// from anywhere that has not made that check (D-W21, rule 11).
+    /// </remarks>
+    private static string EchoNumber(ref Utf8JsonReader reader)
+    {
+        long length = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
+        int copied = (int)Math.Min(length, MaxEchoedTokenLength);
+        Span<byte> token = stackalloc byte[MaxEchoedTokenLength];
+
+        if (reader.HasValueSequence)
+        {
+            reader.ValueSequence.Slice(0, copied).CopyTo(token);
+        }
+        else
+        {
+            reader.ValueSpan[..copied].CopyTo(token);
+        }
+
+        string text = Encoding.UTF8.GetString(token[..copied]);
+
+        return length > MaxEchoedTokenLength ? text + "..." : text;
+    }
 
     private static JsonException NotExact(string model, string property) =>
         new($"The value in {model}.{property} is not a decimal that round-trips exactly. It must be "
