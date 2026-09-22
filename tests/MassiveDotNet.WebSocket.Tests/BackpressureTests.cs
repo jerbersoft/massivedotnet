@@ -145,8 +145,8 @@ public class BackpressureTests
     // Issue #65 / D-W19. Before this, a value the converter refused threw out of Write, escaped
     // Dispatch, missed the read loop's reconnect filter (G3, deliberately), and ended the entire
     // connection -- taking every OTHER topic sharing that socket down with it. One symbol's bad
-    // field, on a topic the consumer may not even have subscribed to, killed the trade feed. Now
-    // the one event is dropped and counted, and the next one parses.
+    // field, on one subscribed topic, killed the trade feed sharing the same socket. Now the one
+    // event is dropped and counted, and the next one parses.
     //
     // Both refusal cases the production log could not tell apart, because the drop must not depend
     // on which one it was. "z":12.0 is the one easiest to overlook -- a valid JSON number, a whole

@@ -166,6 +166,13 @@ public sealed class MassiveStockStream : IAsyncDisposable
     /// with its own try/catch (F1): a notification that something was dropped must never itself
     /// take down the whole live feed -- exactly the defect Task 11 fixed for
     /// <c>MassiveStreamConnection.Faulted</c>, twenty lines from this one.
+    /// <para>
+    /// The one-a-second throttle is shared across every topic on this stream, not scoped per topic:
+    /// a sustained overflow on one topic can therefore delay, or entirely suppress, another topic's
+    /// own report through this event. Nothing is lost to a consumer who reads
+    /// <see cref="MassiveTopicSubscription{T}.DroppedCount"/> instead -- that counter stays exact
+    /// per topic no matter what this event manages to raise.
+    /// </para>
     /// </remarks>
     public event Action<string, long>? DropObserved;
 
