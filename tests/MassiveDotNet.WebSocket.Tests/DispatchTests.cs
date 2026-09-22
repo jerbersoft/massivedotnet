@@ -241,9 +241,66 @@ public class DispatchTests
         Assert.Equal(JsonTokenType.EndObject, goodReader.TokenType);
     }
 
+    // Issue #65 / D-W19: the property this whole change exists to protect, stated at the level a
+    // consumer feels it. The connection is multiplexed -- trades, quotes and both aggregate windows
+    // share one socket -- so one symbol's unparseable `z` on a topic the consumer may not even have
+    // subscribed to used to take the trade feed down with it, and everything after it on every
+    // topic with it.
+    //
+    // The malformed AM event comes FIRST in the frame on purpose: the trade only arrives if the
+    // dispatch loop resumed correctly from the failed object's end token.
+    [Fact]
+    public async Task AMalformedEventInOneTopicDoesNotCostAnotherTopicItsData()
+    {
+        await using FakeWebSocket socket = new();
+        await using MassiveStreamConnection connection = await ConnectAsync(socket);
+
+        TopicSink<StockAggregate> bars = new(
+            "AM", capacity: 8, new StockAggregateConverter(new TickerPool(16), "AM"));
+        TopicSink<StockTrade> trades = new("T", capacity: 8, new StockTradeConverter(new TickerPool(16)));
+        connection.AddSink(bars);
+        connection.AddSink(trades);
+
+        socket.EnqueueText(
+            """[{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":1,"e":2},{"ev":"T","sym":"MSFT","i":"1","p":1,"s":1,"t":1,"q":1}]""");
+
+        // A widening subscribe, once acknowledged, guarantees the frame above has already been
+        // dispatched -- the same causality barrier every other test in this file uses.
+        Task barrier = await SubscribeAfterSendAsync(
+            connection,
+            socket,
+            "T",
+            ["BARRIER"],
+            """[{"ev":"status","status":"success","message":"subscribed to: T.BARRIER"}]""");
+        await barrier;
+
+        trades.Complete();
+
+        List<string> tickers = [];
+        await foreach (StockTrade trade in trades.Subscription.WithCancellation(TestContext.Current.CancellationToken))
+        {
+            tickers.Add(trade.Ticker);
+        }
+
+        Assert.Equal(["MSFT"], tickers);
+        Assert.Equal(1, bars.Subscription.MalformedCount);
+
+        // And the connection is still alive. Before this change the read loop's task was faulted by
+        // now and every sink had been completed.
+        Assert.False(connection.ReadLoopTask.IsCompleted);
+    }
+
     // The connection-level shape of the same requirement: a malformed ev surfaces as a
     // JsonException at the point a real frame is dispatched, faulting the read loop's task the same
     // way every other unrecoverable frame does (see ReadLoopTests) -- it is not swallowed.
+    //
+    // Since issue #65 this is also the FIELD/FRAME boundary, and the reason for it. A malformed
+    // field is caught in TopicSink<T>.Write and drops one event, because the reader that failed is
+    // a copy and the real one is already parked on the object's end token. A malformed `ev` is
+    // different in kind: it throws from ReadEventCode, which is driving the REAL reader, so it
+    // strands that reader mid-object with no safe point to resume from -- and there is no topic to
+    // attribute the loss to either, because the code is what names the topic. Widening the catch to
+    // cover it turns this test red, which is the point of it (D-W19).
     [Fact]
     public async Task AFrameWithAMalformedEventCodeFaultsTheReadLoop()
     {

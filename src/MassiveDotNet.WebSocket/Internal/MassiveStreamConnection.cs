@@ -252,13 +252,20 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                     _reconnectAttempt = 0;
                 }
                 // Only WebSocketException and MassiveStreamException are read-loop faults treated as
-                // reconnectable -- an unexpected close (D-W7). A JsonException out of Dispatch (a
-                // malformed event, see ReadEventCode) is deliberately NOT one of them: the socket is
-                // healthy, the server will resend the same shape on the next message, and
-                // reconnecting to "fix" a parse failure would tear down every other topic's live data
-                // and hammer the service in a backoff loop over nothing the drop caused -- the same
-                // posture D-W6 refuses for a rejected key. Do not widen this filter to catch it (G3,
-                // Task 11 review).
+                // reconnectable -- an unexpected close (D-W7). A JsonException is deliberately NOT
+                // one of them, and that argument is unchanged: the socket is healthy, the server will
+                // resend the same shape on the next message, and reconnecting to "fix" a parse failure
+                // would tear down every other topic's live data and hammer the service in a backoff
+                // loop over nothing the drop caused -- the same posture D-W6 refuses for a rejected
+                // key. Do not widen this filter to catch it (G3, Task 11 review).
+                //
+                // What changed with issue #65 is only G3's other half. A JsonException from a
+                // FIELD no longer reaches here at all: TopicSink<T>.Write catches it, drops the one
+                // event, counts it, and the loop reads on (D-W19). So the SDK now neither reconnects
+                // NOR stops over a bad field, which strengthens the argument above rather than
+                // weakening it. A JsonException from a malformed `ev` still arrives here, still
+                // misses this filter, and is still terminal -- ReadEventCode drives the real reader,
+                // so a throw there strands it mid-object with no topic to attribute the loss to.
                 catch (Exception error) when (error is WebSocketException or MassiveStreamException)
                 {
                     if (await TryReconnectAsync(cancellationToken))
