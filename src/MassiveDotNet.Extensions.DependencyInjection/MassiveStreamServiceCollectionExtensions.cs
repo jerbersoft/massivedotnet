@@ -135,11 +135,17 @@ public static partial class MassiveStreamServiceCollectionExtensions
     //
     // Rule 11: three of these interpolate only counts and a topic's wire code. The fourth,
     // LogMalformed, interpolates a JsonException's MESSAGE, which is a string -- so the rule holds
-    // structurally rather than by inspection here. That message comes from JsonValueReader, whose
-    // only value-echoing helper is reachable only after the token has been proved a
-    // JsonTokenType.Number, and an API key is not a JSON number (D-W21). None of the four ever
-    // touches options.ApiKey or anything derived from it, and LogStreamHealthTests asserts a
-    // sentinel key appears nowhere in what is captured.
+    // structurally rather than by inspection here, and the structure it leans on is narrower than
+    // "the message happens to be safe today": nothing on the streaming read path may construct a
+    // JsonException that interpolates a wire-derived VALUE -- only a model name, a property name,
+    // or a token's shape (JsonTokenType, a length). The one sanctioned exception is
+    // JsonValueReader's echo of a refused number, and that is reachable only after the token is
+    // proved a JsonTokenType.Number (D-W21); an API key is not a JSON number, so the gate is what
+    // keeps this safe, not the absence of some other caller. Add a converter or walk step that
+    // echoes a raw string or byte span into a JsonException's message and this comment is the only
+    // thing that will have told you not to -- nothing here compiles a warning for it. None of the
+    // four templates in this file ever touches options.ApiKey or anything derived from it, and
+    // LogStreamHealthTests asserts a sentinel key appears nowhere in what is captured.
     [LoggerMessage(
         Level = LogLevel.Warning,
         Message = "The Massive stream reconnected ({Count} so far). Messages sent while it was down were missed.")]
