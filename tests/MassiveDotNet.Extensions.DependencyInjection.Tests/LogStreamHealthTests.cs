@@ -200,4 +200,89 @@ public sealed class LogStreamHealthTests
         // finally carries a key into a log (rule 11).
         Assert.DoesNotContain(SentinelApiKey, captured, StringComparison.Ordinal);
     }
+
+    // Issue #65 / D-W20. Three claims in one test, because they only hold together.
+    //
+    // (a) The warning carries the refused VALUE. That message is the only evidence left about which
+    //     of TryGetInt64's three rejection cases occurs on `z`, now that the failure is no longer
+    //     terminal and Faulted no longer carries it.
+    // (b) It does NOT repeat LogDropped's "raise TopicBufferCapacity" advice. That advice is right
+    //     for a buffer overflow and useless here -- the wire is off-schema and the consumer cannot
+    //     do anything about it. Handing them one cause's remedy for another cause is the confusion
+    //     this change and issue #64 both exist to remove.
+    // (c) The sentinel key still appears nowhere. This is the first [LoggerMessage] template in the
+    //     SDK to interpolate a STRING rather than a count, so the rule 11 gate has to cover it.
+    [Fact]
+    public async Task AMalformedFieldIsLoggedWithTheValueAndWithoutTheBufferAdvice()
+    {
+        FakeClock clock = new(Instant.FromUnixTimeSeconds(0));
+        (MassiveStockStream stream, FakeWebSocket first, FakeWebSocket _) = await ConnectAsync(clock);
+        await using MassiveStockStream owned = stream;
+
+        CapturingLoggerProvider capture = new();
+        using ILoggerFactory factory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(capture);
+        });
+
+        stream.LogStreamHealth(factory.CreateLogger("stream-health-test"));
+
+        await stream.SubscribeMinuteAggregatesAsync(["MSFT"], Ct);
+
+        first.EnqueueText("""[{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":1,"e":2}]""");
+
+        // A widening subscribe, once acknowledged, guarantees the frame above has been dispatched.
+        await stream.SubscribeMinuteAggregatesAsync(["AAPL"], Ct);
+
+        string captured = capture.Text;
+
+        Assert.Contains("dropped 1 events on topic AM", captured, StringComparison.Ordinal);
+        Assert.Contains("StockAggregate.z (12.0)", captured, StringComparison.Ordinal);
+        Assert.DoesNotContain("TopicBufferCapacity or do less work", captured, StringComparison.Ordinal);
+        Assert.DoesNotContain(SentinelApiKey, captured, StringComparison.Ordinal);
+    }
+
+    // The sibling of DropsOnTwoTopicsAreCountedSeparatelyRatherThanContinuingEachOther, one axis
+    // over: not two topics sharing one counter, but ONE topic whose two counters share one
+    // dictionary. A drop and a malformed event are different running totals for the same topic
+    // code, so a shared dictionary has the malformed count measured against the drop count --
+    // `malformedCount > previouslyReported` is false, and the warning is silently never logged. A
+    // consumer watching the log would conclude the wire was fine while events were being refused,
+    // which is precisely the "one cause made indistinguishable from another" this change exists to
+    // remove.
+    //
+    // The two throttles are separate windows (D-W20), so both first events get through inside the
+    // same second on the fake clock -- which is what makes this deterministic rather than a race.
+    [Fact]
+    public async Task ADropAndAMalformedEventOnOneTopicAreCountedSeparately()
+    {
+        FakeClock clock = new(Instant.FromUnixTimeSeconds(0));
+        (MassiveStockStream stream, FakeWebSocket first, FakeWebSocket _) = await ConnectAsync(clock);
+        await using MassiveStockStream owned = stream;
+
+        CapturingLoggerProvider capture = new();
+        using ILoggerFactory factory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(capture);
+        });
+
+        stream.LogStreamHealth(factory.CreateLogger("stream-health-test"));
+
+        await stream.SubscribeMinuteAggregatesAsync(["MSFT"], Ct);
+
+        // TopicBufferCapacity is 1 (ConnectAsync sets it): three well-formed bars with nobody
+        // reading evict two, and the malformed fourth is refused. The drop comes FIRST, so a shared
+        // dictionary has its total in place by the time the malformed one is measured.
+        first.EnqueueText(
+            """[{"ev":"AM","sym":"MSFT","v":1,"z":1,"s":1,"e":2},{"ev":"AM","sym":"MSFT","v":1,"z":2,"s":3,"e":4},{"ev":"AM","sym":"MSFT","v":1,"z":3,"s":5,"e":6},{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":7,"e":8}]""");
+
+        await stream.SubscribeMinuteAggregatesAsync(["AAPL"], Ct);
+
+        string captured = capture.Text;
+
+        Assert.Contains("because a topic buffer was full", captured, StringComparison.Ordinal);
+        Assert.Contains("because the wire sent a value", captured, StringComparison.Ordinal);
+    }
 }

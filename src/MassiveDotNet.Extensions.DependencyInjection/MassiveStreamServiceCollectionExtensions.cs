@@ -111,12 +111,35 @@ public static partial class MassiveStreamServiceCollectionExtensions
                 reported[topicCode] = droppedCount;
             }
         };
+
+        // Its own dictionary, for the same per-topic-delta reason as the drop bridge above, and
+        // deliberately not that same dictionary: a malformed count and a drop count are two
+        // different running totals for the same topic code, so sharing one would have each measure
+        // its delta against the other's total and silently under-report both.
+        Dictionary<string, long> reportedMalformed = new(StringComparer.Ordinal);
+
+        stream.MalformedObserved += (topicCode, malformedCount, error) =>
+        {
+            long previouslyReported = reportedMalformed.TryGetValue(topicCode, out long value) ? value : 0;
+
+            if (malformedCount > previouslyReported)
+            {
+                LogMalformed(logger, malformedCount - previouslyReported, topicCode, error.Message);
+                reportedMalformed[topicCode] = malformedCount;
+            }
+        };
     }
 
     // CA1848: LoggerMessage delegates rather than the plain ILogger.LogWarning(...) extension,
-    // which allocates a params array and boxes every argument on every call. Neither message ever
-    // interpolates anything key-shaped -- a reconnect count, a topic's wire code, and a drop count,
-    // never options.ApiKey or anything derived from it (rule 11).
+    // which allocates a params array and boxes every argument on every call.
+    //
+    // Rule 11: three of these interpolate only counts and a topic's wire code. The fourth,
+    // LogMalformed, interpolates a JsonException's MESSAGE, which is a string -- so the rule holds
+    // structurally rather than by inspection here. That message comes from JsonValueReader, whose
+    // only value-echoing helper is reachable only after the token has been proved a
+    // JsonTokenType.Number, and an API key is not a JSON number (D-W21). None of the four ever
+    // touches options.ApiKey or anything derived from it, and LogStreamHealthTests asserts a
+    // sentinel key appears nowhere in what is captured.
     [LoggerMessage(
         Level = LogLevel.Warning,
         Message = "The Massive stream reconnected ({Count} so far). Messages sent while it was down were missed.")]
@@ -134,4 +157,11 @@ public static partial class MassiveStreamServiceCollectionExtensions
             + "subscriptions it replayed ({Parameters}). Those topics are delivering nothing and look "
             + "exactly like a quiet market; re-subscribe to restore them.")]
     private static partial void LogSubscriptionsLost(ILogger logger, int unacknowledged, string parameters);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "The Massive stream dropped {Malformed} events on topic {TopicCode} because the wire sent a "
+            + "value the SDK's schema does not accept: {Reason} Raising TopicBufferCapacity will not help -- "
+            + "this is a server-side shape, not a slow consumer.")]
+    private static partial void LogMalformed(ILogger logger, long malformed, string topicCode, string reason);
 }
