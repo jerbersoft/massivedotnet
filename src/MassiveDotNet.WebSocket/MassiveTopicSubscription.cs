@@ -15,6 +15,7 @@ public sealed class MassiveTopicSubscription<T> : IAsyncEnumerable<T>
 {
     private readonly ChannelReader<T> _reader;
     private long _dropped;
+    private long _malformed;
     private int _enumerated;
 
     internal MassiveTopicSubscription(ChannelReader<T> reader) => _reader = reader;
@@ -30,6 +31,24 @@ public sealed class MassiveTopicSubscription<T> : IAsyncEnumerable<T>
     public long DroppedCount => Interlocked.Read(ref _dropped);
 
     internal void RecordDrop() => Interlocked.Increment(ref _dropped);
+
+    /// <summary>
+    /// How many events were discarded because the wire sent a value this topic's converter would
+    /// not accept.
+    /// </summary>
+    /// <remarks>
+    /// Monotonic, and exact rather than estimated. Deliberately separate from
+    /// <see cref="DroppedCount"/>, because the two have opposite remedies: a drop is the consumer's
+    /// own backpressure and is fixed by raising
+    /// <see cref="MassiveStreamOptions.TopicBufferCapacity"/> or doing less work in the loop, while
+    /// this is Massive's wire disagreeing with the SDK's schema and there is nothing the consumer
+    /// can do about it at all. One counter for both would hand a consumer advice that cannot work
+    /// (D-W20). Subscribe to <c>MassiveStockStream.MalformedObserved</c> for the exception
+    /// naming which field and which value.
+    /// </remarks>
+    public long MalformedCount => Interlocked.Read(ref _malformed);
+
+    internal void RecordMalformed() => Interlocked.Increment(ref _malformed);
 
     /// <summary>Enumerates this topic's events. One consumer at a time.</summary>
     /// <param name="cancellationToken">Ends the enumeration.</param>

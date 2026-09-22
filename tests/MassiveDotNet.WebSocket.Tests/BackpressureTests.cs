@@ -21,6 +21,16 @@ public class BackpressureTests
         sink.Write(ref reader);
     }
 
+    private static void FeedAggregate(TopicSink<StockAggregate> sink, string json)
+    {
+        Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json));
+        reader.Read();
+        sink.Write(ref reader);
+    }
+
+    private static TopicSink<StockAggregate> CreateAggregateSink(int capacity) =>
+        new("AM", capacity, new StockAggregateConverter(new TickerPool(16), "AM"));
+
     [Fact]
     public async Task EventsArriveInOrderWithinATopic()
     {
@@ -130,5 +140,64 @@ public class BackpressureTests
 
         Assert.Throws<InvalidOperationException>(() =>
             sink.Subscription.GetAsyncEnumerator(TestContext.Current.CancellationToken));
+    }
+
+    // Issue #65 / D-W19. Before this, a value the converter refused threw out of Write, escaped
+    // Dispatch, missed the read loop's reconnect filter (G3, deliberately), and ended the entire
+    // connection -- taking every OTHER topic sharing that socket down with it. One symbol's bad
+    // field, on a topic the consumer may not even have subscribed to, killed the trade feed. Now
+    // the one event is dropped and counted, and the next one parses.
+    //
+    // Both refusal cases the production log could not tell apart, because the drop must not depend
+    // on which one it was. "z":12.0 is the one easiest to overlook -- a valid JSON number, a whole
+    // value, refused anyway because the token is not an integer token -- and the second is a value
+    // genuinely past long's range.
+    [Theory]
+    [InlineData("12.0")]
+    [InlineData("9223372036854775808")]
+    public async Task AnEventTheConverterRefusesIsDroppedAndCountedRatherThanThrown(string badAverageTradeSize)
+    {
+        TopicSink<StockAggregate> sink = CreateAggregateSink(capacity: 8);
+
+        FeedAggregate(sink, $$"""{"ev":"AM","sym":"MSFT","v":1,"z":{{badAverageTradeSize}},"s":1,"e":2}""");
+        FeedAggregate(sink, """{"ev":"AM","sym":"MSFT","v":1,"z":7,"s":3,"e":4}""");
+        sink.Complete();
+
+        List<long> sizes = [];
+        await foreach (StockAggregate bar in sink.Subscription.WithCancellation(TestContext.Current.CancellationToken))
+        {
+            sizes.Add(bar.AverageTradeSize);
+        }
+
+        // The malformed bar is gone and the well-formed one that followed it arrived.
+        Assert.Equal([7L], sizes);
+
+        // Its own counter, not DroppedCount (D-W20). A buffer overflow is the consumer's own
+        // backpressure and they fix it by raising TopicBufferCapacity; this is Massive's wire being
+        // off-schema and there is nothing they can do about it. Folding the two together would hand
+        // a consumer advice that cannot work.
+        Assert.Equal(1, sink.Subscription.MalformedCount);
+        Assert.Equal(0, sink.Subscription.DroppedCount);
+    }
+
+    // The evidence route. A malformed event was terminal until issue #65, so its message reached a
+    // consumer through Faulted; now that the connection survives, this seam is the ONLY way the
+    // refused value leaves the SDK. Without it, the fix for the outage would swallow the evidence
+    // for the fix that is still outstanding (whether `z` needs a wider read at all).
+    [Fact]
+    public void ARefusedEventRaisesEventMalformedCarryingTheValue()
+    {
+        TopicSink<StockAggregate> sink = CreateAggregateSink(capacity: 8);
+
+        JsonException? observed = null;
+        sink.EventMalformed += error => observed = error;
+
+        FeedAggregate(sink, """{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":1,"e":2}""");
+
+        // The `!` is not redundant: `observed` is assigned inside a lambda, which the nullable
+        // analyzer cannot follow across the raise, so Assert.NotNull does not narrow it here.
+        Assert.NotNull(observed);
+        Assert.Contains("StockAggregate.z", observed!.Message, StringComparison.Ordinal);
+        Assert.Contains("12.0", observed!.Message, StringComparison.Ordinal);
     }
 }
