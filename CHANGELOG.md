@@ -42,6 +42,11 @@ Two conventions worth knowing before reading a breaking-change entry:
   of them. Capped at 32 bytes, and confined to that one failure: the wrong-token-type message names
   a token type and has no value to quote, and the decimal round-trip message reads a string token,
   where "the bytes are provably a number" does not hold.
+- **`MassiveDotNet.WebSocket`** — the SDK now tells the server it is leaving. Every teardown used to
+  abort the socket, because `ClientWebSocket.Dispose()` does not perform the closing handshake, so a
+  server could not tell a deliberate disconnect from a network failure — which matters on a plan
+  allowing one connection per cluster. The close is send-only and bounded: the server's reply could
+  only be collected by a read loop that has already stopped by then. No public API change.
 
 ## [0.2.0] — 2026-09-09
 
