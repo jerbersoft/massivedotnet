@@ -12,8 +12,8 @@
   <!--
     VersionPrefix, not Version, and THE VALUE IS THE VERSION BEING PREPARED rather than the one last
     released. publish.yml packs a GitHub Release with no suffix and every other trigger with
-    `-p:VersionSuffix=...`, so a push that passes CI on master publishes 0.2.0-ci.N and a published
-    release publishes plain 0.2.0.
+    `-p:VersionSuffix=...`, so a push that passes CI on master publishes 0.4.0-ci.N and a published
+    release publishes plain 0.4.0.
 
     Leaving this at a version already released is the trap worth naming: NuGet orders every
     prerelease of a version BELOW the release of that version, so 0.2.0-ci.N builds published after
@@ -27,7 +27,7 @@
     are published together from one run.
   -->
   <PropertyGroup Label="Package identity">
-    <VersionPrefix>0.3.0</VersionPrefix>
+    <VersionPrefix>0.4.0</VersionPrefix>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- An SPDX expression rather than PackageLicenseFile: NuGet renders it as a link to the
          canonical licence text, so a client reads the terms without unpacking anything. The LICENSE
