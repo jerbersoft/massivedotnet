@@ -28,7 +28,7 @@ public sealed class LocalDateJsonConverter : JsonConverter<LocalDate>
     private const int IsoLength = 10;
 
     // Longer than any escaped spelling of a ten-character date. A raw value past this cannot be a
-    // date, so it is rejected before any buffer is sized from it.
+    // date, so it is rejected before any buffer is sized from it -- and before Parse can echo it.
     private const int MaxRawLength = 64;
 
     /// <inheritdoc />
@@ -39,18 +39,22 @@ public sealed class LocalDateJsonConverter : JsonConverter<LocalDate>
             throw new JsonException($"Expected a YYYY-MM-DD string for a date, found a {reader.TokenType} token.");
         }
 
+        long rawLength = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
+
+        // Ahead of the fast path, not inside the copying one, because Parse echoes the value it
+        // refuses and a String token carries no length the SDK controls. Checking here makes Parse
+        // unreachable with more than MaxRawLength bytes on either path, which is what bounds those
+        // echoes by construction rather than by which fields the map happens to type today (D41).
+        if (rawLength > MaxRawLength)
+        {
+            throw new JsonException("Expected a YYYY-MM-DD string for a date, found a longer value.");
+        }
+
         // The fast path reads the bytes in place. A date never needs an escape, and a value split
         // across buffer segments is rare, so the copying path below is for correctness only.
         if (!reader.HasValueSequence && !reader.ValueIsEscaped)
         {
             return Parse(reader.ValueSpan);
-        }
-
-        long rawLength = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
-
-        if (rawLength > MaxRawLength)
-        {
-            throw new JsonException("Expected a YYYY-MM-DD string for a date, found a longer value.");
         }
 
         Span<byte> buffer = stackalloc byte[MaxRawLength];
@@ -72,6 +76,12 @@ public sealed class LocalDateJsonConverter : JsonConverter<LocalDate>
     /// <param name="utf8">The bytes to parse.</param>
     /// <returns>The parsed date.</returns>
     /// <exception cref="JsonException">The span does not contain a valid ISO date.</exception>
+    /// <remarks>
+    /// Both failure messages below quote the value they refused, which is safe only because every
+    /// caller is past <c>Read</c>'s length guard: <paramref name="utf8"/> is therefore never longer
+    /// than <see cref="MaxRawLength"/>, so no message can carry an unbounded value into a log line
+    /// through the DI package's bridge. Do not call this without making that check (D41, rule 11).
+    /// </remarks>
     private static LocalDate Parse(ReadOnlySpan<byte> utf8)
     {
         if (utf8.Length != IsoLength

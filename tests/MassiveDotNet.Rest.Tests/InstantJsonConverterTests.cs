@@ -118,6 +118,35 @@ public sealed class InstantJsonConverterTests
         Assert.Throws<JsonException>(() => Read("\"9999-12-31T23:59:59-18:00\""));
     }
 
+    // The fast path -- unescaped and contiguous, which is every response the service actually
+    // sends -- reached Parse with no length check at all, so a pathological value was rendered
+    // into the message whole and, through the DI package's log bridge, into a log line. The slow
+    // path has refused a value past MaxRawLength since it was written; the guard now covers both,
+    // which is what makes every echo in Parse bounded by construction rather than by luck.
+    [Fact]
+    public void AValueTooLongToBeATimestampIsRefusedWithoutEchoingIt()
+    {
+        string value = new('9', 65);
+
+        JsonException thrown = Assert.Throws<JsonException>(() => Read($"\"{value}\""));
+
+        Assert.DoesNotContain(value, thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("found a longer value", thrown.Message, StringComparison.Ordinal);
+    }
+
+    // Pins where the bound sits, and is what stops the test above from being satisfied by deleting
+    // the echo altogether: a value short enough to still be a plausible timestamp names itself,
+    // which is the entire diagnostic value these messages carry.
+    [Fact]
+    public void AValueAtTheLengthBoundIsStillEchoed()
+    {
+        string value = new('9', 64);
+
+        JsonException thrown = Assert.Throws<JsonException>(() => Read($"\"{value}\""));
+
+        Assert.Contains(value, thrown.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void WritesTheExtendedIsoForm()
     {

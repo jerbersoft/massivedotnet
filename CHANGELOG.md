@@ -17,6 +17,20 @@ Two conventions worth knowing before reading a breaking-change entry:
   unreleased one ships marked `[Experimental]`. Neither is removed, and nothing is ever silently
   omitted.
 
+## [Unreleased]
+
+### Fixed
+
+- **`MassiveDotNet`** — `LocalDateJsonConverter` and `InstantJsonConverter` no longer render an
+  arbitrarily long value into their failure messages. Both refused a value past 64 bytes already,
+  but only on the copying path taken for an escaped value or one split across buffer segments; the
+  unescaped fast path, which is every response the service actually sends, parsed the raw span with
+  no length check, so a pathological string in a `format: date` or `format: date-time` field was
+  echoed whole — and, through the DI package's log bridge, into a log line. The check now runs
+  ahead of both paths. A malformed value short enough to be a plausible date or timestamp still
+  names itself, as before; one longer than 64 bytes reports `found a longer value`, which is what
+  the copying path has always done.
+
 ## [0.3.0] — 2026-09-22
 
 ### Added

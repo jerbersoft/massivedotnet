@@ -19,7 +19,8 @@ namespace MassiveDotNet.Serialization;
 /// <para>
 /// Accepts <c>YYYY-MM-DDTHH:MM:SS</c>, an optional fraction of one to nine digits, then <c>Z</c>
 /// or a numeric <c>±HH:MM</c> offset. The <c>T</c> and <c>Z</c> designators may be lowercase, as
-/// RFC 3339 permits. Anything else is a <see cref="JsonException"/> naming the value.
+/// RFC 3339 permits. Anything else is a <see cref="JsonException"/>, naming the value unless it is
+/// longer than any spelling of a timestamp could be, in which case it reports only that (D41).
 /// </para>
 /// <para>
 /// Registered once on the generated REST serialization context, so every <see cref="Instant"/>
@@ -35,7 +36,7 @@ public sealed class InstantJsonConverter : JsonConverter<Instant>
     private const int MinLength = TimestampLength + 1;
 
     // Longer than any escaped spelling of a timestamp. A raw value past this cannot be one, so it
-    // is rejected before any buffer is sized from it.
+    // is rejected before any buffer is sized from it -- and before Parse can echo it.
     private const int MaxRawLength = 64;
 
     // Indexed by the number of fraction digits read, so the digits scale to nanoseconds.
@@ -50,18 +51,22 @@ public sealed class InstantJsonConverter : JsonConverter<Instant>
             throw new JsonException($"Expected an RFC 3339 timestamp string, found a {reader.TokenType} token.");
         }
 
+        long rawLength = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
+
+        // Ahead of the fast path, not inside the copying one, because Parse echoes the value it
+        // refuses and a String token carries no length the SDK controls. Checking here makes Parse
+        // unreachable with more than MaxRawLength bytes on either path, which is what bounds those
+        // echoes by construction rather than by which fields the map happens to type today (D41).
+        if (rawLength > MaxRawLength)
+        {
+            throw new JsonException("Expected an RFC 3339 timestamp string, found a longer value.");
+        }
+
         // The fast path reads the bytes in place. A timestamp never needs an escape, and a value
         // split across buffer segments is rare, so the copying path below is for correctness only.
         if (!reader.HasValueSequence && !reader.ValueIsEscaped)
         {
             return Parse(reader.ValueSpan);
-        }
-
-        long rawLength = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
-
-        if (rawLength > MaxRawLength)
-        {
-            throw new JsonException("Expected an RFC 3339 timestamp string, found a longer value.");
         }
 
         Span<byte> buffer = stackalloc byte[MaxRawLength];
@@ -83,6 +88,13 @@ public sealed class InstantJsonConverter : JsonConverter<Instant>
     /// <param name="utf8">The bytes to parse.</param>
     /// <returns>The parsed instant.</returns>
     /// <exception cref="JsonException">The span does not contain a valid RFC 3339 timestamp.</exception>
+    /// <remarks>
+    /// The failure messages below, and <see cref="Malformed"/>, quote the value they refused, which
+    /// is safe only because every caller is past <c>Read</c>'s length guard: <paramref name="utf8"/>
+    /// is therefore never longer than <see cref="MaxRawLength"/>, so no message can carry an
+    /// unbounded value into a log line through the DI package's bridge. Do not call this without
+    /// making that check (D41, rule 11).
+    /// </remarks>
     private static Instant Parse(ReadOnlySpan<byte> utf8)
     {
         if (utf8.Length < MinLength
