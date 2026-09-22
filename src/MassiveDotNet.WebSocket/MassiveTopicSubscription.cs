@@ -43,7 +43,7 @@ public sealed class MassiveTopicSubscription<T> : IAsyncEnumerable<T>
     /// <see cref="MassiveStreamOptions.TopicBufferCapacity"/> or doing less work in the loop, while
     /// this is Massive's wire disagreeing with the SDK's schema and there is nothing the consumer
     /// can do about it at all. One counter for both would hand a consumer advice that cannot work
-    /// (D-W20). Subscribe to <c>MassiveStockStream.MalformedObserved</c> for the exception
+    /// (D-W20). Subscribe to <see cref="MassiveStockStream.MalformedObserved"/> for the exception
     /// naming which field and which value.
     /// </remarks>
     public long MalformedCount => Interlocked.Read(ref _malformed);

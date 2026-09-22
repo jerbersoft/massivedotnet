@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using MassiveDotNet.WebSocket.Events;
 using MassiveDotNet.WebSocket.Internal;
@@ -19,6 +20,11 @@ public sealed class MassiveStockStream : IAsyncDisposable
     // injected clock rather than the wall clock, so a sustained overflow does not produce a
     // DropObserved (and, through the DI bridge, a log line) per dropped event.
     private static readonly Duration DropThrottleWindow = Duration.FromSeconds(1);
+
+    // D-W20: its OWN window and its own state, deliberately not shared with DropThrottleWindow's.
+    // A burst of buffer overflows and a burst of off-schema fields are different problems with
+    // opposite remedies, so neither must be able to throttle the other into silence.
+    private static readonly Duration MalformedThrottleWindow = Duration.FromSeconds(1);
 
     private readonly MassiveStreamConnection _connection;
     private readonly MassiveStreamOptions _options;
@@ -73,6 +79,9 @@ public sealed class MassiveStockStream : IAsyncDisposable
 
     private readonly object _dropThrottleLock = new();
     private Instant? _lastDropObservedAt;
+
+    private readonly object _malformedThrottleLock = new();
+    private Instant? _lastMalformedObservedAt;
 
     internal MassiveStockStream(
         MassiveStreamConnection connection, MassiveStreamOptions options, IClock clock, Action? onDisposed = null)
@@ -160,6 +169,28 @@ public sealed class MassiveStockStream : IAsyncDisposable
     /// </remarks>
     public event Action<string, long>? DropObserved;
 
+    /// <summary>
+    /// Raised when the wire sent a value a converter would not accept and the event was dropped,
+    /// naming the topic's wire code, that topic's own running malformed count, and the exception
+    /// saying which field and which value — throttled to at most once a second so a sustained
+    /// off-schema field does not produce an unbounded stream of notifications.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="DropObserved"/> on purpose (D-W20), and not a duplicate of it. A
+    /// drop is the consumer's own backpressure, fixed by raising
+    /// <see cref="MassiveStreamOptions.TopicBufferCapacity"/> or doing less work in the loop; this
+    /// is Massive's wire disagreeing with the SDK's schema, which the consumer cannot fix at all.
+    /// Reporting both through one signal would hand them advice that cannot work.
+    /// <para>
+    /// The exception travels with the raise because it is the only route the refused value has out
+    /// of the SDK. A malformed event was terminal until issue #65, so its message reached a
+    /// consumer through <see cref="Faulted"/>; now that the connection survives, nothing else
+    /// carries it. Every handler is invoked with its own try/catch (F1): a notification about one
+    /// dropped event must never itself end the live feed.
+    /// </para>
+    /// </remarks>
+    public event Action<string, long, JsonException>? MalformedObserved;
+
     /// <summary>Subscribes to tick-level trades.</summary>
     /// <param name="tickers">Symbols, or <c>*</c> for every symbol.</param>
     /// <param name="cancellationToken">Cancels the subscribe.</param>
@@ -224,6 +255,8 @@ public sealed class MassiveStockStream : IAsyncDisposable
                 TopicSink<T> sink = new(topicCode, _options.TopicBufferCapacity, converter);
 
                 sink.ItemDropped += () => OnItemDropped(topicCode, sink.Subscription.DroppedCount);
+                sink.EventMalformed += error =>
+                    OnEventMalformed(topicCode, sink.Subscription.MalformedCount, error);
                 _connection.AddSink(sink);
                 _createdSinks.Add(sink);
                 field = sink;
@@ -348,6 +381,28 @@ public sealed class MassiveStockStream : IAsyncDisposable
         }
 
         EventRaiser.Raise(DropObserved, topicCode, droppedCount);
+    }
+
+    // The same edge-triggered throttle as OnItemDropped, with its own window and its own lock
+    // (D-W20): the first qualifying event in a fresh window raises and every later one in that
+    // window is discarded outright, so the count carried is the running total at that first event,
+    // not the total once a burst has finished. Sharing the drop throttle's state would let a
+    // buffer-overflow burst silence this, and the two report problems with opposite remedies.
+    private void OnEventMalformed(string topicCode, long malformedCount, JsonException error)
+    {
+        Instant now = _clock.GetCurrentInstant();
+
+        lock (_malformedThrottleLock)
+        {
+            if (_lastMalformedObservedAt is { } last && now - last < MalformedThrottleWindow)
+            {
+                return;
+            }
+
+            _lastMalformedObservedAt = now;
+        }
+
+        EventRaiser.Raise(MalformedObserved, topicCode, malformedCount, error);
     }
 
     // L1 (Task 14 ruling): an internal escape hatch so a live test can send a topic StockTopic

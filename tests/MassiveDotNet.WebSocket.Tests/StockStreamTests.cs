@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text.Json;
 using MassiveDotNet.WebSocket.Events;
 using NodaTime;
 using NodaTime.Testing;
@@ -84,6 +85,18 @@ public class StockStreamTests
         socket.EnqueueText($$"""[{"ev":"status","status":"success","message":"subscribed to: Q.{{ticker}}"}]""");
 
         return await task;
+    }
+
+    private static async Task<MassiveTopicSubscription<StockAggregate>> SubscribeMinuteAggregatesAsync(
+        MassiveStockStream stream, FakeWebSocket socket, string ticker, CancellationToken cancellationToken)
+    {
+        TaskCompletionSource sent = socket.SentSignal;
+        Task<MassiveTopicSubscription<StockAggregate>> subscribe = stream.SubscribeMinuteAggregatesAsync([ticker], cancellationToken);
+
+        await sent.Task.WaitAsync(cancellationToken);
+        socket.EnqueueText($$"""[{"ev":"status","status":"success","message":"subscribed to: AM.{{ticker}}"}]""");
+
+        return await subscribe;
     }
 
     [Fact]
@@ -345,6 +358,130 @@ public class StockStreamTests
         MassiveTopicSubscription<StockTrade> stillWorks =
             await SubscribeTradesAsync(stream, socket, "GOOG", TestContext.Current.CancellationToken);
         Assert.Same(trades, stillWorks);
+    }
+
+    // Issue #65 / D-W20. The exception travels with the raise, and that is not decoration: a
+    // malformed event was terminal until this change, so its message reached a consumer through
+    // Faulted. Now that the connection survives, this event is the only route the refused value has
+    // out of the SDK -- and that value is the only evidence about which of TryGetInt64's three
+    // rejection cases actually occurs on `z`, which is the question issue #65 defers to a later
+    // decision and this work exists to make answerable.
+    [Fact]
+    public async Task MalformedObservedCarriesTheTopicTheCountAndTheRefusedValue()
+    {
+        FakeClock clock = new(Instant.FromUnixTimeSeconds(0));
+        MassiveStreamOptions options = new() { ApiKey = "k" };
+
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync(options, clock);
+        await using MassiveStockStream _ = stream;
+
+        await SubscribeMinuteAggregatesAsync(stream, socket, "MSFT", TestContext.Current.CancellationToken);
+
+        string? topicCode = null;
+        long count = 0;
+        JsonException? error = null;
+
+        stream.MalformedObserved += (topic, malformedCount, exception) =>
+        {
+            topicCode = topic;
+            count = malformedCount;
+            error = exception;
+        };
+
+        socket.EnqueueText("""[{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":1,"e":2}]""");
+
+        await SubscribeMinuteAggregatesAsync(stream, socket, "AAPL", TestContext.Current.CancellationToken);
+
+        Assert.Equal("AM", topicCode);
+        Assert.Equal(1, count);
+        // The `!` is not redundant: `error` is assigned inside a lambda, so Assert.NotNull does not
+        // narrow it for the analyzer here.
+        Assert.NotNull(error);
+        Assert.Contains("StockAggregate.z", error!.Message, StringComparison.Ordinal);
+        Assert.Contains("12.0", error!.Message, StringComparison.Ordinal);
+    }
+
+    // Its own window, deliberately not shared with DropObserved's (D-W20). A sustained off-schema
+    // field would otherwise produce one raise -- and, through the DI bridge, one log line -- per
+    // event; and a burst of buffer overflows must not be able to throttle this into silence, or
+    // vice versa, because they are different problems with opposite remedies.
+    //
+    // Edge-triggered, exactly like DropObserved's: the FIRST qualifying event in a fresh window
+    // raises and every later one in that window is discarded outright, so the count carried is the
+    // running total at that first event, not the total once the burst ends.
+    [Fact]
+    public async Task MalformedObservedIsThrottledToAtMostOncePerSecond()
+    {
+        FakeClock clock = new(Instant.FromUnixTimeSeconds(0));
+        MassiveStreamOptions options = new() { ApiKey = "k" };
+
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync(options, clock);
+        await using MassiveStockStream _ = stream;
+
+        MassiveTopicSubscription<StockAggregate> bars =
+            await SubscribeMinuteAggregatesAsync(stream, socket, "MSFT", TestContext.Current.CancellationToken);
+
+        int observed = 0;
+        long lastCount = 0;
+
+        stream.MalformedObserved += (_, malformedCount, _) =>
+        {
+            Interlocked.Increment(ref observed);
+            Interlocked.Exchange(ref lastCount, malformedCount);
+        };
+
+        socket.EnqueueText(
+            """[{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":1,"e":2},{"ev":"AM","sym":"MSFT","v":1,"z":13.0,"s":3,"e":4}]""");
+
+        await SubscribeMinuteAggregatesAsync(stream, socket, "AAPL", TestContext.Current.CancellationToken);
+
+        // Both were refused, so the subscription's own total is 2 -- but only the first reached the
+        // event, carrying the total as it stood at that moment: 1.
+        Assert.Equal(2, bars.MalformedCount);
+        Assert.Equal(1, Interlocked.CompareExchange(ref observed, 0, 0));
+        Assert.Equal(1, Interlocked.Read(ref lastCount));
+
+        clock.Advance(Duration.FromSeconds(2));
+
+        socket.EnqueueText("""[{"ev":"AM","sym":"MSFT","v":1,"z":14.0,"s":5,"e":6}]""");
+
+        await SubscribeMinuteAggregatesAsync(stream, socket, "TSLA", TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, Interlocked.CompareExchange(ref observed, 0, 0));
+        Assert.Equal(3, Interlocked.Read(ref lastCount));
+    }
+
+    // F1, the property EventRaiser exists for, applied to the new event. Every handler gets its own
+    // try/catch: a multicast delegate stops invoking subscribers the instant one throws, so a single
+    // try around the whole invocation would still starve every handler after the throwing one -- and
+    // the raise happens on the read-loop thread, so an escaping handler exception would reach the
+    // loop's outer catch and end the live feed. A notification that one event was dropped must never
+    // be worse than the drop it is reporting.
+    [Fact]
+    public async Task AThrowingMalformedObservedHandlerDoesNotEndTheStream()
+    {
+        FakeClock clock = new(Instant.FromUnixTimeSeconds(0));
+        MassiveStreamOptions options = new() { ApiKey = "k" };
+
+        (MassiveStockStream stream, FakeWebSocket socket) = await ConnectAsync(options, clock);
+        await using MassiveStockStream _ = stream;
+
+        await SubscribeMinuteAggregatesAsync(stream, socket, "MSFT", TestContext.Current.CancellationToken);
+
+        int reachedAfterTheThrower = 0;
+
+        stream.MalformedObserved += (_, _, _) => throw new InvalidOperationException("a rude handler");
+        stream.MalformedObserved += (_, _, _) => Interlocked.Increment(ref reachedAfterTheThrower);
+
+        socket.EnqueueText("""[{"ev":"AM","sym":"MSFT","v":1,"z":12.0,"s":1,"e":2}]""");
+
+        // If the throw had escaped, this subscribe would never be acknowledged -- the read loop that
+        // delivers the acknowledgement would be dead.
+        MassiveTopicSubscription<StockTrade> trades =
+            await SubscribeTradesAsync(stream, socket, "AAPL", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(trades);
+        Assert.Equal(1, Interlocked.CompareExchange(ref reachedAfterTheThrower, 0, 0));
     }
 
     // F5 (Task 12 review round 1): a disposed stream's ObjectDisposedException used to name

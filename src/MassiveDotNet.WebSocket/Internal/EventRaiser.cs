@@ -66,4 +66,28 @@ internal static class EventRaiser
             }
         }
     }
+
+    /// <summary>Raises a three-argument event, isolating each subscriber's failure.</summary>
+    /// <typeparam name="T1">The first argument's type.</typeparam>
+    /// <typeparam name="T2">The second argument's type.</typeparam>
+    /// <typeparam name="T3">The third argument's type.</typeparam>
+    /// <param name="handlers">The event's invocation list, or <see langword="null"/> if empty.</param>
+    /// <param name="argument1">The first argument to pass each subscriber.</param>
+    /// <param name="argument2">The second argument to pass each subscriber.</param>
+    /// <param name="argument3">The third argument to pass each subscriber.</param>
+    public static void Raise<T1, T2, T3>(
+        Action<T1, T2, T3>? handlers, T1 argument1, T2 argument2, T3 argument3)
+    {
+        foreach (Delegate handler in handlers?.GetInvocationList() ?? [])
+        {
+            try
+            {
+                ((Action<T1, T2, T3>)handler)(argument1, argument2, argument3);
+            }
+            catch
+            {
+                // See the remarks above.
+            }
+        }
+    }
 }
