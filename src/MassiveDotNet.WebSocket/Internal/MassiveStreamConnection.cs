@@ -164,6 +164,14 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private const long NoReconnectYet = long.MinValue;
     private long _lastReconnectedTicks = NoReconnectYet;
 
+    // A close frame is one small write on an already-established connection: if it has not landed
+    // in two seconds the connection is gone and waiting longer buys nothing. Deliberately not a
+    // MassiveStreamOptions property (D-W24) -- that would be public surface, under rules 10 and 14,
+    // for a number no consumer can meaningfully tune. HandshakeTimeout is not reused because in
+    // this codebase "handshake" means the OPENING one, and its 10s is sized for a round trip plus
+    // the server's own auth work.
+    private static readonly Duration CloseTimeout = Duration.FromSeconds(2);
+
     /// <summary>When the connection was last re-established.</summary>
     public Instant? LastReconnected
     {
@@ -1158,6 +1166,37 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private ValueTask<int> ReadMessageAsync(Memory<byte> buffer, CancellationToken cancellationToken) =>
         new FrameReader(_socket!, _options.MaxMessageBytes).ReadMessageAsync(buffer, cancellationToken);
 
+    // Send-only, and never awaited for a reply (D-W22): CloseOutputAsync returns once the frame is
+    // written. The full handshake's reply could only be collected by something pumping
+    // ReceiveAsync, and neither caller has that -- DisposeAsync has already joined ReadLoopTask,
+    // and TryReconnectAsync runs ON the read loop. Waiting would park every teardown until this
+    // timeout for a reply that cannot arrive.
+    //
+    // The token source is standalone ON PURPOSE. Linking it to _shutdown would cancel the send
+    // instantly on the disposal path, because DisposeAsync cancels _shutdown before it ever reaches
+    // the socket -- the frame would silently never go out while every "it did not throw" assertion
+    // still passed.
+    //
+    // Every failure is swallowed, matching the two catch blocks inside DisposeAsync: a courtesy
+    // frame that will not send is not the caller's problem and must never be how their teardown
+    // throws.
+    private static async Task CloseQuietlyAsync(IMassiveWebSocket socket)
+    {
+        using CancellationTokenSource timeout = new();
+        // Boundary crossing (produce): the domain Duration converts here and nowhere above.
+        timeout.CancelAfter(CloseTimeout.ToTimeSpan());
+
+        try
+        {
+            await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, statusDescription: null, timeout.Token);
+        }
+        catch (Exception)
+        {
+            // A socket that will not take a close frame is a socket already gone. Nothing here is
+            // actionable, and the abort that follows in the caller reclaims it either way.
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -1209,6 +1248,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
 
         if (_socket is not null)
         {
+            await CloseQuietlyAsync(_socket);
             await _socket.DisposeAsync();
         }
 
