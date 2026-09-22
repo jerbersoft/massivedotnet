@@ -1,3 +1,1 @@
 #nullable enable
-MassiveDotNet.WebSocket.MassiveStockStream.MalformedObserved -> System.Action<string!, long, System.Text.Json.JsonException!>?
-MassiveDotNet.WebSocket.MassiveTopicSubscription<T>.MalformedCount.get -> long

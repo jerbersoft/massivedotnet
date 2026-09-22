@@ -157,6 +157,7 @@ MassiveDotNet.WebSocket.MassiveStockStream.DisposeAsync() -> System.Threading.Ta
 MassiveDotNet.WebSocket.MassiveStockStream.DropObserved -> System.Action<string!, long>?
 MassiveDotNet.WebSocket.MassiveStockStream.Faulted -> System.Action<System.Exception!>?
 MassiveDotNet.WebSocket.MassiveStockStream.LastReconnected.get -> NodaTime.Instant?
+MassiveDotNet.WebSocket.MassiveStockStream.MalformedObserved -> System.Action<string!, long, System.Text.Json.JsonException!>?
 MassiveDotNet.WebSocket.MassiveStockStream.ReconnectCount.get -> int
 MassiveDotNet.WebSocket.MassiveStockStream.Reconnected -> System.Action<int>?
 MassiveDotNet.WebSocket.MassiveStockStream.SubscribeImbalancesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! tickers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveTopicSubscription<MassiveDotNet.WebSocket.Events.StockImbalance>!>!
@@ -217,6 +218,7 @@ MassiveDotNet.WebSocket.MassiveStreamSubscriptionException.Unacknowledged.get ->
 MassiveDotNet.WebSocket.MassiveTopicSubscription<T>
 MassiveDotNet.WebSocket.MassiveTopicSubscription<T>.DroppedCount.get -> long
 MassiveDotNet.WebSocket.MassiveTopicSubscription<T>.GetAsyncEnumerator(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerator<T>!
+MassiveDotNet.WebSocket.MassiveTopicSubscription<T>.MalformedCount.get -> long
 MassiveDotNet.WebSocket.StockTopic
 MassiveDotNet.WebSocket.StockTopic.Imbalances = 4 -> MassiveDotNet.WebSocket.StockTopic
 MassiveDotNet.WebSocket.StockTopic.LimitUpLimitDown = 5 -> MassiveDotNet.WebSocket.StockTopic
