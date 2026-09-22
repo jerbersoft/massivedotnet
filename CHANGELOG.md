@@ -19,6 +19,30 @@ Two conventions worth knowing before reading a breaking-change entry:
 
 ## [Unreleased]
 
+### Added
+
+- **`MassiveDotNet.WebSocket`** — `MassiveTopicSubscription<T>.MalformedCount` and
+  `MassiveStockStream.MalformedObserved`, reporting events the wire sent in a shape the SDK's schema
+  does not accept. Separate from `DroppedCount`/`DropObserved` on purpose: a drop is the consumer's
+  own backpressure and is fixed by raising `TopicBufferCapacity`, while a malformed event is the
+  server's wire disagreeing with the SDK and the consumer cannot fix it at all. `MalformedObserved`
+  carries the `JsonException`, throttled to at most one raise a second on its own window. The DI
+  package's `LogStreamHealth` bridges it to `ILogger` at `Warning`.
+
+### Fixed
+
+- **`MassiveDotNet.WebSocket`** — a value a converter refuses no longer ends the connection. The
+  event is dropped and counted, and the read loop carries on. The connection is multiplexed, so one
+  unparseable field on one symbol — on a topic the consumer may not even have subscribed to — used
+  to take every other topic's live data down with it. A malformed `ev` is still terminal: it leaves
+  the reader stranded mid-object with no topic to attribute the loss to.
+- **`MassiveDotNet`** — a numeric range failure now names the value it refused:
+  `The number in StockAggregate.z (12.0) does not fit a 64-bit integer.` `Utf8JsonReader`'s
+  `TryGetInt64` returns `false` for three unrelated reasons and the old message distinguished none
+  of them. Capped at 32 bytes, and confined to that one failure: the wrong-token-type message names
+  a token type and has no value to quote, and the decimal round-trip message reads a string token,
+  where "the bytes are provably a number" does not hold.
+
 ## [0.2.0] — 2026-09-09
 
 **The first version published to nuget.org.** The `0.1`/`0.2` numbering follows the project's own
