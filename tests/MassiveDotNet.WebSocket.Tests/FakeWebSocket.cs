@@ -461,6 +461,12 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
             return;
         }
 
+        // A real socket refuses a close whose token is already cancelled, so this fake must too --
+        // otherwise a teardown that (incorrectly) linked the close's token to something already
+        // cancelled would still record a frame that a genuine CloseOutputAsync would have thrown
+        // out of, and every "it did not throw" assertion in this file would keep passing regardless.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (_closeGate is { } gate)
         {
             await gate.Task.WaitAsync(cancellationToken);

@@ -349,7 +349,9 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             // delayed by up to HandshakeTimeout (10s default) behind an in-flight subscribe.
             // Accepted: a bounded delay on an already-degraded connection is the better trade
             // against the state divergence this gate exists to prevent (F-11.3, Task 11 review
-            // round 1).
+            // round 1). The ledger runs the other way too, since D40: CloseQuietlyAsync(previous)
+            // below now also runs while this gate is held, so a caller's own SubscribeAsync/
+            // UnsubscribeAsync can be delayed by up to CloseTimeout (2s default) longer per attempt.
             await _subscribeGate.WaitAsync(cancellationToken);
 
             try
@@ -1247,6 +1249,13 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         // connection it was reading from had been disposed (F5, review round 1).
         CompleteAllSinks();
 
+        // Runs without _subscribeGate, unlike SubscribeAsync/UnsubscribeAsync, and SubscribeAsync
+        // does not link _shutdown either -- so a caller whose subscribe is still in flight when
+        // disposal reaches here can have its SendAsync collide with this CloseOutputAsync on the
+        // same socket, which permits only one outstanding send at a time. CloseQuietlyAsync
+        // swallows its own side regardless; the caller's send, if it loses that race, now sees
+        // InvalidOperationException where it previously saw the abort's WebSocketException --
+        // caller error on a race that was already undefined, not a new one this change owns fixing.
         if (_socket is not null)
         {
             await CloseQuietlyAsync(_socket);
