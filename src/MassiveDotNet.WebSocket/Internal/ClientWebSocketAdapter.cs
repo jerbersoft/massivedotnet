@@ -30,9 +30,9 @@ internal sealed class ClientWebSocketAdapter : IMassiveWebSocket
     public ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken) =>
         _socket.ReceiveAsync(buffer, cancellationToken);
 
-    public Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) =>
+    public Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) =>
         _socket.State is WebSocketState.Open or WebSocketState.CloseReceived
-            ? _socket.CloseAsync(closeStatus, statusDescription, cancellationToken)
+            ? _socket.CloseOutputAsync(closeStatus, statusDescription, cancellationToken)
             : Task.CompletedTask;
 
     public ValueTask DisposeAsync()

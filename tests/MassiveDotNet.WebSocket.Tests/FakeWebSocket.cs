@@ -43,6 +43,45 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
     /// <summary>The description from the most recently delivered close frame.</summary>
     public string? CloseStatusDescription { get; private set; }
 
+    /// <summary>How many close frames this socket was asked to SEND.</summary>
+    /// <remarks>
+    /// Distinct from <see cref="CloseStatus"/>, which records a close frame the test DELIVERED
+    /// inbound. Collapsing the two would let an assertion about the SDK closing politely pass
+    /// against a socket that only received a close.
+    /// </remarks>
+    public int CloseSentCount { get; private set; }
+
+    /// <summary>The status of the most recent close frame this socket was asked to send.</summary>
+    public WebSocketCloseStatus? SentCloseStatus { get; private set; }
+
+    /// <summary>The description of the most recent close frame this socket was asked to send.</summary>
+    public string? SentCloseDescription { get; private set; }
+
+    /// <summary>
+    /// The value <see cref="CloseSentCount"/> held at the moment <see cref="DisposeAsync"/> ran, so
+    /// a test can pin that the close was sent BEFORE the socket was torn down rather than merely
+    /// that both happened.
+    /// </summary>
+    public int CloseSentCountAtDispose { get; private set; }
+
+    /// <summary>
+    /// When set, <see cref="CloseOutputAsync"/> records the attempt and then throws, standing in for
+    /// a socket that will not accept a close frame.
+    /// </summary>
+    public bool ThrowOnClose { get; set; }
+
+    private TaskCompletionSource? _closeGate;
+
+    /// <summary>
+    /// Makes the next <see cref="CloseOutputAsync"/> wait until <see cref="ReleaseClose"/> is
+    /// called, so a test can pin that a close which never completes does not hang teardown. Same
+    /// shape, and same reason, as <see cref="GateNextConnect"/>.
+    /// </summary>
+    public void GateNextClose() => _closeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Releases a close parked by <see cref="GateNextClose"/>.</summary>
+    public void ReleaseClose() => _closeGate?.TrySetResult();
+
     /// <summary>Completes once a message has been sent, so a test need not poll.</summary>
     public TaskCompletionSource SentSignal { get; private set; } =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -412,14 +451,36 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
         return new ValueWebSocketReceiveResult(count, frame.MessageType, endOfMessage);
     }
 
-    public Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken)
+    public async Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken)
     {
+        // The same guard ClientWebSocketAdapter applies. This fake replaces the SOCKET, which sits
+        // below the adapter, so without this a connection-level test asserting "nothing was sent on
+        // a dead socket" would pass no matter what the production code did.
+        if (State is not (WebSocketState.Open or WebSocketState.CloseReceived))
+        {
+            return;
+        }
+
+        if (_closeGate is { } gate)
+        {
+            await gate.Task.WaitAsync(cancellationToken);
+        }
+
+        CloseSentCount++;
+        SentCloseStatus = closeStatus;
+        SentCloseDescription = statusDescription;
+
+        if (ThrowOnClose)
+        {
+            throw new WebSocketException(WebSocketError.InvalidState, "the socket is not connected.");
+        }
+
         State = WebSocketState.Closed;
-        return Task.CompletedTask;
     }
 
     public ValueTask DisposeAsync()
     {
+        CloseSentCountAtDispose = CloseSentCount;
         State = WebSocketState.Closed;
         _inbound.Writer.TryComplete();
         return ValueTask.CompletedTask;

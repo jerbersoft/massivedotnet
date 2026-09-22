@@ -25,8 +25,17 @@ internal interface IMassiveWebSocket : IAsyncDisposable
     /// <summary>Receives the next frame, which may be part of a larger message.</summary>
     ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken);
 
-    /// <summary>Closes the connection politely, if it is still open.</summary>
-    Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sends a close frame, if the connection is still open, and returns without waiting for the
+    /// server's reply.
+    /// </summary>
+    /// <remarks>
+    /// Send-only on purpose (D-W22). The full handshake's reply can only be collected by something
+    /// pumping <see cref="ReceiveAsync"/>, and on both teardown paths nothing is: disposal has
+    /// already joined the read loop, and the reconnect handover runs ON that loop. Waiting there
+    /// would park every teardown until its timeout for a reply that cannot arrive.
+    /// </remarks>
+    Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken);
 }
 
 /// <summary>

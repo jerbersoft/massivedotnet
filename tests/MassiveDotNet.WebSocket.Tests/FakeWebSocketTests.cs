@@ -114,4 +114,58 @@ public class FakeWebSocketTests
         Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.CloseStatus);
         Assert.Equal("bye", socket.CloseStatusDescription);
     }
+
+    // The fake has to be able to see an outbound close before anything can assert the SDK sends
+    // one. Its existing CloseStatus/CloseStatusDescription record an INBOUND close the test
+    // delivered, which is the opposite direction and must keep meaning that.
+    [Fact]
+    public async Task ItRecordsACloseItWasAskedToSend()
+    {
+        await using FakeWebSocket socket = new();
+        await socket.ConnectAsync(new Uri("wss://example.test"), TestContext.Current.CancellationToken);
+
+        await socket.CloseOutputAsync(
+            WebSocketCloseStatus.NormalClosure,
+            statusDescription: null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, socket.CloseSentCount);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.SentCloseStatus);
+        Assert.Null(socket.SentCloseDescription);
+    }
+
+    // An inbound close and an outbound close are recorded separately. Folding them into one pair of
+    // properties would make every assertion in Task 2 and Task 3 pass against a socket that only
+    // RECEIVED a close and never sent one.
+    [Fact]
+    public async Task AnInboundCloseIsNotRecordedAsOneItSent()
+    {
+        await using FakeWebSocket socket = new();
+        await socket.ConnectAsync(new Uri("wss://example.test"), TestContext.Current.CancellationToken);
+        socket.EnqueueClose(WebSocketCloseStatus.EndpointUnavailable, "going away");
+
+        await socket.ReceiveAsync(new byte[16], TestContext.Current.CancellationToken);
+
+        Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, socket.CloseStatus);
+        Assert.Equal(0, socket.CloseSentCount);
+        Assert.Null(socket.SentCloseStatus);
+    }
+
+    // The fake must honour the same State guard the real adapter does. It stands in for the SOCKET,
+    // which sits below ClientWebSocketAdapter, so nothing else in a connection-level test enforces
+    // it -- and without it, every "sends nothing on a dead socket" assertion in ClosingHandshakeTests
+    // would pass vacuously.
+    [Fact]
+    public async Task ItSendsNothingWhenTheSocketWasNeverOpened()
+    {
+        await using FakeWebSocket socket = new();
+
+        await socket.CloseOutputAsync(
+            WebSocketCloseStatus.NormalClosure,
+            statusDescription: null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, socket.CloseSentCount);
+        Assert.Null(socket.SentCloseStatus);
+    }
 }
