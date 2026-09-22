@@ -138,10 +138,13 @@ public static partial class MassiveStreamServiceCollectionExtensions
     // structurally rather than by inspection here, and the structure it leans on is narrower than
     // "the message happens to be safe today": nothing on the streaming read path may construct a
     // JsonException that interpolates a wire-derived VALUE -- only a model name, a property name,
-    // or a token's shape (JsonTokenType, a length). The one sanctioned exception is
+    // or a token's shape (JsonTokenType, a length). The one sanctioned exception this SDK writes is
     // JsonValueReader's echo of a refused number, and that is reachable only after the token is
     // proved a JsonTokenType.Number (D-W21); an API key is not a JSON number, so the gate is what
-    // keeps this safe, not the absence of some other caller. Add a converter or walk step that
+    // keeps this safe, not the absence of some other caller. System.Text.Json's own Utf8JsonReader
+    // is also on this path and is sanctioned the same way: its JsonReaderException messages quote
+    // at most one invalid wire character (e.g. "'{0}' is an invalid start of a value"), never a
+    // value this SDK chose to echo, so it cannot carry a key either. Add a converter or walk step that
     // echoes a raw string or byte span into a JsonException's message and this comment is the only
     // thing that will have told you not to -- nothing here compiles a warning for it. None of the
     // four templates in this file ever touches options.ApiKey or anything derived from it, and

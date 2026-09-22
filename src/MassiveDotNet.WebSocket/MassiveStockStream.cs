@@ -188,6 +188,13 @@ public sealed class MassiveStockStream : IAsyncDisposable
     /// carries it. Every handler is invoked with its own try/catch (F1): a notification about one
     /// dropped event must never itself end the live feed.
     /// </para>
+    /// <para>
+    /// The one-a-second throttle is shared across every topic on this stream, not scoped per topic
+    /// (D-W20): a sustained burst of malformed events on one topic can therefore delay, or entirely
+    /// suppress, another topic's own report through this event. Nothing is lost to a consumer who
+    /// reads <see cref="MassiveTopicSubscription{T}.MalformedCount"/> instead -- that counter stays
+    /// exact per topic no matter what this event manages to raise.
+    /// </para>
     /// </remarks>
     public event Action<string, long, JsonException>? MalformedObserved;
 

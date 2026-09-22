@@ -33,9 +33,9 @@ Two conventions worth knowing before reading a breaking-change entry:
 
 - **`MassiveDotNet.WebSocket`** — a value a converter refuses no longer ends the connection. The
   event is dropped and counted, and the read loop carries on. The connection is multiplexed, so one
-  unparseable field on one symbol — on a topic the consumer may not even have subscribed to — used
-  to take every other topic's live data down with it. A malformed `ev` is still terminal: it leaves
-  the reader stranded mid-object with no topic to attribute the loss to.
+  unparseable field on one symbol used to take every other topic's live data down with it. A
+  malformed `ev` is still terminal: it leaves the reader stranded mid-object with no topic to
+  attribute the loss to.
 - **`MassiveDotNet`** — a numeric range failure now names the value it refused:
   `The number in StockAggregate.z (12.0) does not fit a 64-bit integer.` `Utf8JsonReader`'s
   `TryGetInt64` returns `false` for three unrelated reasons and the old message distinguished none

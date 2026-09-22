@@ -243,9 +243,8 @@ public class DispatchTests
 
     // Issue #65 / D-W19: the property this whole change exists to protect, stated at the level a
     // consumer feels it. The connection is multiplexed -- trades, quotes and both aggregate windows
-    // share one socket -- so one symbol's unparseable `z` on a topic the consumer may not even have
-    // subscribed to used to take the trade feed down with it, and everything after it on every
-    // topic with it.
+    // share one socket -- so one symbol's unparseable `z` on the aggregates topic used to take the
+    // trade feed down with it, and everything after it on every topic with it.
     //
     // The malformed AM event comes FIRST in the frame on purpose: the trade only arrives if the
     // dispatch loop resumed correctly from the failed object's end token.

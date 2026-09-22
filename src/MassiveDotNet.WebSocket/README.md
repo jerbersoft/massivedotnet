@@ -28,7 +28,7 @@ Six stock topics, each returning a `MassiveTopicSubscription<T>` over its own ev
 `SubscribeTradesAsync`, `SubscribeQuotesAsync`, `SubscribeSecondAggregatesAsync`,
 `SubscribeMinuteAggregatesAsync`, `SubscribeImbalancesAsync`, `SubscribeLimitUpLimitDownAsync`.
 
-## Two things worth knowing
+## Three things worth knowing
 
 **Topics are a typed enum, not a string.** The server silently drops a topic code it does not
 recognise — no acknowledgement, no error — so a caller who mistyped a string would see a healthy
@@ -40,6 +40,13 @@ were asked for. When the server refuses out loud, the exception carries what it 
 (1024 events by default). Every topic shares one socket, so a writer that waited would stall the
 read loop and cost you the topics that were keeping up. Drops are counted exactly on
 `DroppedCount` and raised as an event; the DI package bridges that count to `ILogger`.
+
+**A malformed field costs one event, not the connection.** The wire occasionally sends a value the
+SDK's schema won't parse — a `z` value `Utf8JsonReader` refuses, say. That event is dropped and counted
+rather than thrown out of the read loop; because the connection is multiplexed, one bad field on
+one symbol used to take every topic sharing the socket down with it, this package included. It's
+counted exactly on `MalformedCount` and raised as `MalformedObserved`, carrying the `JsonException`
+so you can see what the wire actually sent; the DI package bridges that to `ILogger` too.
 
 Reconnect is automatic, with backoff, and replays every subscription. If the replay's
 acknowledgements fall short, `SubscriptionsLost` names the pairs that went unanswered rather than
