@@ -309,7 +309,9 @@ git commit -m "refactor: make the socket seam's close send-only"
 
 **Interfaces:**
 - Consumes: `IMassiveWebSocket.CloseOutputAsync(...)`, and `FakeWebSocket`'s `CloseSentCount`,
-  `SentCloseStatus`, `SentCloseDescription`, `GateNextClose()`, `ReleaseClose()` — all from Task 1.
+  `SentCloseStatus`, `SentCloseDescription`, `CloseSentCountAtDispose`, `ThrowOnClose`,
+  `GateNextClose()`, `ReleaseClose()` — all from Task 1. **This task changes no test fixture**: the
+  fake is complete after Task 1.
 - Produces: `private static async Task CloseQuietlyAsync(IMassiveWebSocket socket)` and
   `private static readonly Duration CloseTimeout` on `MassiveStreamConnection`, both used again by
   Task 3.
@@ -568,8 +570,7 @@ close on that path is new behaviour their fakes now see.
 
 ```bash
 git add src/MassiveDotNet.WebSocket/Internal/MassiveStreamConnection.cs \
-        tests/MassiveDotNet.WebSocket.Tests/ClosingHandshakeTests.cs \
-        tests/MassiveDotNet.WebSocket.Tests/FakeWebSocket.cs
+        tests/MassiveDotNet.WebSocket.Tests/ClosingHandshakeTests.cs
 git commit -m "fix: tell the server we are leaving before disposing the socket"
 ```
 
