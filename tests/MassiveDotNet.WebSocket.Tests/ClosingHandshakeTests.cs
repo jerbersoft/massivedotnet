@@ -58,6 +58,11 @@ public class ClosingHandshakeTests
 
         await connection.DisposeAsync();
 
+        // Proves a close was actually sent before trusting the description on it -- otherwise this
+        // assertion passes vacuously against a connection that sent nothing at all, which is not a
+        // hypothetical: it is exactly the state this file's own RED run was in before Task 2 wired
+        // up CloseQuietlyAsync.
+        Assert.Equal(1, socket.CloseSentCount);
         Assert.Null(socket.SentCloseDescription);
     }
 
@@ -75,8 +80,12 @@ public class ClosingHandshakeTests
         Assert.Equal(0, socket.CloseSentCount);
     }
 
-    // The case the production logs actually show: the remote aborted without a close frame, leaving
-    // the socket Aborted. Nothing may be pushed onto it, and disposal must still complete.
+    // Pins that disposal completes cleanly across a full connect-fault-dispose lifecycle on a
+    // socket the remote aborted -- the case production logs actually show, and a path exercised
+    // nowhere else in this file. The zero below is the FAKE's own State guard holding (Aborted is
+    // neither Open nor CloseReceived), not evidence that production code skipped the close attempt
+    // -- that distinction, and the throw-swallowing it implies, is what
+    // ACloseThatThrowsDoesNotEscapeDisposal covers instead.
     [Fact]
     public async Task DisposingAnAbortedStreamSendsNothingAndCompletes()
     {
