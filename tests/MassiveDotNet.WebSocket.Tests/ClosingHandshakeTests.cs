@@ -202,8 +202,47 @@ public class ClosingHandshakeTests
         Assert.Equal(WebSocketCloseStatus.NormalClosure, first.SentCloseStatus);
     }
 
-    // The case production actually shows: the remote aborted with no close frame, leaving the
-    // socket Aborted. The adapter's guard must skip, and nothing may be sent onto a dead socket.
+    // Case 2 from D-W23: the server sent a close frame first, which FrameReader reports as a
+    // MassiveStreamException while leaving the socket CloseReceived, not Aborted. Before this task
+    // the SDK received that close and never answered it; this is the first code path that does.
+    // Unlike the Aborted test below, the fake's State guard PERMITS a send here, so this is the one
+    // that actually exercises -- and would fail without -- the CloseQuietlyAsync call this task
+    // added to the handover.
+    [Fact]
+    public async Task TheReconnectHandoverAnswersACloseTheServerSent()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+        first.EnqueueClose(WebSocketCloseStatus.NormalClosure, "bye");
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await WaitUntilAsync(() => second.ConnectCount > 0);
+
+        Assert.Equal(1, first.CloseSentCount);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, first.SentCloseStatus);
+    }
+
+    // Pins that a reconnect handover completes cleanly across a full connect-fault-reconnect
+    // lifecycle on a socket the remote aborted -- the case production logs actually show, and a
+    // lifecycle exercised nowhere else in this file. The zero below is the FAKE's own State guard
+    // holding (Aborted is neither Open nor CloseReceived), not evidence that this call site
+    // attempted and skipped the close -- that discriminative guard is
+    // TheReconnectHandoverAnswersACloseTheServerSent, above.
     [Fact]
     public async Task TheReconnectHandoverSendsNothingOnAnAbortedSocket()
     {
