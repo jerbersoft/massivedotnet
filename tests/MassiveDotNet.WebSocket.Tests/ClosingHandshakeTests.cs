@@ -155,4 +155,94 @@ public class ClosingHandshakeTests
         // from "never tried".
         Assert.Equal(1, socket.CloseSentCount);
     }
+
+    private static MassiveStreamOptions FastReconnect() => new()
+    {
+        ApiKey = "k",
+        Reconnect = new MassiveStreamReconnectOptions
+        {
+            InitialBackoff = Duration.FromMilliseconds(1),
+            MaxBackoff = Duration.FromMilliseconds(5),
+            Jitter = 0,
+        },
+    };
+
+    // Case 1 from D-W23: a message past MaxMessageBytes faults the read loop while the socket is
+    // still OPEN, so the handover has a live connection to close politely. This is the case that
+    // makes the reconnect call site load-bearing rather than decorative.
+    [Fact]
+    public async Task TheReconnectHandoverClosesAPreviousSocketThatIsStillOpen()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+        first.EnqueueFragmented(new string('x', 4096), chunkSize: 64);
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        MassiveStreamOptions options = FastReconnect();
+        options.MaxMessageBytes = 256;
+
+        await using MassiveStreamConnection connection = new(
+            options,
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await WaitUntilAsync(() => second.ConnectCount > 0);
+
+        Assert.Equal(1, first.CloseSentCount);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, first.SentCloseStatus);
+    }
+
+    // The case production actually shows: the remote aborted with no close frame, leaving the
+    // socket Aborted. The adapter's guard must skip, and nothing may be sent onto a dead socket.
+    [Fact]
+    public async Task TheReconnectHandoverSendsNothingOnAnAbortedSocket()
+    {
+        FakeWebSocket first = new();
+        FakeWebSocket second = new();
+        int created = 0;
+
+        first.EnqueueText(Connected);
+        first.EnqueueText(AuthSuccess);
+        first.AbortNext();
+
+        second.EnqueueText(Connected);
+        second.EnqueueText(AuthSuccess);
+
+        await using MassiveStreamConnection connection = new(
+            FastReconnect(),
+            MassiveMarket.Stocks,
+            () => created++ == 0 ? first : second,
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await connection.ConnectAsync(TestContext.Current.CancellationToken);
+        connection.StartReading();
+
+        await WaitUntilAsync(() => second.ConnectCount > 0);
+
+        Assert.Equal(0, first.CloseSentCount);
+    }
+
+    // Polling rather than a signal: the handover happens inside the read loop, which exposes no
+    // hook a test can await. Bounded so a regression fails readably instead of hanging.
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using CancellationTokenSource cts = new();
+        cts.CancelAfter(Duration.FromSeconds(5).ToTimeSpan());
+
+        while (!condition())
+        {
+            cts.Token.ThrowIfCancellationRequested();
+            await Task.Delay(Duration.FromMilliseconds(20).ToTimeSpan(), cts.Token);
+        }
+    }
 }

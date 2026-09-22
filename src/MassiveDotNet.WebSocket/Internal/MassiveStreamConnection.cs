@@ -356,6 +356,7 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             {
                 if (_socket is { } previous)
                 {
+                    await CloseQuietlyAsync(previous);
                     await previous.DisposeAsync();
                 }
 
