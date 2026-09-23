@@ -159,7 +159,12 @@ being prepared, not the one last released**.
 1. Confirm `master` is green and the live tier passes locally.
 2. Move each `PublicAPI.Unshipped.txt` into its `PublicAPI.Shipped.txt` — the surface being released
    is, from that point, shipped. Keep `#nullable enable` as the first line of both.
-3. Update `CHANGELOG.md`: retitle the unreleased section to the version and the date.
+3. Update `CHANGELOG.md`: retitle the unreleased section to the version and the date, **and fix
+   the reference-style link definitions at the foot** — add one for the new version, and point
+   `[Unreleased]` at `compare/v<new version>...HEAD`. Nothing enforces this and the omission is
+   invisible in review: an undefined reference renders as plain text rather than a broken link,
+   which is how `## [0.3.0]` shipped with no definition and `[Unreleased]` kept comparing from
+   v0.2.0 for a whole cycle.
 4. Publish a GitHub Release tagged `v<VersionPrefix>`. That is the **only** trigger that produces a
    stable version; `publish.yml` refuses a stable publish from anything else, and asserts the tag
    matches what the tree packs.

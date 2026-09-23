@@ -155,7 +155,9 @@ MassiveDotNet.WebSocket.MassiveMarket.Stocks = 0 -> MassiveDotNet.WebSocket.Mass
 MassiveDotNet.WebSocket.MassiveStockStream
 MassiveDotNet.WebSocket.MassiveStockStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
 MassiveDotNet.WebSocket.MassiveStockStream.DropObserved -> System.Action<string!, long>?
+MassiveDotNet.WebSocket.MassiveStockStream.EvictionCount.get -> int
 MassiveDotNet.WebSocket.MassiveStockStream.Faulted -> System.Action<System.Exception!>?
+MassiveDotNet.WebSocket.MassiveStockStream.LastEvictionMessage.get -> string?
 MassiveDotNet.WebSocket.MassiveStockStream.LastReconnected.get -> NodaTime.Instant?
 MassiveDotNet.WebSocket.MassiveStockStream.MalformedObserved -> System.Action<string!, long, System.Text.Json.JsonException!>?
 MassiveDotNet.WebSocket.MassiveStockStream.ReconnectCount.get -> int
@@ -175,6 +177,9 @@ MassiveDotNet.WebSocket.MassiveStreamClient
 MassiveDotNet.WebSocket.MassiveStreamClient.ConnectStocksAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.WebSocket.MassiveStockStream!>!
 MassiveDotNet.WebSocket.MassiveStreamClient.DisposeAsync() -> System.Threading.Tasks.ValueTask
 MassiveDotNet.WebSocket.MassiveStreamClient.MassiveStreamClient(MassiveDotNet.WebSocket.MassiveStreamOptions! options) -> void
+MassiveDotNet.WebSocket.MassiveStreamEvictedException
+MassiveDotNet.WebSocket.MassiveStreamEvictedException.MassiveStreamEvictedException(string! serverMessage, System.Exception! innerException) -> void
+MassiveDotNet.WebSocket.MassiveStreamEvictedException.ServerMessage.get -> string!
 MassiveDotNet.WebSocket.MassiveStreamException
 MassiveDotNet.WebSocket.MassiveStreamException.MassiveStreamException(string! message) -> void
 MassiveDotNet.WebSocket.MassiveStreamException.MassiveStreamException(string! message, System.Exception! innerException) -> void

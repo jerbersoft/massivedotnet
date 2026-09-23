@@ -1,6 +1,1 @@
 #nullable enable
-MassiveDotNet.WebSocket.MassiveStockStream.EvictionCount.get -> int
-MassiveDotNet.WebSocket.MassiveStockStream.LastEvictionMessage.get -> string?
-MassiveDotNet.WebSocket.MassiveStreamEvictedException
-MassiveDotNet.WebSocket.MassiveStreamEvictedException.MassiveStreamEvictedException(string! serverMessage, System.Exception! innerException) -> void
-MassiveDotNet.WebSocket.MassiveStreamEvictedException.ServerMessage.get -> string!
