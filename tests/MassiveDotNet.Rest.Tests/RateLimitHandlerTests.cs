@@ -185,4 +185,125 @@ public sealed class RateLimitHandlerTests
 
         Assert.Equal(4, handler.AvailablePermits);
     }
+
+    [Fact]
+    public async Task KeepsReleasingWhenTheRefillPeriodIsUnderAMillisecond()
+    {
+        // 1,500 a second is a 0.667ms period. The BCL timer is given whole milliseconds and
+        // stores a period of 0 as "fire once", so the limiter refilled once at construction --
+        // while the bucket was still full -- and never again. Every request after the initial
+        // burst then waited for a permit that was never coming, and QueueLimit's int.MaxValue
+        // default means it waited forever with nothing reporting it.
+        //
+        // All-or-nothing on purpose, which is what lets a wall-clock assertion sit in the
+        // offline tier under D31: the broken tree releases essentially nothing here, so the
+        // gap being asserted is the whole rate, not a tolerance around it.
+        ScriptedHandler inner = new(HttpStatusCode.OK);
+        MassiveRateLimitOptions limit = new()
+        {
+            PermitsPerWindow = 1_500,
+            Window = Duration.FromSeconds(1),
+        };
+
+        using MassiveRateLimitHandler handler = new(limit) { InnerHandler = inner };
+        using HttpMessageInvoker invoker = new(handler);
+
+        await SpendTheBurstAsync(invoker, limit.PermitsPerWindow);
+
+        int released = await CountReleasedAsync(invoker, Duration.FromSeconds(2), queued: 4_000);
+
+        Assert.True(
+            released >= 500,
+            $"The limiter stopped refilling below a one-millisecond period: {released} requests " +
+            "were released in two seconds at a configured 1,500 a second.");
+    }
+
+    [Fact]
+    public async Task DoesNotExceedTheConfiguredRateWhenTheRefillPeriodIsNotAWholeMillisecond()
+    {
+        // 400 a second is a 2.5ms period, which the BCL timer truncated to 2ms -- a quarter more
+        // requests than the caller asked for, sustained for as long as they kept sending. Every
+        // period that is not a whole number of milliseconds over-delivered this way.
+        //
+        // The assertion is one-sided, and that is the point: a loaded or slow runner can only
+        // release FEWER requests than configured, never more, so scheduling noise cannot fail
+        // this. It is an upper bound, not the two-sided rate tolerance D31 keeps out of the
+        // offline tier.
+        ScriptedHandler inner = new(HttpStatusCode.OK);
+        MassiveRateLimitOptions limit = new()
+        {
+            PermitsPerWindow = 400,
+            Window = Duration.FromSeconds(1),
+        };
+
+        using MassiveRateLimitHandler handler = new(limit) { InnerHandler = inner };
+        using HttpMessageInvoker invoker = new(handler);
+
+        await SpendTheBurstAsync(invoker, limit.PermitsPerWindow);
+
+        long start = Stopwatch.GetTimestamp();
+        int released = await CountReleasedAsync(invoker, Duration.FromSeconds(2), queued: 2_000);
+
+        Duration elapsed = Stopwatch.GetElapsedTime(start) is { } measured
+            ? Duration.FromTimeSpan(measured)
+            : Duration.Zero;
+
+        double configured = limit.PermitsPerWindow / limit.Window.TotalSeconds;
+        double rate = released / elapsed.TotalSeconds;
+
+        Assert.True(
+            rate <= configured * 1.05,
+            $"The limiter released {rate:N0} a second against a configured {configured:N0}.");
+    }
+
+    /// <summary>
+    /// Spends the initial burst. The bucket starts full at
+    /// <see cref="MassiveRateLimitOptions.PermitsPerWindow"/>, so the sustained rate is only
+    /// observable once those permits are gone.
+    /// </summary>
+    private static Task SpendTheBurstAsync(HttpMessageInvoker invoker, int permits) =>
+        Task.WhenAll(Enumerable
+            .Range(0, permits)
+            .Select(_ => SendAsync(invoker, CancellationToken.None)));
+
+    /// <summary>
+    /// Queues far more requests than <paramref name="window"/> could release and counts how many
+    /// the limiter let through before the window closed.
+    /// </summary>
+    private static async Task<int> CountReleasedAsync(HttpMessageInvoker invoker, Duration window, int queued)
+    {
+        using CancellationTokenSource expiry = new();
+
+        // Boundary crossing (produce): converted inline, so the BCL type is never named.
+        expiry.CancelAfter(window.ToTimeSpan());
+
+        int released = 0;
+
+        await Task.WhenAll(Enumerable.Range(0, queued).Select(async _ =>
+        {
+            try
+            {
+                await SendAsync(invoker, expiry.Token);
+                Interlocked.Increment(ref released);
+            }
+            catch (OperationCanceledException)
+            {
+                // The window closed while this one was still queued, which is the normal way
+                // for all but the released requests to end.
+            }
+        }));
+
+        return released;
+    }
+
+    /// <summary>
+    /// Drives the handler directly rather than through <see cref="MassiveRestClient"/>: these two
+    /// tests spend a burst of hundreds of permits before they measure anything, and a URI build
+    /// per request would dominate what is meant to be a timing measurement.
+    /// </summary>
+    private static async Task SendAsync(HttpMessageInvoker invoker, CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, MassiveEndpoints.Production);
+        using HttpResponseMessage response = await invoker.SendAsync(request, cancellationToken);
+    }
 }

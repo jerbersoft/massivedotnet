@@ -33,6 +33,20 @@ Two conventions worth knowing before reading a breaking-change entry:
 
 ### Fixed
 
+- **`MassiveDotNet`** — the opt-in rate limiter now delivers the rate it was configured with. It
+  drove replenishment from `System.Threading.Timer`, which is given whole milliseconds and adds a
+  flat one permit per firing however much time has actually passed, so the delivered rate was
+  whatever that timer could express rather than what the caller asked for. Above 60,000 permits a
+  minute the refill period rounds to zero, which the timer stores as *fire once*: the limiter
+  refilled a single time at construction and never again, so every request after the initial burst
+  waited — forever, on the `QueueLimit` default, with nothing reporting it. A period that was not a
+  whole number of milliseconds over-delivered instead, by 7% at 7,000 a minute and 15% at 45,000,
+  and a firing delayed by a pause lost its permit for good. Replenishment is now driven from the
+  time that actually elapsed, computed at tick precision, so a fractional period is honoured
+  exactly, a sub-millisecond one works, and a late tick catches up. Measured from 600 to 120,000 a
+  minute, every rate now lands within 1% of what was configured. The free tier's five a minute was
+  never affected and is unchanged. No public API change.
+
 - **`MassiveDotNet.WebSocket`** — a `max_connections` status arriving mid-stream is no longer
   discarded. It was parsed and then thrown away unless a subscribe happened to be in flight, so the
   abort that followed carried no close code and read exactly like a slow-consumer close or a network

@@ -21,7 +21,25 @@ namespace MassiveDotNet.Http;
 /// </remarks>
 public sealed class MassiveRateLimitHandler : DelegatingHandler
 {
+    // How often the handler asks the limiter to replenish. This sets only how promptly a queued
+    // request is released; it is not the rate, which the limiter derives from the replenishment
+    // period below at tick precision (D43). Both are private constants rather than
+    // MassiveRateLimitOptions properties for D40's reason: that would be public surface under
+    // rules 10 and 14 for numbers no consumer can tune.
+    //
+    // The floor is 5ms because System.Threading.Timer is given whole milliseconds and stores a
+    // period of 0 as "fire once", so anything under 1ms would stop the ticker after one firing --
+    // the defect this replaced, arriving by a second route. Two hundred wakeups a second is noise
+    // beside the thousand-plus requests a second a caller who configured that rate is issuing.
+    private static readonly Duration MinTickInterval = Duration.FromMilliseconds(5);
+
+    // The cap keeps a slow allowance releasing promptly. At five a minute the period is twelve
+    // seconds, so without it a permit that misses a tick waits another six -- measured at 42.0s
+    // against an ideal 36.0. The cost is one wakeup a second while idle, which buys that back.
+    private static readonly Duration MaxTickInterval = Duration.FromSeconds(1);
+
     private readonly TokenBucketRateLimiter _limiter;
+    private readonly Timer _ticker;
     private bool _disposed;
 
     /// <summary>Initializes a new instance of the <see cref="MassiveRateLimitHandler"/> class.</summary>
@@ -38,8 +56,9 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
         // a burst at the end of one landing in the same server window as the next block.
         Duration period = options.Window / options.PermitsPerWindow;
 
-        // A period that rounds to nothing would make the limiter spin; one tick is the smallest
-        // interval the timer can express, and at that rate the allowance is not the constraint.
+        // Reachable only above roughly 600 million permits a minute, where the slice rounds away
+        // entirely and the limiter would refuse a period of zero. One tick is the smallest it can
+        // hold, and at ten million requests a second the allowance is not the constraint.
         if (period < Duration.FromTicks(1))
         {
             period = Duration.FromTicks(1);
@@ -52,10 +71,46 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
 
             // Boundary crossing (produce): converted inline, so the BCL type is never named.
             ReplenishmentPeriod = period.ToTimeSpan(),
-            AutoReplenishment = true,
+
+            // Replenishment is driven by the ticker below rather than by the limiter's own timer,
+            // and the difference is arithmetic rather than scheduling. The automatic path adds a
+            // flat TokensPerPeriod on every firing and trusts the timer to be close enough, so
+            // the rate becomes whatever the timer can express: truncated to whole milliseconds,
+            // stopped after one firing below a millisecond, and permanently a permit short for
+            // every firing a pause delayed. The manual path adds the fill rate times the time
+            // that actually elapsed, computed from this period's ticks, so a fractional period is
+            // honoured exactly and a late tick catches up (D43).
+            AutoReplenishment = false,
             QueueLimit = options.QueueLimit,
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
         });
+
+        Duration half = period / 2;
+        Duration interval =
+            half < MinTickInterval ? MinTickInterval :
+            half > MaxTickInterval ? MaxTickInterval :
+            half;
+
+        // What the clamp buys is a bound on lateness, not a rate. The limiter ignores a replenish
+        // arriving before a full period has elapsed and dates the next one from the moment it
+        // accepted rather than from when it was due, so a tick scheduled exactly one period after
+        // the last one lands a hair short from time to time and is skipped; the permit then waits
+        // for the tick after that. One interval is therefore the most a permit can be late, which
+        // is why the interval is clamped at both ends rather than simply tracking the period.
+        // Ticking early is free -- the limiter carries the time a skipped tick did not spend --
+        // so the only cost of a shorter interval is the wakeups.
+        //
+        // Measured on the free-tier default, whose period is 12 seconds, permits 6/7/8 arrived at
+        // 12.0/24.0/37.0s against an ideal 12/24/36: one interval late, once. The same run with
+        // the cap removed (a 6s interval) gave 42.0s, and with no clamp at all (12s) it happened
+        // to give 36.0s. The clamped rule is the one whose worst case is stated rather than lucky.
+        //
+        // Boundary crossing (produce): converted inline, so the BCL type is never named.
+        _ticker = new Timer(
+            static state => ((TokenBucketRateLimiter)state!).TryReplenish(),
+            _limiter,
+            interval.ToTimeSpan(),
+            interval.ToTimeSpan());
     }
 
     /// <summary>
@@ -119,9 +174,12 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
     {
         if (disposing && !_disposed)
         {
-            // The limiter owns a replenishment timer, so leaking one leaks a recurring callback
-            // for the lifetime of the process.
+            // Leaking either of these leaks a recurring callback for the lifetime of the process.
+            // The ticker goes first, and a firing already under way when it does is harmless:
+            // TryReplenish on a disposed limiter returns without touching anything, so the race
+            // cannot put an unhandled exception on a thread-pool thread.
             _disposed = true;
+            _ticker.Dispose();
             _limiter.Dispose();
         }
 
