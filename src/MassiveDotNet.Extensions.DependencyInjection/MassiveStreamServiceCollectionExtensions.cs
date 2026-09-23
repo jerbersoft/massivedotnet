@@ -82,7 +82,34 @@ public static partial class MassiveStreamServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(logger);
 
-        stream.Reconnected += count => LogReconnected(logger, count);
+        // Eviction rides on Reconnected rather than on a signal of its own, and the delta is
+        // tracked here for the same reason the two below track theirs: the counter is cumulative,
+        // so "how many are new since I last logged" is this bridge's question to answer, not the
+        // stream's. Reconnect is on by default, which is what makes this arm the one that matters
+        // -- an evicted connection normally comes back rather than stopping, so Faulted never fires
+        // and MassiveStreamEvictedException never reaches anyone; without this the eviction would
+        // be invisible on every default configuration (D42).
+        //
+        // Logged BEFORE the reconnect line: it is the reason that reconnect happened, and a reader
+        // scanning downward should meet the cause above the effect. Read inside the handler because
+        // that is the only moment the two are known to belong together.
+        //
+        // Rule 11: LastEvictionMessage is the server's own prose, which is the same class of value
+        // D35 already echoes verbatim for auth_failed. The key travels only in the SDK's own auth
+        // frame, never in a server reply, so no status message can carry one back --
+        // LogStreamHealthTests' sentinel assertion covers this arm along with the rest.
+        int reportedEvictions = 0;
+
+        stream.Reconnected += count =>
+        {
+            if (stream.EvictionCount > reportedEvictions)
+            {
+                reportedEvictions = stream.EvictionCount;
+                LogEvicted(logger, stream.LastEvictionMessage ?? string.Empty);
+            }
+
+            LogReconnected(logger, count);
+        };
 
         // The reconnect above and this are two halves of one story, and only together are they
         // honest: LogReconnected says the socket came back, and this says which subscriptions did
@@ -153,6 +180,13 @@ public static partial class MassiveStreamServiceCollectionExtensions
         Level = LogLevel.Warning,
         Message = "The Massive stream reconnected ({Count} so far). Messages sent while it was down were missed.")]
     private static partial void LogReconnected(ILogger logger, int count);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "The Massive stream was evicted by the server to make room for another connection on the same "
+            + "key: {Reason} Something else is using this key -- the fix is another connection on the plan or "
+            + "one fewer process, not a change to this consumer.")]
+    private static partial void LogEvicted(ILogger logger, string reason);
 
     [LoggerMessage(
         Level = LogLevel.Warning,

@@ -80,6 +80,24 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     private string? _pendingError;
     private string? _replayError;
 
+    // What the server said when it evicted THIS socket, and nothing once a new socket replaces it.
+    // Scoping it to one socket is the whole point: the status precedes the close it explains, so it
+    // is only the cause of the very next drop -- left armed for the connection's life it would
+    // charge an unrelated failure, minutes or hours later on a socket that was never evicted, to an
+    // eviction that had already been survived. Written on the read loop by OnStatus and by
+    // ConnectAsync's clear, read by StopPermanently on that same loop; Volatile for visibility only
+    // -- a reference assignment is already atomic -- because ConnectAsync also runs on a caller's
+    // thread for the very first connect (D42).
+    private string? _evictionPending;
+
+    // The cumulative half, and deliberately never cleared: a consumer asking "has this stream ever
+    // been evicted" is asking a different question from "did this particular drop happen because of
+    // one", and only the second is a property of a single socket. This pair is what makes an
+    // eviction visible at all under the DEFAULT configuration, where reconnect is on, the socket
+    // comes back, and Faulted therefore never fires -- see the remarks on EvictionCount.
+    private int _evictionCount;
+    private string? _lastEvictionMessage;
+
     public MassiveStreamConnection(
         MassiveStreamOptions options,
         MassiveMarket market,
@@ -120,6 +138,11 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         // Boundary crossing (produce): the domain Duration converts here and nowhere above.
         timeout.CancelAfter(_options.HandshakeTimeout.ToTimeSpan());
+
+        // A new socket was not the one that got evicted, so whatever the old one was told stops
+        // being the explanation for anything that happens from here (D42). The cumulative record
+        // below deliberately survives this -- only the pending cause is socket-scoped.
+        Volatile.Write(ref _evictionPending, null);
 
         _socket = _factory();
         await _socket.ConnectAsync(Endpoint, timeout.Token);
@@ -181,6 +204,12 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             return ticks == NoReconnectYet ? null : Instant.FromUnixTimeTicks(ticks);
         }
     }
+
+    /// <summary>How many times the server has evicted this connection for another on the same key.</summary>
+    public int EvictionCount => Volatile.Read(ref _evictionCount);
+
+    /// <summary>What the server said the last time it evicted this connection.</summary>
+    public string? LastEvictionMessage => Volatile.Read(ref _lastEvictionMessage);
 
     /// <summary>Raised after a successful reconnect, carrying the running count.</summary>
     public event Action<int>? Reconnected;
@@ -305,8 +334,19 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
             // WHY the stream stopped, D-W6/G5), or the fault never entered the reconnect filter above
             // at all (a JsonException, G3). Exactly one of those three stops reaches here, and this is
             // the only place that raises Faulted, so a consumer never sees it twice (G4).
-            StopPermanently(error);
-            throw;
+            Exception reported = StopPermanently(error);
+
+            // Rethrown as the exception the consumer was handed, so ReadLoopTask and Faulted never
+            // disagree about why the stream stopped -- the shape G5 already gives an authentication
+            // failure surfacing during a reconnect, where the substituted cause is what propagates
+            // rather than the drop that triggered the attempt. A bare `throw;` where nothing was
+            // substituted, which is every case but an eviction, keeps the original stack intact.
+            if (ReferenceEquals(reported, error))
+            {
+                throw;
+            }
+
+            throw reported;
         }
     }
 
@@ -612,14 +652,39 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     // a transient read-loop fault") is unchanged by this: the distinction that matters is terminal
     // vs transient, not fault vs dispose, and a transient drop's sequence must survive the reconnect
     // that resumes it.
-    private void StopPermanently(Exception cause)
+    //
+    // Returns the exception the consumer was actually handed, so the caller rethrows that rather
+    // than the raw cause and ReadLoopTask and Faulted are left agreeing about why the stream
+    // stopped.
+    private Exception StopPermanently(Exception cause)
     {
+        // The one place the eviction the server announced becomes the cause a consumer is given.
+        // It replaces the drop rather than joining it because the drop is the symptom and this is
+        // the reason: an evicted connection reports a bare abort with no close code, which reads
+        // exactly like a slow consumer or a network failure and sends an operator after their own
+        // throughput when the real problem is a second process on the same key (D42).
+        //
+        // Keyed on the pending slot, never on the drop's type: FrameReader reports a clean
+        // server-initiated close as MassiveStreamException and an abrupt one throws
+        // WebSocketException, and the vendor describes both shapes for an eviction.
+        //
+        // Constructed HERE and never thrown into the read loop. MassiveStreamEvictedException
+        // derives from MassiveStreamException, which the loop's filter treats as reconnectable, so
+        // throwing one would route it straight back into TryReconnectAsync -- reconnecting over the
+        // report rather than delivering it. This method runs only once the loop is already stopping
+        // for good, which is what makes the substitution safe.
+        Exception reported = Volatile.Read(ref _evictionPending) is { } evicted
+            ? new MassiveStreamEvictedException(evicted, cause)
+            : cause;
+
         // Through EventRaiser, so one throwing subscriber loses only its own notification -- never
         // its neighbours', and never CompleteAllSinks() below, which is what a bare Invoke here
         // skipped when a handler threw (finding 2's original repro).
-        EventRaiser.Raise(Faulted, cause);
+        EventRaiser.Raise(Faulted, reported);
 
         CompleteAllSinks();
+
+        return reported;
     }
 
     // Shared by StopPermanently and DisposeAsync: both are the same "nothing further will ever
@@ -769,6 +834,18 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
     {
         if (status.Status != StatusMessage.Success)
         {
+            // Recorded for the connection AND then offered to RecordRefusal, rather than routed to
+            // one or the other. Both reports are true and they answer different questions: the
+            // connection is being evicted, and a subscribe in flight when it arrives genuinely will
+            // not be honoured -- which is the shape observed live on 2026-09-09, where this status
+            // reached the caller only because D37's refusal slot happened to be armed. Recording
+            // here consumes nothing RecordRefusal needs, so the acknowledgement bookkeeping behind
+            // it is untouched (D42).
+            if (status.Status == StatusMessage.MaxConnections)
+            {
+                RecordEviction(status);
+            }
+
             RecordRefusal(status);
             return;
         }
@@ -803,6 +880,33 @@ internal sealed partial class MassiveStreamConnection : IAsyncDisposable
                 _pendingAcknowledgements?.TrySetResult();
             }
         }
+    }
+
+    // Keeps the server's reason for evicting this connection, so the drop that follows can name a
+    // cause instead of reporting a bare abort nobody can attribute (#69, D42).
+    //
+    // Raises NOTHING, which is D33's deadlock shape rather than mere caution: this runs ON the read
+    // loop, so a handler invoked from here runs there too, and a handler that called back into the
+    // connection would wait for an acknowledgement only this loop can deliver -- while this loop is
+    // inside the handler. The signal a consumer gets instead is the exception StopPermanently
+    // substitutes, or -- when the stream reconnects and therefore never stops -- the counter and
+    // message below, read from a Reconnected handler.
+    //
+    // Takes no lock, unlike RecordRefusal just after it. Nothing here is read together with
+    // anything else, so there is no pair that could be seen half-updated the way _pendingAcks and
+    // _pendingAcknowledgements can, and the Volatile writes carry the visibility a reader on
+    // another thread is owed. The count's read-modify-write needs no interlock for the same reason
+    // _reconnectCount's does not: the read loop is its only writer.
+    //
+    // An empty message still counts. RecordRefusal drops one because a subscribe's fallback prose
+    // already describes silence better than an empty string would, but an eviction has no such
+    // fallback -- "the server evicted this connection and said nothing" is the whole finding, and
+    // discarding it would put the SDK back to reporting a bare drop.
+    private void RecordEviction(in StatusMessage status)
+    {
+        Volatile.Write(ref _evictionPending, status.Message);
+        Volatile.Write(ref _lastEvictionMessage, status.Message);
+        Volatile.Write(ref _evictionCount, _evictionCount + 1);
     }
 
     // Keeps the server's reason for a subscribe it will not honour, so the shortfall can report

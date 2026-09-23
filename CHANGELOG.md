@@ -19,7 +19,27 @@ Two conventions worth knowing before reading a breaking-change entry:
 
 ## [Unreleased]
 
+### Added
+
+- **`MassiveDotNet.WebSocket`** — `MassiveStreamEvictedException`, plus
+  `MassiveStockStream.EvictionCount` and `MassiveStockStream.LastEvictionMessage`. Massive answers a
+  connection it is about to evict with a `max_connections` status and then closes it, so eviction is
+  the one documented disconnect cause that announces itself. The exception carries the server's
+  message verbatim and reaches a consumer through the existing `Faulted` event; it is **not**
+  terminal, and the reconnect policy is unchanged. Because reconnect is on by default an eviction
+  normally ends in a reconnect rather than a stop, which is what the two properties are for: read
+  them from a `Reconnected` handler to tell an eviction apart from an ordinary drop. The DI
+  package's `LogStreamHealth` bridge reports one at `Warning` beside the reconnect it caused.
+
 ### Fixed
+
+- **`MassiveDotNet.WebSocket`** — a `max_connections` status arriving mid-stream is no longer
+  discarded. It was parsed and then thrown away unless a subscribe happened to be in flight, so the
+  abort that followed carried no close code and read exactly like a slow-consumer close or a network
+  drop — an operator would audit their own consumer's throughput when the real problem was a second
+  process displacing them on the same key. The status now also records the connection's cause, and
+  still refuses the subscribe it arrives during, with that subscribe's acknowledgement bookkeeping
+  untouched. A drop no status preceded reports exactly what it reported before.
 
 - **`MassiveDotNet`** — `LocalDateJsonConverter` and `InstantJsonConverter` no longer render an
   arbitrarily long value into their failure messages. Both refused a value past 64 bytes already,

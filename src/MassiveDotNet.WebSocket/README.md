@@ -52,6 +52,14 @@ Reconnect is automatic, with backoff, and replays every subscription. If the rep
 acknowledgements fall short, `SubscriptionsLost` names the pairs that went unanswered rather than
 leaving you with a connection that looks healthy.
 
+**An eviction says so.** Massive closes a connection to make room for another one on the same key,
+and it announces that first — the only disconnect cause that does. Without it, the abort reads
+exactly like a slow consumer or a network drop, and you go looking at your own throughput when the
+real problem is a second process. `EvictionCount` and `LastEvictionMessage` carry the server's own
+words; read them from a `Reconnected` handler, since reconnect is on by default and an eviction
+normally ends in one. With reconnect off, `Faulted` carries a `MassiveStreamEvictedException`
+instead. The SDK reports and keeps reconnecting — what to do about the other process is your call.
+
 Native AOT clean, hand-written event converters reading straight off `Utf8JsonReader`, and parsing
 a frame allocates nothing beyond the event itself.
 

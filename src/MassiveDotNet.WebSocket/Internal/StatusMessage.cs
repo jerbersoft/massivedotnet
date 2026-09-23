@@ -15,6 +15,12 @@ internal readonly record struct StatusMessage(string Status, string Message)
     public const string AuthFailed = "auth_failed";
     public const string Success = "success";
 
+    // Sent to a connection the server is about to evict so another may take its place, and then the
+    // connection is closed. Unlike every status above it, this one is aimed at the whole connection
+    // rather than at a request the SDK has in flight, which is why it needed somewhere of its own
+    // to be recorded (D42).
+    public const string MaxConnections = "max_connections";
+
     private const string ModelName = nameof(StatusMessage);
 
     /// <summary>

@@ -99,6 +99,39 @@ public sealed class MassiveStockStream : IAsyncDisposable
     /// <summary>When the connection was last re-established.</summary>
     public Instant? LastReconnected => _connection.LastReconnected;
 
+    /// <summary>
+    /// How many times the server has evicted this connection to make room for another on the same
+    /// key.
+    /// </summary>
+    /// <remarks>
+    /// Eviction is the only documented disconnect cause that announces itself, and without this it
+    /// is the one a consumer cannot tell apart from a slow-consumer close or a network drop. Read
+    /// it from a <see cref="Reconnected"/> handler: reconnect is on by default, so an eviction
+    /// normally ends in a reconnect rather than a stop, and <see cref="Faulted"/> -- which carries
+    /// <see cref="MassiveStreamEvictedException"/> -- fires only for a stream configured not to
+    /// reconnect (D42).
+    /// <para>
+    /// A rising count while <see cref="ReconnectCount"/> rises with it means something else is
+    /// using this key: on stocks the older connection is the one closed, so two processes that both
+    /// reconnect will keep displacing each other indefinitely. The SDK does not intervene -- the
+    /// remedy is a second connection on the plan, or one fewer process, and neither is the SDK's
+    /// call to make.
+    /// </para>
+    /// </remarks>
+    public int EvictionCount => _connection.EvictionCount;
+
+    /// <summary>
+    /// What the server said the last time it evicted this connection, verbatim, or
+    /// <see langword="null"/> if it never has.
+    /// </summary>
+    /// <remarks>
+    /// Reported rather than categorised, as <see cref="MassiveStreamAuthenticationException.ServerMessage"/>
+    /// is (D35). Unlike the pending cause behind <see cref="MassiveStreamEvictedException"/>, this
+    /// is cumulative and survives every reconnect: it answers "has this stream ever been evicted",
+    /// which is a different question from whether any particular drop was one.
+    /// </remarks>
+    public string? LastEvictionMessage => _connection.LastEvictionMessage;
+
     /// <summary>Raised after a reconnect, carrying the running count.</summary>
     /// <remarks>A reconnect means messages were missed; the protocol offers no way to recover them.</remarks>
     public event Action<int>? Reconnected

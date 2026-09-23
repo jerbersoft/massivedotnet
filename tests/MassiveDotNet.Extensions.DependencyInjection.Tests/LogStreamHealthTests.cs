@@ -285,4 +285,108 @@ public sealed class LogStreamHealthTests
         Assert.Contains("because a topic buffer was full", captured, StringComparison.Ordinal);
         Assert.Contains("because the wire sent a value", captured, StringComparison.Ordinal);
     }
+
+    // Reconnect is on by default, so an eviction normally ends in a reconnect rather than a stop:
+    // Faulted never fires and MassiveStreamEvictedException never reaches anyone. This arm is
+    // therefore the only thing that makes an eviction visible on a default configuration, which is
+    // the whole point of recording it as state as well as a cause (D42).
+    //
+    // What it has to distinguish is the pair of reconnects: the first was caused by an eviction and
+    // the second was not. A bridge that logged the eviction on every reconnect would send an
+    // operator looking for a second process on the key long after the one that was there had gone.
+    //
+    // Three sockets and its own options rather than the shared ConnectAsync helper: that helper
+    // stocks two handshakes and leaves the default half-second backoff in place, and this needs a
+    // third connect and two backoffs it is not worth waiting out.
+    [Fact]
+    public async Task AnEvictionIsLoggedOnceForTheReconnectItCaused()
+    {
+        FakeWebSocket[] sockets = [new(), new(), new()];
+
+        foreach (FakeWebSocket socket in sockets)
+        {
+            socket.EnqueueText(Connected);
+            socket.EnqueueText(AuthSuccess);
+        }
+
+        int created = 0;
+        MassiveStreamClient client = new(
+            new MassiveStreamOptions
+            {
+                ApiKey = SentinelApiKey,
+                Reconnect = new MassiveStreamReconnectOptions
+                {
+                    InitialBackoff = Duration.FromMilliseconds(1),
+                    MaxBackoff = Duration.FromMilliseconds(5),
+                    Jitter = 0,
+                },
+            },
+            new FakeClock(Instant.FromUnixTimeSeconds(0)));
+
+        await using MassiveStockStream stream =
+            await client.ConnectStocksAsync(() => sockets[created++], Ct);
+
+        CapturingLoggerProvider capture = new();
+        using ILoggerFactory factory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(capture);
+        });
+
+        stream.LogStreamHealth(factory.CreateLogger("stream-health-test"));
+
+        TaskCompletionSource firstReconnect = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource secondReconnect = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        stream.Reconnected += count =>
+        {
+            if (count == 1)
+            {
+                firstReconnect.TrySetResult();
+            }
+            else if (count == 2)
+            {
+                secondReconnect.TrySetResult();
+            }
+        };
+
+        sockets[0].EnqueueText(
+            """[{"ev":"status","status":"max_connections","message":"Maximum number of websocket connections exceeded. "}]""");
+        sockets[0].AbortNext();
+
+        await firstReconnect.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), Ct);
+
+        Assert.Contains("evicted by the server", capture.Text, StringComparison.Ordinal);
+
+        // The server's own words reach the log verbatim, which is the point of keeping them: an
+        // operator reading "connections exceeded" knows to look for a second process, where the
+        // bare abort this replaced told them to go and audit their own throughput.
+        Assert.Contains(
+            "Maximum number of websocket connections exceeded.", capture.Text, StringComparison.Ordinal);
+
+        int afterFirst = Occurrences(capture.Text, "evicted by the server");
+        Assert.Equal(1, afterFirst);
+
+        // A second reconnect with no eviction behind it. EvictionCount has not moved, so the delta
+        // check must keep the line from repeating.
+        sockets[1].AbortNext();
+        await secondReconnect.Task.WaitAsync(Duration.FromSeconds(5).ToTimeSpan(), Ct);
+
+        Assert.Equal(1, Occurrences(capture.Text, "evicted by the server"));
+        Assert.Contains("reconnected (2 so far)", capture.Text, StringComparison.Ordinal);
+    }
+
+    private static int Occurrences(string haystack, string needle)
+    {
+        int count = 0;
+
+        for (int i = haystack.IndexOf(needle, StringComparison.Ordinal);
+             i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
 }
