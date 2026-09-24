@@ -256,6 +256,82 @@ public sealed class RateLimitHandlerTests
             $"The limiter released {rate:N0} a second against a configured {configured:N0}.");
     }
 
+    [Fact]
+    public async Task DoesNotReleaseASecondBurstAfterSittingIdle()
+    {
+        // The limiter's clock freezes while the bucket is full: TryReplenish returns before it
+        // dates itself, so time spent idle stays banked and pays out in one lump the moment a
+        // request drains the bucket. The caller then gets their burst, and the whole allowance
+        // again immediately after it -- on the free tier, ten requests inside one second against
+        // a configured five a minute.
+        //
+        // Every gate written for #70 spends the burst before it measures anything, so the bucket
+        // is never left full and stale and this path went entirely unexercised. This one idles
+        // first, which is the whole difference.
+        //
+        // One-sided like its #70 siblings: an upper bound on what the limiter hands back, which
+        // load and jitter can only lower.
+        ScriptedHandler inner = new(HttpStatusCode.OK);
+        MassiveRateLimitOptions limit = new()
+        {
+            PermitsPerWindow = 40,
+            Window = Duration.FromSeconds(1),
+        };
+
+        using MassiveRateLimitHandler handler = new(limit) { InnerHandler = inner };
+        using HttpMessageInvoker invoker = new(handler);
+
+        // Longer than the window, with the bucket full and untouched throughout. That is what
+        // banks the credit: sixty periods' worth, against a bucket that holds forty.
+        //
+        // Boundary crossing (produce): converted inline, so the BCL type is never named.
+        await Task.Delay(Duration.FromMilliseconds(1_500).ToTimeSpan(), Ct);
+
+        await SpendTheBurstAsync(invoker, limit.PermitsPerWindow);
+
+        // Four tick intervals. The period is 25ms, so honest replenishment owes at most two
+        // permits over this window; the regression pays the whole forty-permit allowance on the
+        // first tick after the drain.
+        await Task.Delay(Duration.FromMilliseconds(50).ToTimeSpan(), Ct);
+
+        int available = handler.AvailablePermits;
+
+        Assert.True(
+            available <= 8,
+            $"The limiter released a second burst after sitting idle: {available} permits were " +
+            $"available 50ms after the initial burst of {limit.PermitsPerWindow} was spent.");
+    }
+
+    [Fact]
+    public async Task KeepsTheWholeBurstAvailableAfterSittingIdle()
+    {
+        // The fix above must not be paid for out of the burst, and the obvious form of it is.
+        // Nudging the limiter on every tick also stops the second burst, but it spends a permit
+        // each time whether or not the credit to replace it has accrued, so a slow allowance sits
+        // permanently one short -- measured at four of five on the free tier's own parameters,
+        // which is a 20% haircut on the thing the throttle exists to make usable. The nudge is
+        // therefore gated on a full period's credit already being banked, which is exactly the
+        // condition that makes it net-zero.
+        //
+        // A gauge read rather than a timing assertion, so a loaded runner has nothing to fail
+        // here: the bucket cannot exceed its limit, and nothing is consuming from it.
+        MassiveRateLimitOptions limit = new()
+        {
+            PermitsPerWindow = 40,
+            Window = Duration.FromSeconds(1),
+        };
+
+        using MassiveRateLimitHandler handler = new(limit)
+        {
+            InnerHandler = new ScriptedHandler(HttpStatusCode.OK),
+        };
+
+        // Boundary crossing (produce): converted inline, so the BCL type is never named.
+        await Task.Delay(Duration.FromMilliseconds(1_500).ToTimeSpan(), Ct);
+
+        Assert.Equal(limit.PermitsPerWindow, handler.AvailablePermits);
+    }
+
     /// <summary>
     /// Spends the initial burst. The bucket starts full at
     /// <see cref="MassiveRateLimitOptions.PermitsPerWindow"/>, so the sustained rate is only

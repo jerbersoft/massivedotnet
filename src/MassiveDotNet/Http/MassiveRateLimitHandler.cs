@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading.RateLimiting;
 using NodaTime;
 
@@ -40,6 +41,18 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
 
     private readonly TokenBucketRateLimiter _limiter;
     private readonly Timer _ticker;
+    private readonly int _tokenLimit;
+
+    // Stopwatch counter units rather than a Duration, so the comparison in Tick is raw integer
+    // arithmetic against Stopwatch.GetTimestamp() and no BCL temporal type is named (rule 12).
+    private readonly long _stalenessTicks;
+
+    // When the handler last knew its own clock was in step with the limiter's -- either because
+    // the bucket had room, so the limiter accepted the elapsed time and dated itself from it, or
+    // because a nudge made room for it to. Read and written only from Tick, which the guard below
+    // keeps to one thread at a time.
+    private long _lastFreshTimestamp;
+    private int _ticking;
     private bool _disposed;
 
     /// <summary>Initializes a new instance of the <see cref="MassiveRateLimitHandler"/> class.</summary>
@@ -85,6 +98,14 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
         });
 
+        _tokenLimit = options.PermitsPerWindow;
+
+        // One period, in the units Stopwatch.GetTimestamp() counts. Floored at one count so a
+        // period shorter than the counter's own resolution still compares as "a period has
+        // passed" rather than as zero, which would nudge on every tick.
+        _stalenessTicks = Math.Max(1L, (long)(period.TotalSeconds * Stopwatch.Frequency));
+        _lastFreshTimestamp = Stopwatch.GetTimestamp();
+
         Duration half = period / 2;
         Duration interval =
             half < MinTickInterval ? MinTickInterval :
@@ -107,10 +128,96 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
         //
         // Boundary crossing (produce): converted inline, so the BCL type is never named.
         _ticker = new Timer(
-            static state => ((TokenBucketRateLimiter)state!).TryReplenish(),
-            _limiter,
+            static state => ((MassiveRateLimitHandler)state!).Tick(),
+            this,
             interval.ToTimeSpan(),
             interval.ToTimeSpan());
+    }
+
+    /// <summary>
+    /// One firing of the ticker: replenish, and keep the limiter's clock from freezing while the
+    /// bucket is full.
+    /// </summary>
+    private void Tick()
+    {
+        // System.Threading.Timer starts a new callback on schedule whether or not the last one
+        // has returned, and two concurrent nudges would spend two permits where the accrued
+        // credit only guarantees one back. Skipping an overlapping firing costs nothing: the next
+        // is at most one interval away, and the limiter carries the time this one did not spend.
+        if (Interlocked.Exchange(ref _ticking, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            // Null rather than a throw is how a disposed limiter answers this, and the race is
+            // real: Timer.Dispose() does not wait for a firing already under way.
+            //
+            // This is the one allocation the ticker makes -- RateLimiterStatistics is a class, so
+            // a full bucket costs about 48 bytes a tick: 200 a second at the 5ms floor, one a
+            // second on the free tier, and none of it on a request path, so D31's ceilings do not
+            // see it. Checking only when the staleness threshold is crossed would avoid most of
+            // them, and was rejected: observing fullness every tick is what keeps the nudge
+            // honest, because a caller trickling at exactly the configured rate leaves the bucket
+            // full at some instants and not others, and a check that samples once a period would
+            // catch a full one and nudge against credit the limiter had already paid out.
+            if (_limiter.GetStatistics() is not { } statistics)
+            {
+                return;
+            }
+
+            long now = Stopwatch.GetTimestamp();
+
+            if (statistics.CurrentAvailablePermits < _tokenLimit)
+            {
+                // The ordinary path, and the only one that existed before. The bucket has room,
+                // so the limiter accepts the elapsed time, adds the fill rate times it, and dates
+                // itself from now -- which is what D43 bought and is unchanged.
+                _limiter.TryReplenish();
+                _lastFreshTimestamp = now;
+                return;
+            }
+
+            // A full bucket is where the limiter's clock freezes: TryReplenish returns early
+            // without dating itself, so the time spent idle is still banked and pays out in one
+            // lump the moment a request drains the bucket -- a second burst of up to the whole
+            // allowance, at a rate nobody configured (#72).
+            //
+            // Taking a permit gives the limiter the room it needs to accept the replenish, and
+            // accepting it is what carries its clock forward, discarding credit a full bucket
+            // could never have held anyway. Nudging on every tick would also do that, but it
+            // spends a permit whether or not the credit to replace it has accrued, leaving a slow
+            // allowance permanently one short -- four of five on the free tier. The staleness
+            // guard is what makes this net-zero instead: below it, the two clocks are close
+            // enough that there is nothing banked to discard, and above it a full period's credit
+            // is waiting, so the replenish is guaranteed to return the permit that was taken.
+            if (now - _lastFreshTimestamp < _stalenessTicks)
+            {
+                return;
+            }
+
+            // Not checked for IsAcquired: the bucket was full a moment ago, so this fails only if
+            // a request drained it in between -- in which case the replenish below takes the
+            // ordinary path and dates the limiter from now regardless, which is the outcome this
+            // wanted.
+            using (_limiter.AttemptAcquire(permitCount: 1))
+            {
+                _limiter.TryReplenish();
+            }
+
+            _lastFreshTimestamp = now;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposal races the ticker, and an unhandled exception on a thread-pool timer
+            // callback ends the process. TryReplenish alone was safe on a disposed limiter, which
+            // is why D43 could state the race was harmless; taking a permit is not.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _ticking, 0);
+        }
     }
 
     /// <summary>
@@ -175,9 +282,11 @@ public sealed class MassiveRateLimitHandler : DelegatingHandler
         if (disposing && !_disposed)
         {
             // Leaking either of these leaks a recurring callback for the lifetime of the process.
-            // The ticker goes first, and a firing already under way when it does is harmless:
-            // TryReplenish on a disposed limiter returns without touching anything, so the race
-            // cannot put an unhandled exception on a thread-pool thread.
+            // The ticker goes first, and Timer.Dispose() does not wait for a firing already under
+            // way, so one can still be inside Tick when the limiter goes. That used to be harmless
+            // because the callback was a bare TryReplenish, which returns without touching a
+            // disposed limiter; it now reads statistics and takes a permit, so Tick catches
+            // ObjectDisposedException itself rather than putting one on a thread-pool thread.
             _disposed = true;
             _ticker.Dispose();
             _limiter.Dispose();

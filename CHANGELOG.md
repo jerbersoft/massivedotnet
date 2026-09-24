@@ -17,6 +17,23 @@ Two conventions worth knowing before reading a breaking-change entry:
   unreleased one ships marked `[Experimental]`. Neither is removed, and nothing is ever silently
   omitted.
 
+## [Unreleased]
+
+### Fixed
+
+- **`MassiveDotNet`** — the opt-in rate limiter no longer releases a second burst after sitting
+  idle. A regression introduced in 0.4.0: replenishment moved off the limiter's own timer onto the
+  handler's, and while the bucket is full the limiter returns from a replenish without recording
+  that any time has passed. Its clock therefore froze for as long as a caller was idle, and the
+  first refill after a request finally drained the bucket credited the whole idle at once, capped
+  at the allowance — so a caller got their burst and then the entire allowance again immediately
+  behind it. On the free tier's five a minute, a minute of quiet released ten requests inside one
+  second. The handler now keeps the limiter's clock moving while the bucket is full, at no cost to
+  the burst: after any idle the first five still go out at once, and the sixth, seventh and eighth
+  land at 12, 24 and 36 seconds exactly as before. Sustained rates are unaffected — the correction
+  cannot engage while requests are flowing, since it only applies to a bucket that is already full.
+  0.3.0 and earlier are not affected. No public API change.
+
 ## [0.4.0] — 2026-09-24
 
 ### Added
