@@ -17,7 +17,7 @@ Two conventions worth knowing before reading a breaking-change entry:
   unreleased one ships marked `[Experimental]`. Neither is removed, and nothing is ever silently
   omitted.
 
-## [0.4.0] — 2026-09-23
+## [0.4.0] — 2026-09-24
 
 ### Added
 
