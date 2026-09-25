@@ -9,8 +9,15 @@ namespace MassiveDotNet;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Only HTTP 429 and 5xx are retried. Every other 4xx describes a request that will fail again
-/// however many times it is sent, so retrying one spends quota to reach the same answer.
+/// HTTP 429 and 5xx are retried, and so is a transport failure that describes the connection
+/// rather than an answer, such as a reset; <see cref="Http.MassiveRetryHandler"/> lists the exact
+/// set. Every other 4xx describes a request that will fail again however many times it is sent,
+/// so retrying one spends quota to reach the same answer.
+/// </para>
+/// <para>
+/// A timeout is not retried. <see cref="MassiveClientOptions.Timeout"/> bounds every attempt and
+/// every backoff of one call together, so a caller who wants a timed-out request retried makes a
+/// fresh call.
 /// </para>
 /// <para>
 /// A request carrying content is never retried, since re-sending a consumed body is not
