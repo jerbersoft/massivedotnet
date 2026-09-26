@@ -101,11 +101,11 @@ public sealed partial record BalanceSheet
 
     /// <summary>The fiscal quarter number (1, 2, 3, or 4) for the reporting period.</summary>
     [JsonPropertyName("fiscal_quarter")]
-    public int? FiscalQuarter { get; init; }
+    public long? FiscalQuarter { get; init; }
 
     /// <summary>The fiscal year for the reporting period.</summary>
     [JsonPropertyName("fiscal_year")]
-    public int? FiscalYear { get; init; }
+    public long? FiscalYear { get; init; }
 
     /// <summary>
     /// Intangible asset representing the excess of purchase price over fair value of net assets
