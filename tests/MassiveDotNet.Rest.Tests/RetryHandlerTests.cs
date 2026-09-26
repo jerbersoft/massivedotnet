@@ -210,6 +210,106 @@ public sealed class RetryHandlerTests
         Assert.Equal(1, inner.RequestCount);
     }
 
+    [Theory]
+    [InlineData(HttpRequestError.Unknown)]
+    [InlineData(HttpRequestError.NameResolutionError)]
+    [InlineData(HttpRequestError.ConnectionError)]
+    [InlineData(HttpRequestError.SecureConnectionError)]
+    [InlineData(HttpRequestError.HttpProtocolError)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task RetriesATransportFailureThatReachedNoAnswer(HttpRequestError error)
+    {
+        // Unknown is the one that matters most: a connection reset mid-send is an IOException,
+        // which the runtime reports under Unknown rather than ConnectionError (#73).
+        TransportFailureHandler inner = new(error, failures: 2);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(inner, Fast(maxAttempts: 3));
+
+        using (client)
+        using (transport)
+        {
+            await client.Reference.ListTickersAsync(cancellationToken: Ct);
+        }
+
+        Assert.Equal(3, inner.RequestCount);
+    }
+
+    [Fact]
+    public async Task SurfacesTheTransportFailureOnceTheAttemptCapIsReached()
+    {
+        // One failure more than the cap allows: a handler that ignored the cap would reach the
+        // success behind it and fail this test, rather than retrying for ever and hanging it.
+        TransportFailureHandler inner = new(HttpRequestError.Unknown, failures: 4);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(inner, Fast(maxAttempts: 3));
+
+        HttpRequestException exception;
+
+        using (client)
+        using (transport)
+        {
+            exception = await Assert.ThrowsAsync<HttpRequestException>(
+                () => client.Reference.ListTickersAsync(cancellationToken: Ct));
+        }
+
+        Assert.Equal(HttpRequestError.Unknown, exception.HttpRequestError);
+        Assert.Equal(3, inner.RequestCount);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ConfigurationLimitExceeded)]
+    [InlineData(HttpRequestError.VersionNegotiationError)]
+    [InlineData(HttpRequestError.UserAuthenticationError)]
+    [InlineData(HttpRequestError.ProxyTunnelError)]
+    [InlineData(HttpRequestError.ExtendedConnectNotSupported)]
+    public async Task NeverRetriesATransportFailureThatWouldRecurIdentically(HttpRequestError error)
+    {
+        // These describe the answer, the request or the configuration rather than the
+        // connection, so a second attempt fails the same way: the transport's non-429 4xx.
+        TransportFailureHandler inner = new(error, failures: int.MaxValue);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(inner, Fast());
+
+        using (client)
+        using (transport)
+        {
+            await Assert.ThrowsAsync<HttpRequestException>(
+                () => client.Reference.ListTickersAsync(cancellationToken: Ct));
+        }
+
+        Assert.Equal(1, inner.RequestCount);
+    }
+
+    [Fact]
+    public async Task DoesNotRetryATransportFailureOnceTheTokenIsCancelled()
+    {
+        // The runtime's own handler reports a failure under a cancelled token as a cancellation,
+        // but an inner handler need not. With no backoff to wait out, only the handler's own
+        // check stops a second attempt going out for a caller who has already given up; the
+        // same check is what leaves an HttpClient.Timeout, which cancels this token, unretried.
+        using CancellationTokenSource cts = new();
+        TransportFailureHandler inner = new(HttpRequestError.Unknown, failures: int.MaxValue)
+        {
+            BeforeFailing = cts.Cancel,
+        };
+
+        MassiveRetryOptions retry = new()
+        {
+            MaxAttempts = 3,
+            InitialBackoff = Duration.Zero,
+            MaxBackoff = Duration.Zero,
+        };
+
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(inner, retry);
+
+        using (client)
+        using (transport)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => client.Reference.ListTickersAsync(cancellationToken: cts.Token));
+        }
+
+        Assert.Equal(1, inner.RequestCount);
+    }
+
     [Fact]
     public async Task DoesNotRetryARequestCarryingContent()
     {

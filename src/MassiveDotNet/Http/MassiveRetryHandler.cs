@@ -8,9 +8,27 @@ namespace MassiveDotNet.Http;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Only HTTP 429 and 5xx are retried, along with the transport-level failures that describe a
-/// connection rather than an answer. Every other 4xx describes a request that will fail
-/// identically however often it is sent.
+/// Retried: HTTP 429 and 5xx, and a transport failure that describes the connection rather than
+/// an answer, meaning an <see cref="HttpRequestException"/> whose
+/// <see cref="HttpRequestException.HttpRequestError"/> is <see cref="HttpRequestError.Unknown"/>,
+/// <see cref="HttpRequestError.NameResolutionError"/>, <see cref="HttpRequestError.ConnectionError"/>,
+/// <see cref="HttpRequestError.SecureConnectionError"/>, <see cref="HttpRequestError.HttpProtocolError"/>
+/// or <see cref="HttpRequestError.ResponseEnded"/>. <see cref="HttpRequestError.Unknown"/> is on
+/// that list because the runtime reports a connection reset mid-send under it. Every other 4xx,
+/// and every other transport failure, describes a request, an answer or a configuration that will
+/// fail identically however often it is sent.
+/// </para>
+/// <para>
+/// Only a failure before the response headers arrive can be retried here. The transport reads
+/// with <see cref="HttpCompletionOption.ResponseHeadersRead"/>, so this handler hands a response on
+/// once its headers are in, and a connection that breaks while the body is read surfaces from
+/// deserialization, outside it.
+/// </para>
+/// <para>
+/// A timeout is never retried here. <see cref="HttpClient.Timeout"/> cancels the token this
+/// handler runs under, so it bounds every attempt and every backoff of one call together, and
+/// once it fires nothing inside the handler can send again. A caller who wants a timed-out
+/// request retried makes a fresh call, which gets a fresh timeout.
 /// </para>
 /// <para>
 /// <strong>This handler must sit inside <see cref="MassiveAuthenticationHandler"/>.</strong> Under
@@ -62,7 +80,23 @@ public sealed class MassiveRetryHandler : DelegatingHandler
 
         for (int attempt = 1; ; attempt++)
         {
-            HttpResponseMessage response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            HttpResponseMessage response;
+
+            try
+            {
+                response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException exception) when (
+                attempt < _options.MaxAttempts
+                && !cancellationToken.IsCancellationRequested
+                && IsRetryable(exception.HttpRequestError))
+            {
+                // No answer arrived, so there is no Retry-After to honour and no response to
+                // dispose. A cancelled token means the caller gave up or HttpClient.Timeout fired,
+                // and either way this failure is its consequence, not something to send again for.
+                await WaitAsync(ComputeBackoff(attempt), cancellationToken).ConfigureAwait(false);
+                continue;
+            }
 
             if (attempt >= _options.MaxAttempts || !IsRetryable(response.StatusCode))
             {
@@ -92,16 +126,30 @@ public sealed class MassiveRetryHandler : DelegatingHandler
             // will see it now that a further attempt is going out.
             response.Dispose();
 
-            if (backoff > Duration.Zero)
-            {
-                // Boundary crossing (produce): converted inline at the BCL call site.
-                await Task.Delay(backoff.ToTimeSpan(), cancellationToken).ConfigureAwait(false);
-            }
+            await WaitAsync(backoff, cancellationToken).ConfigureAwait(false);
         }
     }
 
+    private static Task WaitAsync(Duration backoff, CancellationToken cancellationToken) =>
+        backoff > Duration.Zero
+            // Boundary crossing (produce): converted inline at the BCL call site.
+            ? Task.Delay(backoff.ToTimeSpan(), cancellationToken)
+            : Task.CompletedTask;
+
     private static bool IsRetryable(HttpStatusCode status) =>
         status == HttpStatusCode.TooManyRequests || (int)status >= 500;
+
+    // The categories that describe the connection: no answer arrived, so another attempt can
+    // succeed. Unknown is here because the runtime reports a reset mid-send under it rather than
+    // under ConnectionError (#73). An allow-list, so a category a later runtime adds is not
+    // retried until someone decides it should be.
+    private static bool IsRetryable(HttpRequestError error) =>
+        error is HttpRequestError.Unknown
+            or HttpRequestError.NameResolutionError
+            or HttpRequestError.ConnectionError
+            or HttpRequestError.SecureConnectionError
+            or HttpRequestError.HttpProtocolError
+            or HttpRequestError.ResponseEnded;
 
     private Duration ComputeBackoff(int attempt)
     {

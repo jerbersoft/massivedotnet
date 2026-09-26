@@ -17,6 +17,22 @@ Two conventions worth knowing before reading a breaking-change entry:
   unreleased one ships marked `[Experimental]`. Neither is removed, and nothing is ever silently
   omitted.
 
+## [Unreleased]
+
+### Fixed
+
+- **`MassiveDotNet`** — the opt-in retry now retries a broken connection, as its documentation
+  always said it did (#73). Until now it retried on HTTP status alone, so a connection reset
+  failed the call on its first attempt however high `MaxAttempts` was set. It now retries an
+  `HttpRequestException` thrown before the response headers arrive, within the same
+  `MaxAttempts` and backoff, when its `HttpRequestError` describes the connection: `Unknown`
+  (which is how the runtime reports a reset mid-send), `NameResolutionError`, `ConnectionError`,
+  `SecureConnectionError`, `HttpProtocolError` or `ResponseEnded`. The other categories fail the
+  same way on every attempt and still surface at once. A timeout is still not retried, and cannot
+  be: `Timeout` bounds every attempt and backoff of a call together. That is now stated on
+  `MassiveClientOptions.Timeout`, `MassiveRetryOptions` and the handler, along with the one other
+  failure the handler cannot reach, a connection that breaks while a body is being read (D44).
+
 ## [0.4.1] — 2026-09-24
 
 ### Fixed

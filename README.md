@@ -248,7 +248,7 @@ using MassiveRestClient client = new(new MassiveClientOptions
         Window = Duration.FromMinutes(1),
     },
 
-    // Ride out a transient 429 or 5xx. Nothing else is retried.
+    // Ride out a transient 429, 5xx or broken connection. Nothing else is retried.
     Retry = new MassiveRetryOptions { MaxAttempts = 3 },
 });
 ```
@@ -261,8 +261,13 @@ burst up to `PermitsPerWindow` goes out immediately and everything after it is p
 request over the allowance waits; set `QueueLimit = 0` to have it throw
 `MassiveRateLimitExceededException` without reaching the network instead.
 
-**Retry.** Only HTTP 429 and 5xx. Every other 4xx describes a request that fails identically
-however often it is sent, so retrying one spends quota to reach the same answer. Backoff is
+**Retry.** HTTP 429 and 5xx, and a connection that broke before the response headers arrived: a
+reset, a refused connect, a failed DNS lookup or TLS handshake. Every other 4xx describes a request
+that fails identically however often it is sent, so retrying one spends quota to reach the same
+answer. Two failures are not retried. A connection that breaks while a body is being read surfaces
+from deserialization, after the retry has handed the response on. And a timeout: `Timeout` is a
+budget for the whole call, every retry and backoff included, so once it runs out a retry needs a
+fresh call. Backoff is
 exponential with jitter, and a server's `Retry-After` takes precedence over the computed delay —
 except when it exceeds `MaxBackoff`, where the 429 surfaces with its hint intact rather than
 holding your task for a period the SDK did not choose:

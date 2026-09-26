@@ -37,6 +37,10 @@ public sealed class MassiveClientOptions
     /// It is converted at the <c>HttpClient</c> boundary inside <c>MassiveHttpTransport</c>, and
     /// is ignored when the transport is constructed over a caller-supplied <c>HttpClient</c>,
     /// since that client carries its own timeout.
+    /// <para>
+    /// With <see cref="Retry"/> set it is a budget for the whole call, not for each attempt:
+    /// every retry and every backoff runs inside it, and a call that runs out is not retried.
+    /// </para>
     /// </remarks>
     public Duration Timeout { get; set; } = Duration.FromSeconds(100);
 
@@ -57,8 +61,8 @@ public sealed class MassiveClientOptions
     public MassiveRateLimitOptions? RateLimit { get; set; }
 
     /// <summary>
-    /// Bounded retry for HTTP 429 and 5xx, or <see langword="null"/> to surface the first failure.
-    /// Off by default.
+    /// Bounded retry for HTTP 429, 5xx and a broken connection, or <see langword="null"/> to
+    /// surface the first failure. Off by default.
     /// </summary>
     /// <remarks>
     /// Assigning an instance is the whole opt-in:
