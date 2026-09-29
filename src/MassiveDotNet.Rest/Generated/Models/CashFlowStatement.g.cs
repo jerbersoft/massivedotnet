@@ -83,11 +83,11 @@ public sealed partial record CashFlowStatement
 
     /// <summary>The fiscal quarter number (1, 2, 3, or 4) for the reporting period.</summary>
     [JsonPropertyName("fiscal_quarter")]
-    public int? FiscalQuarter { get; init; }
+    public long? FiscalQuarter { get; init; }
 
     /// <summary>The fiscal year for the reporting period.</summary>
     [JsonPropertyName("fiscal_year")]
-    public int? FiscalYear { get; init; }
+    public long? FiscalYear { get; init; }
 
     /// <summary>After-tax income or loss from business operations that have been discontinued.</summary>
     [JsonPropertyName("income_loss_from_discontinued_operations")]
