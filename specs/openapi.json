@@ -17755,7 +17755,6 @@
                         },
                         "required": [
                           "ticker",
-                          "sip_timestamp",
                           "sequence_number",
                           "ask_exchange",
                           "ask_price",
@@ -21836,12 +21835,12 @@
                           },
                           "fiscal_quarter": {
                             "description": "The fiscal quarter number (1, 2, 3, or 4) for the reporting period.",
-                            "format": "int32",
+                            "format": "int64",
                             "type": "integer"
                           },
                           "fiscal_year": {
                             "description": "The fiscal year for the reporting period.",
-                            "format": "int32",
+                            "format": "int64",
                             "type": "integer"
                           },
                           "goodwill": {
@@ -22444,12 +22443,12 @@
                           },
                           "fiscal_quarter": {
                             "description": "The fiscal quarter number (1, 2, 3, or 4) for the reporting period.",
-                            "format": "int32",
+                            "format": "int64",
                             "type": "integer"
                           },
                           "fiscal_year": {
                             "description": "The fiscal year for the reporting period.",
-                            "format": "int32",
+                            "format": "int64",
                             "type": "integer"
                           },
                           "income_loss_from_discontinued_operations": {
@@ -23061,12 +23060,12 @@
                           },
                           "fiscal_quarter": {
                             "description": "The fiscal quarter number (1, 2, 3, or 4) for the reporting period.",
-                            "format": "int32",
+                            "format": "int64",
                             "type": "integer"
                           },
                           "fiscal_year": {
                             "description": "The fiscal year for the reporting period.",
-                            "format": "int32",
+                            "format": "int64",
                             "type": "integer"
                           },
                           "gross_profit": {
