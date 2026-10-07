@@ -63,7 +63,10 @@ public readonly partial record struct LastQuote
     [JsonPropertyName("p")]
     public double? BidPrice { get; init; }
 
-    /// <summary>The total number of shares that buyers want to purchase at the current bid price.</summary>
+    /// <summary>
+    /// The bid size. This represents the number of shares buyers are bidding for at the given bid
+    /// price.
+    /// </summary>
     [JsonPropertyName("s")]
     public int? BidSize { get; init; }
 
@@ -75,7 +78,7 @@ public readonly partial record struct LastQuote
     [JsonPropertyName("P")]
     public double? AskPrice { get; init; }
 
-    /// <summary>The total number of shares available for sale at the current ask price.</summary>
+    /// <summary>The ask size. This represents the number of shares sellers are offering at the given ask price.</summary>
     [JsonPropertyName("S")]
     public int? AskSize { get; init; }
 
