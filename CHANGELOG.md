@@ -19,6 +19,18 @@ Two conventions worth knowing before reading a breaking-change entry:
 
 ## [Unreleased]
 
+### Added
+
+- **`MassiveDotNet`** — `MassiveClientOptions.ApiKeyProvider`, an optional `Func<string>` the
+  authentication handler calls on every request instead of sending `ApiKey`. A long-lived client —
+  including the singleton `AddMassive` registers — can now follow a key that changes while it runs,
+  with no rebuilt `HttpClient`. It is called once per send, outside the retry, so every attempt of
+  one request carries the same key and the query scheme still appends it once. A null or whitespace
+  answer fails that request before anything is sent, naming the option and never a value. Without a
+  provider nothing changes, and `ApiKey` is no longer required when one is set. A new
+  `MassiveAuthenticationHandler(Func<string>, MassiveAuthenticationScheme)` constructor carries it
+  (D45).
+
 ### Fixed
 
 - **`MassiveDotNet`** — the opt-in retry now retries a broken connection, as its documentation

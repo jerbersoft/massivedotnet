@@ -22,7 +22,8 @@ public sealed class CredentialLoggingTests
 
     private static async Task<string> CaptureLogsAsync(
         MassiveAuthenticationScheme scheme,
-        Action<IHttpClientBuilder>? customize = null)
+        Action<IHttpClientBuilder>? customize = null,
+        bool viaProvider = false)
     {
         CapturingLoggerProvider capture = new();
         ServiceCollection services = new();
@@ -35,7 +36,15 @@ public sealed class CredentialLoggingTests
 
         services.AddMassive(options =>
         {
-            options.ApiKey = ApiKey;
+            if (viaProvider)
+            {
+                options.ApiKeyProvider = static () => ApiKey;
+            }
+            else
+            {
+                options.ApiKey = ApiKey;
+            }
+
             options.AuthenticationScheme = scheme;
         })
         .ConfigurePrimaryHttpMessageHandler(static () => new RecordingHandler());
@@ -78,6 +87,17 @@ public sealed class CredentialLoggingTests
     public async Task TheQueryStringKeyNeverReachesALogSink()
     {
         string logs = await CaptureLogsAsync(MassiveAuthenticationScheme.QueryString);
+
+        Assert.DoesNotContain(ApiKey, logs, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(MassiveAuthenticationScheme.BearerToken)]
+    [InlineData(MassiveAuthenticationScheme.QueryString)]
+    public async Task AProvidedKeyNeverReachesALogSink(MassiveAuthenticationScheme scheme)
+    {
+        // D45 adds a second way for the key to arrive. It must meet rule 11 exactly as ApiKey does.
+        string logs = await CaptureLogsAsync(scheme, viaProvider: true);
 
         Assert.DoesNotContain(ApiKey, logs, StringComparison.Ordinal);
     }

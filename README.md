@@ -431,6 +431,16 @@ builder.Services.AddMassive(options =>
 `MassiveRestClient` then arrives by injection like any other service. It and `MassiveHttpTransport`
 are registered as **singletons**, matching the lifetime the client documents for itself.
 
+A singleton holds its key for the life of the process. To change the key while the application
+runs, set `ApiKeyProvider` instead: it is asked for the key on every request, and wins over
+`ApiKey`.
+
+```csharp
+builder.Services.AddMassive(options => options.ApiKeyProvider = () => keyStore.CurrentMassiveKey);
+```
+
+Keep the provider cheap — return a key you already hold — because it runs on every send.
+
 `AddMassive` returns the `IHttpClientBuilder` for the underlying named client, so resilience,
 logging, or any other handler goes on the same pipeline:
 

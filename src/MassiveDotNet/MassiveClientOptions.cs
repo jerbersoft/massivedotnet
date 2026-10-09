@@ -10,13 +10,36 @@ public sealed class MassiveClientOptions
     private string? _apiKey;
 
     /// <summary>
-    /// The API key used to authenticate requests. Required.
+    /// The API key used to authenticate requests. Required unless <see cref="ApiKeyProvider"/> is set.
     /// </summary>
     public string? ApiKey
     {
         get => _apiKey;
         set => _apiKey = string.IsNullOrWhiteSpace(value) ? null : value;
     }
+
+    /// <summary>
+    /// Supplies the API key on every request, or <see langword="null"/> — the default — to send
+    /// <see cref="ApiKey"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a long-lived client whose key can change while it runs. The pipeline is built once, and
+    /// the DI registration holds it for the process lifetime (D28), so a key read at construction
+    /// cannot follow a rotation (D45).
+    /// </para>
+    /// <para>
+    /// When set, it wins over <see cref="ApiKey"/>, which may then be left unset. It is called once
+    /// per request the client sends, on the sending thread, and outside any retry, so every attempt
+    /// of one request carries the same key. Keep it cheap and thread-safe: return a key already held,
+    /// never fetch one.
+    /// </para>
+    /// <para>
+    /// A null or whitespace answer fails that request with an <see cref="InvalidOperationException"/>
+    /// before anything is sent. An exception the provider throws reaches the caller unchanged.
+    /// </para>
+    /// </remarks>
+    public Func<string>? ApiKeyProvider { get; set; }
 
     /// <summary>
     /// The base address requests are issued against. Defaults to <see cref="MassiveEndpoints.Production"/>.
@@ -76,15 +99,16 @@ public sealed class MassiveClientOptions
     /// Throws if the options are not in a usable state.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// The API key is missing, the base address is not absolute, or a configured
-    /// <see cref="RateLimit"/> or <see cref="Retry"/> holds a value it cannot act on.
+    /// Neither the API key nor an API key provider is set, the base address is not absolute, or
+    /// a configured <see cref="RateLimit"/> or <see cref="Retry"/> holds a value it cannot act on.
     /// </exception>
     public void Validate()
     {
-        if (_apiKey is null)
+        if (_apiKey is null && ApiKeyProvider is null)
         {
             throw new InvalidOperationException(
-                $"{nameof(MassiveClientOptions)}.{nameof(ApiKey)} must be set to a non-empty value.");
+                $"{nameof(MassiveClientOptions)}.{nameof(ApiKey)} must be set to a non-empty value, or "
+                + $"{nameof(MassiveClientOptions)}.{nameof(ApiKeyProvider)} must be set.");
         }
 
         if (!BaseAddress.IsAbsoluteUri)

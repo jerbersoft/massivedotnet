@@ -97,6 +97,29 @@ public sealed class AddMassiveTests
     }
 
     [Fact]
+    public async Task AProviderAloneAuthenticatesEveryRequestOfTheRegisteredClient()
+    {
+        // D45: the registered pipeline is built once and held for the process lifetime (D28), so the
+        // provider -- not a rebuilt handler -- is how a running host follows a changed key. No ApiKey
+        // is set, so this also proves a provider alone passes the registration's validation.
+        string current = "key-one";
+        (ServiceProvider provider, RecordingHandler handler) = Build(options => options.ApiKeyProvider = () => current);
+
+        using (provider)
+        {
+            MassiveRestClient client = provider.GetRequiredService<MassiveRestClient>();
+
+            await client.Reference.ListTickersAsync(limit: 1, cancellationToken: Ct);
+            current = "key-two";
+            await client.Reference.ListTickersAsync(limit: 1, cancellationToken: Ct);
+        }
+
+        Assert.Equal(
+            ["key-one", "key-two"],
+            handler.Requests.Select(static request => request.Headers.Authorization?.Parameter));
+    }
+
+    [Fact]
     public async Task TheBaseAddressReachesTheRequest()
     {
         // Cursor traversal resolves next_url against the client's BaseAddress and throws when it

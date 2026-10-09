@@ -135,7 +135,10 @@ public static class MassiveServiceCollectionExtensions
             {
                 MassiveClientOptions options = provider.GetRequiredService<IOptions<MassiveClientOptions>>().Value;
 
-                return new MassiveAuthenticationHandler(options.ApiKey!, options.AuthenticationScheme);
+                // D45: a provider is read on every send, so the singleton pipeline follows a changed key.
+                return options.ApiKeyProvider is { } apiKeyProvider
+                    ? new MassiveAuthenticationHandler(apiKeyProvider, options.AuthenticationScheme)
+                    : new MassiveAuthenticationHandler(options.ApiKey!, options.AuthenticationScheme);
             })
             .AddHttpMessageHandler(static provider =>
             {
