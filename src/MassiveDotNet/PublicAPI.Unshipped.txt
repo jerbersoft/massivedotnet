@@ -1,1 +1,4 @@
 #nullable enable
+MassiveDotNet.Http.MassiveAuthenticationHandler.MassiveAuthenticationHandler(System.Func<string!>! apiKeyProvider, MassiveDotNet.MassiveAuthenticationScheme scheme) -> void
+MassiveDotNet.MassiveClientOptions.ApiKeyProvider.get -> System.Func<string!>?
+MassiveDotNet.MassiveClientOptions.ApiKeyProvider.set -> void

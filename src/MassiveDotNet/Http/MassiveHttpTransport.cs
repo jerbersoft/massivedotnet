@@ -128,10 +128,12 @@ public sealed class MassiveHttpTransport : IDisposable
             pipeline = new MassiveRetryHandler(retry) { InnerHandler = pipeline };
         }
 
-        return new MassiveAuthenticationHandler(options.ApiKey!, options.AuthenticationScheme)
-        {
-            InnerHandler = pipeline,
-        };
+        MassiveAuthenticationHandler authentication = options.ApiKeyProvider is { } apiKeyProvider
+            ? new MassiveAuthenticationHandler(apiKeyProvider, options.AuthenticationScheme)
+            : new MassiveAuthenticationHandler(options.ApiKey!, options.AuthenticationScheme);
+
+        authentication.InnerHandler = pipeline;
+        return authentication;
     }
 
     /// <summary>
