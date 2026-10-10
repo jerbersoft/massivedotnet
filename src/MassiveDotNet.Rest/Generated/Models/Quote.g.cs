@@ -60,7 +60,10 @@ public readonly partial record struct Quote
     [JsonPropertyName("bid_price")]
     public double? BidPrice { get; init; }
 
-    /// <summary>The total number of shares that buyers want to purchase at the current bid price.</summary>
+    /// <summary>
+    /// The bid size. This represents the number of shares buyers are bidding for at the given bid
+    /// price.
+    /// </summary>
     [JsonPropertyName("bid_size")]
     public double? BidSize { get; init; }
 
@@ -72,7 +75,7 @@ public readonly partial record struct Quote
     [JsonPropertyName("ask_price")]
     public double? AskPrice { get; init; }
 
-    /// <summary>The total number of shares available for sale at the current ask price.</summary>
+    /// <summary>The ask size. This represents the number of shares sellers are offering at the given ask price.</summary>
     [JsonPropertyName("ask_size")]
     public double? AskSize { get; init; }
 
