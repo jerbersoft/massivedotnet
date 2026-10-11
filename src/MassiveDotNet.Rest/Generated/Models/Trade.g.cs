@@ -44,10 +44,11 @@ public readonly partial record struct Trade
 
     /// <summary>
     /// The nanosecond accuracy Participant/Exchange Unix Timestamp. This is the timestamp of when the
-    /// trade was actually generated at the exchange.
+    /// trade was actually generated at the exchange. Omitted on OTC trades reported through the FINRA
+    /// ORF (exchange 62), which carry no participant timestamp.
     /// </summary>
     [JsonPropertyName("participant_timestamp")]
-    public long ParticipantTimestampNanoseconds { get; init; }
+    public long? ParticipantTimestampNanoseconds { get; init; }
 
     /// <summary>
     /// The nanosecond accuracy TRF (Trade Reporting Facility) Unix Timestamp. This is the timestamp of
