@@ -129,27 +129,34 @@ jobs:
 
           echo "status=ok" >> "$GITHUB_OUTPUT"
 
-      - name: Open pull request
+      - name: Open or update pull request
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGEN_STATUS: ${{ steps.regen.outputs.status }}
           FORCED: ${{ steps.diff.outputs.forced }}
+          BOT_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
         run: |
           today="$(date -u +%Y-%m-%d)"
-          branch="spec-sync/$today"
+
+          # One branch, and so one pull request, for as long as upstream stays ahead of master.
+          # A branch per day opened a fresh pull request every night the drift went unmerged:
+          # 47 of them for one unresolved generator failure, most with byte-identical trees.
+          # The self-test has a branch of its own so that a forced run never overwrites a sync.
+          if [ "$FORCED" = "true" ]; then
+            branch="spec-sync/self-test"
+          else
+            branch="spec-sync/latest"
+          fi
 
           git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "$BOT_EMAIL"
 
           # Keyed on the pull request, not the branch. A run that pushed its branch and then
           # failed to open the PR leaves the branch behind looking complete, so keying on the
-          # branch made re-running that day -- the one action that repairs it -- a no-op that
-          # reported success (#45).
-          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
-            echo "A pull request is already open for $branch; nothing to do."
-            exit 0
-          fi
+          # branch made re-running -- the one action that repairs it -- a no-op that reported
+          # success (#45). An open pull request is updated in place; with none, one is opened.
+          pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
 
           # What the PR says about generated code, and whether it carries any, both follow from
           # one status. An unset status means the step did not reach its own reporting, so it
@@ -220,10 +227,39 @@ jobs:
           Review the operation summary in the workflow run, then check whether
           \`specs/endpoints.map.json\` needs new rows for any added operations - coverage is
           enforced by \`EndpointCoverageTests\`.
+
+          This pull request is rebuilt in place from master whenever upstream or master moves,
+          and closes itself once master carries the upstream description. A commit pushed here
+          by hand stops the nightly rebuild until this is merged or closed.
           BODY
 
-          # Forcing is safe because the guard above established that no open pull request is
-          # reviewing this branch, so anything already on it is an abandoned run's leftovers.
+          if [ -n "$pr" ]; then
+            # The branch is this workflow's own, rebuilt from master on every run, so a force push
+            # is how it is updated. A commit anyone else pushed to it is the exception: that is
+            # work in progress on the sync, and forcing over it would discard it without a trace.
+            if gh api "repos/$GITHUB_REPOSITORY/pulls/$pr/commits" --paginate \
+                --jq '.[].commit.author.email' | grep -qvxF "$BOT_EMAIL"; then
+              echo "::warning::#$pr carries a commit this workflow did not make, so $branch is left as it is. Merge or close #$pr to resume nightly updates."
+              exit 0
+            fi
+
+            # Nothing moved since the last run. Pushing anyway would rewrite the commit and notify
+            # every watcher of a change that is not one.
+            if git fetch --quiet --no-tags --depth=1 origin "refs/heads/$branch" \
+              && [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse 'FETCH_HEAD^{tree}')" ]; then
+              echo "#$pr already matches upstream and master; nothing to do."
+              exit 0
+            fi
+
+            git push --force origin "$branch"
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/pulls/$pr" --silent \
+              -f title="$title" -F body=@/tmp/pr-body.md
+            echo "Updated #$pr in place."
+            exit 0
+          fi
+
+          # Forcing is safe because no open pull request is reviewing this branch, so anything
+          # already on it is an abandoned run's leftovers.
           git push --force origin "$branch"
 
           if gh pr create \
@@ -251,10 +287,24 @@ jobs:
           re-run opens one for the branch that is already there rather than skipping the day.
           BLOCKED
 
+          # One issue for as long as the blockage lasts, not one a night. The branch name is fixed,
+          # so the title is too, and a later run adds its link to the issue already open.
+          export BLOCKED_TITLE="spec-sync could not open a pull request for $branch"
+          issue="$(gh issue list --state open --label "area:ci" --json number,title \
+            --jq '[.[] | select(.title == env.BLOCKED_TITLE)][0].number // empty')"
+
           # Reported from whether the issue was actually opened, not from having attempted it:
           # claiming an issue that does not exist is the failure this fallback exists to prevent.
-          if gh issue create \
-            --title "spec-sync could not open a pull request for $branch" \
+          if [ -n "$issue" ]; then
+            if gh issue comment "$issue" \
+              --body "Still blocked: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            then
+              echo "::error::Pull request creation was refused for $branch; noted on the open issue #$issue."
+            else
+              echo "::error::Pull request creation was refused for $branch, and the note on #$issue could not be added either. Check the workflow's issues: write permission."
+            fi
+          elif gh issue create \
+            --title "$BLOCKED_TITLE" \
             --body-file /tmp/blocked-body.md \
             --label "area:ci"
           then
@@ -264,3 +314,27 @@ jobs:
           fi
 
           exit 1
+
+      - name: Close a sync master already carries
+        # Upstream matches master, so whatever the sync pull request proposed has landed by
+        # another route: a sync made by hand, or the D21 removal commit. Left open, it reads as
+        # pending drift that does not exist. A commit someone pushed to the branch is kept.
+        if: steps.diff.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOT_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+        run: |
+          branch="spec-sync/latest"
+          pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$pr" ]; then
+            echo "No sync pull request is open."
+            exit 0
+          fi
+
+          if gh api "repos/$GITHUB_REPOSITORY/pulls/$pr/commits" --paginate \
+              --jq '.[].commit.author.email' | grep -qvxF "$BOT_EMAIL"; then
+            echo "::warning::master matches upstream, but #$pr carries a commit this workflow did not make, so it is left open for a human to close."
+            exit 0
+          fi
+
+          gh pr close "$pr" --delete-branch --comment "master now matches \`https://api.massive.com/openapi\`, so this sync has nothing left to propose. Closed by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
