@@ -2,11 +2,18 @@ version: 2
 
 # Keeps the actions in .github/workflows/ current.
 #
-# `uses: actions/checkout@v7` is not a version. It is a pointer, resolved fresh on every run, to
-# whatever commit that tag names today -- so the reference is a standing trust in the tag's owner
-# rather than a decision taken once. Keeping the pointers current is the cheaper half of that
-# problem. The other half is pinning them to commit SHAs, and this file has to come first: a pin
-# nobody updates is a version frozen together with its bugs, which trades one risk for another.
+# Every `uses:` names a full commit SHA, with the release it was cut from as a trailing comment:
+# `uses: actions/checkout@<40 hex digits> # v7.0.1`. A tag such as `@v7` is not a version. It is a
+# pointer, resolved fresh on every run, to whatever commit that tag names today -- so the reference
+# is a standing trust in the tag's owner rather than a decision taken once. The SHA is that
+# decision, and this file is what keeps it from being a version frozen together with its bugs: the
+# updater rewrites the SHA and the comment together, so the comment is how a reviewer reads which
+# release a pin is. A new `uses:` takes the same form; Semgrep flags a bare tag.
+#
+# A new release waits out a seven-day cooldown before it is proposed. A hijacked release is usually
+# caught and pulled within days, and it is the one thing a pin cannot defend against, since the SHA
+# is taken from the release itself. The cooldown holds back version updates only; a security update
+# for an advisory is not delayed.
 #
 # Minor and patch updates arrive grouped in a single pull request. Separately they are noise, and a
 # solo maintainer handed six near-identical pull requests reviews none of them.
@@ -27,6 +34,8 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci
       include: scope
