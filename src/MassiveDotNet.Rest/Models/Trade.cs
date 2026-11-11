@@ -12,9 +12,13 @@ public readonly partial record struct Trade
     [JsonIgnore]
     public Instant SipTimestamp => Epoch.FromNanoseconds(SipTimestampNanoseconds);
 
-    /// <summary>The moment the exchange generated this trade, converted from <see cref="ParticipantTimestampNanoseconds"/>.</summary>
+    /// <summary>
+    /// The moment the exchange generated this trade, converted from
+    /// <see cref="ParticipantTimestampNanoseconds"/>, or <see langword="null"/> when the trade carries
+    /// none, as an OTC trade reported through the FINRA ORF does.
+    /// </summary>
     [JsonIgnore]
-    public Instant ParticipantTimestamp => Epoch.FromNanoseconds(ParticipantTimestampNanoseconds);
+    public Instant? ParticipantTimestamp => ParticipantTimestampNanoseconds is { } nanoseconds ? Epoch.FromNanoseconds(nanoseconds) : null;
 
     /// <summary>
     /// The moment the trade reporting facility received this trade, converted from

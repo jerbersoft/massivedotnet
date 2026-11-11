@@ -1,1 +1,102 @@
 #nullable enable
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.<Clone>$() -> MassiveDotNet.Rest.Models.FinancialDataPoint!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.DerivedFrom.get -> string![]?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.DerivedFrom.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Equals(MassiveDotNet.Rest.Models.FinancialDataPoint? other) -> bool
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.FinancialDataPoint() -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Formula.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Formula.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Label.get -> string!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Label.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Order.get -> int
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Order.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Source.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Source.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Unit.get -> string!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Unit.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Value.get -> double
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.Value.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.XPath.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialDataPoint.XPath.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.<Clone>$() -> MassiveDotNet.Rest.Models.FinancialReport!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.AcceptanceTimestamp.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.AcceptanceTimestamp.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Cik.get -> string!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Cik.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.CompanyName.get -> string!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.CompanyName.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.EndDate.get -> NodaTime.LocalDate?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.EndDate.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Equals(MassiveDotNet.Rest.Models.FinancialReport? other) -> bool
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FilingDate.get -> NodaTime.LocalDate?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FilingDate.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FinancialReport() -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Financials.get -> MassiveDotNet.Rest.Models.FinancialStatements!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Financials.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FiscalPeriod.get -> string!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FiscalPeriod.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FiscalYear.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.FiscalYear.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Sic.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Sic.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.SourceFilingFileUrl.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.SourceFilingFileUrl.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.SourceFilingUrl.get -> string?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.SourceFilingUrl.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.StartDate.get -> NodaTime.LocalDate?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.StartDate.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Tickers.get -> string![]?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Tickers.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Timeframe.get -> string!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialReport.Timeframe.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.<Clone>$() -> MassiveDotNet.Rest.Models.FinancialStatements!
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.BalanceSheet.get -> System.Collections.Generic.Dictionary<string!, MassiveDotNet.Rest.Models.FinancialDataPoint!>?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.BalanceSheet.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.CashFlowStatement.get -> System.Collections.Generic.Dictionary<string!, MassiveDotNet.Rest.Models.FinancialDataPoint!>?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.CashFlowStatement.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.ComprehensiveIncome.get -> System.Collections.Generic.Dictionary<string!, MassiveDotNet.Rest.Models.FinancialDataPoint!>?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.ComprehensiveIncome.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.Equals(MassiveDotNet.Rest.Models.FinancialStatements? other) -> bool
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.FinancialStatements() -> void
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.IncomeStatement.get -> System.Collections.Generic.Dictionary<string!, MassiveDotNet.Rest.Models.FinancialDataPoint!>?
+*REMOVED*MassiveDotNet.Rest.Models.FinancialStatements.IncomeStatement.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.CompanyTicker.get -> string?
+MassiveDotNet.Rest.Models.OptionsContract.CompanyTicker.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.Metric.get -> string?
+MassiveDotNet.Rest.Models.OptionsContract.Metric.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.ReportingPeriod.get -> string?
+MassiveDotNet.Rest.Models.OptionsContract.ReportingPeriod.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.ReportTime.get -> string?
+MassiveDotNet.Rest.Models.OptionsContract.ReportTime.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.Scale.get -> int?
+MassiveDotNet.Rest.Models.OptionsContract.Scale.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.Type.get -> string?
+MassiveDotNet.Rest.Models.OptionsContract.Type.init -> void
+MassiveDotNet.Rest.Models.OptionsContract.UnderlyingType.get -> string?
+MassiveDotNet.Rest.Models.OptionsContract.UnderlyingType.init -> void
+MassiveDotNet.Rest.Models.PreviousCloseBar.Ticker.get -> string!
+MassiveDotNet.Rest.Models.PreviousCloseBar.Ticker.init -> void
+*REMOVED*MassiveDotNet.Rest.Models.Trade.ParticipantTimestamp.get -> NodaTime.Instant
+MassiveDotNet.Rest.Models.Trade.ParticipantTimestamp.get -> NodaTime.Instant?
+*REMOVED*MassiveDotNet.Rest.Models.Trade.ParticipantTimestampNanoseconds.get -> long
+MassiveDotNet.Rest.Models.Trade.ParticipantTimestampNanoseconds.get -> long?
+*REMOVED*[MASSIVE0001]MassiveDotNet.Rest.ReferenceGroup.EnumerateFinancialsAsync(string? ticker = null, string? cik = null, string? companyName = null, string? sic = null, MassiveDotNet.RangeFilter<NodaTime.LocalDate>? filingDate = null, MassiveDotNet.RangeFilter<NodaTime.LocalDate>? periodOfReportDate = null, string? timeframe = null, bool? includeSources = null, string? companyNameSearch = null, MassiveDotNet.SortOrder? order = null, int? limit = null, string? sort = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<MassiveDotNet.Rest.Models.FinancialReport!>!
+*REMOVED*[MASSIVE0001]MassiveDotNet.Rest.ReferenceGroup.ListFinancialsAsync(string? ticker = null, string? cik = null, string? companyName = null, string? sic = null, MassiveDotNet.RangeFilter<NodaTime.LocalDate>? filingDate = null, MassiveDotNet.RangeFilter<NodaTime.LocalDate>? periodOfReportDate = null, string? timeframe = null, bool? includeSources = null, string? companyNameSearch = null, MassiveDotNet.SortOrder? order = null, int? limit = null, string? sort = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MassiveDotNet.MassivePage<MassiveDotNet.Rest.Models.FinancialReport!>>!
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialDataPoint.Equals(object? obj) -> bool
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialDataPoint.GetHashCode() -> int
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialDataPoint.ToString() -> string!
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialReport.Equals(object? obj) -> bool
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialReport.GetHashCode() -> int
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialReport.ToString() -> string!
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialStatements.Equals(object? obj) -> bool
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialStatements.GetHashCode() -> int
+*REMOVED*override MassiveDotNet.Rest.Models.FinancialStatements.ToString() -> string!
+*REMOVED*static MassiveDotNet.Rest.Models.FinancialDataPoint.operator !=(MassiveDotNet.Rest.Models.FinancialDataPoint? left, MassiveDotNet.Rest.Models.FinancialDataPoint? right) -> bool
+*REMOVED*static MassiveDotNet.Rest.Models.FinancialDataPoint.operator ==(MassiveDotNet.Rest.Models.FinancialDataPoint? left, MassiveDotNet.Rest.Models.FinancialDataPoint? right) -> bool
+*REMOVED*static MassiveDotNet.Rest.Models.FinancialReport.operator !=(MassiveDotNet.Rest.Models.FinancialReport? left, MassiveDotNet.Rest.Models.FinancialReport? right) -> bool
+*REMOVED*static MassiveDotNet.Rest.Models.FinancialReport.operator ==(MassiveDotNet.Rest.Models.FinancialReport? left, MassiveDotNet.Rest.Models.FinancialReport? right) -> bool
+*REMOVED*static MassiveDotNet.Rest.Models.FinancialStatements.operator !=(MassiveDotNet.Rest.Models.FinancialStatements? left, MassiveDotNet.Rest.Models.FinancialStatements? right) -> bool
+*REMOVED*static MassiveDotNet.Rest.Models.FinancialStatements.operator ==(MassiveDotNet.Rest.Models.FinancialStatements? left, MassiveDotNet.Rest.Models.FinancialStatements? right) -> bool

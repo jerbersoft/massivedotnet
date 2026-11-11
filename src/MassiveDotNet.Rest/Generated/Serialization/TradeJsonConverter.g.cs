@@ -41,7 +41,7 @@ internal sealed class TradeJsonConverter : JsonConverter<Trade>
 
         string? tradeId = null;
         long sipTimestampNanoseconds = default;
-        long participantTimestampNanoseconds = default;
+        long? participantTimestampNanoseconds = null;
         long? trfTimestampNanoseconds = null;
         long sequenceNumber = default;
         double price = default;
@@ -70,7 +70,7 @@ internal sealed class TradeJsonConverter : JsonConverter<Trade>
             else if (reader.ValueTextEquals("participant_timestamp"u8))
             {
                 reader.Read();
-                participantTimestampNanoseconds = JsonValueReader.ReadInt64(ref reader, "Trade", "participant_timestamp");
+                participantTimestampNanoseconds = JsonValueReader.ReadNullableInt64(ref reader, "Trade", "participant_timestamp");
             }
             else if (reader.ValueTextEquals("trf_timestamp"u8))
             {
@@ -161,7 +161,15 @@ internal sealed class TradeJsonConverter : JsonConverter<Trade>
         writer.WriteStartObject();
         writer.WriteString("id", value.TradeId);
         writer.WriteNumber("sip_timestamp", value.SipTimestampNanoseconds);
-        writer.WriteNumber("participant_timestamp", value.ParticipantTimestampNanoseconds);
+
+        if (value.ParticipantTimestampNanoseconds is { } participantTimestampNanoseconds)
+        {
+            writer.WriteNumber("participant_timestamp", participantTimestampNanoseconds);
+        }
+        else
+        {
+            writer.WriteNull("participant_timestamp");
+        }
 
         if (value.TrfTimestampNanoseconds is { } trfTimestampNanoseconds)
         {

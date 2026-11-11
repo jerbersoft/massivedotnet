@@ -19,13 +19,18 @@ namespace MassiveDotNet.Rest.Models;
 /// <remarks>
 /// <see cref="Agg"/>'s shape without the OTC flag, which this endpoint's schema does not declare. A
 /// separate model because the generator refuses a model whose properties the site does not declare
-/// (decision D16). The schema also omits the ticker its example carries, so none is bound; the
-/// caller named it in the request. <see cref="Timestamp"/> is computed from <see
-/// cref="TimestampMilliseconds"/> only when read (decision D5).
+/// (decision D16). The description omitted the ticker its example carries until the 2026-11-11 spec
+/// sync, which declared it; the map names it <see cref="Ticker"/> like every other bar. <see
+/// cref="Timestamp"/> is computed from <see cref="TimestampMilliseconds"/> only when read (decision
+/// D5).
 /// </remarks>
 [JsonConverter(typeof(PreviousCloseBarJsonConverter))]
 public readonly partial record struct PreviousCloseBar
 {
+    /// <summary>The exchange symbol that this item is traded under.</summary>
+    [JsonPropertyName("T")]
+    public required string Ticker { get; init; }
+
     /// <summary>The open price for the symbol in the given time period.</summary>
     [JsonPropertyName("o")]
     public double Open { get; init; }

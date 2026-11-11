@@ -36,6 +36,7 @@ internal sealed class PreviousCloseBarJsonConverter : JsonConverter<PreviousClos
             throw new JsonException($"Expected an object for PreviousCloseBar, but the response carried a {reader.TokenType} token.");
         }
 
+        string? ticker = null;
         double open = default;
         double high = default;
         double low = default;
@@ -44,10 +45,17 @@ internal sealed class PreviousCloseBarJsonConverter : JsonConverter<PreviousClos
         double? volumeWeightedAveragePrice = null;
         long timestampMilliseconds = default;
         long? transactionCount = null;
+        bool sawTicker = false;
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
-            if (reader.ValueTextEquals("o"u8))
+            if (reader.ValueTextEquals("T"u8))
+            {
+                reader.Read();
+                ticker = JsonValueReader.ReadString(ref reader, "PreviousCloseBar", "T");
+                sawTicker = true;
+            }
+            else if (reader.ValueTextEquals("o"u8))
             {
                 reader.Read();
                 open = JsonValueReader.ReadDouble(ref reader, "PreviousCloseBar", "o");
@@ -97,8 +105,14 @@ internal sealed class PreviousCloseBarJsonConverter : JsonConverter<PreviousClos
             }
         }
 
+        if (!sawTicker)
+        {
+            throw new JsonException("PreviousCloseBar is missing the required property 'T'.");
+        }
+
         return new PreviousCloseBar
         {
+            Ticker = ticker!,
             Open = open,
             High = high,
             Low = low,
@@ -114,6 +128,7 @@ internal sealed class PreviousCloseBarJsonConverter : JsonConverter<PreviousClos
     public override void Write(Utf8JsonWriter writer, PreviousCloseBar value, JsonSerializerOptions options)
     {
         writer.WriteStartObject();
+        writer.WriteString("T", value.Ticker);
         writer.WriteNumber("o", value.Open);
         writer.WriteNumber("h", value.High);
         writer.WriteNumber("l", value.Low);

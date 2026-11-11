@@ -63,7 +63,10 @@ public readonly partial record struct LastQuote
     [JsonPropertyName("p")]
     public double? BidPrice { get; init; }
 
-    /// <summary>The total number of shares that buyers want to purchase at the current bid price.</summary>
+    /// <summary>
+    /// The bid size. This represents the number of shares buyers are bidding for at the given bid
+    /// price.
+    /// </summary>
     [JsonPropertyName("s")]
     public int? BidSize { get; init; }
 
@@ -75,7 +78,7 @@ public readonly partial record struct LastQuote
     [JsonPropertyName("P")]
     public double? AskPrice { get; init; }
 
-    /// <summary>The total number of shares available for sale at the current ask price.</summary>
+    /// <summary>The ask size. This represents the number of shares sellers are offering at the given ask price.</summary>
     [JsonPropertyName("S")]
     public int? AskSize { get; init; }
 
@@ -83,12 +86,20 @@ public readonly partial record struct LastQuote
     [JsonPropertyName("X")]
     public int? AskExchangeId { get; init; }
 
-    /// <summary>A list of condition codes.</summary>
+    /// <summary>
+    /// A list of condition codes. See [Stocks Condition
+    /// Codes](https://massive.com/docs/rest/stocks/market-operations/condition-codes) for what each
+    /// code means.
+    /// </summary>
     [JsonPropertyName("c")]
     [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }
 
-    /// <summary>A list of indicator codes.</summary>
+    /// <summary>
+    /// A list of indicator codes. See the [Conditions and
+    /// Indicators](https://massive.com/glossary/conditions-indicators) glossary for what each code
+    /// means.
+    /// </summary>
     [JsonPropertyName("i")]
     [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Indicators { get; init; }

@@ -93,7 +93,11 @@ public readonly partial record struct DevTrade
     [JsonPropertyName("trf_id")]
     public int? TrfId { get; init; }
 
-    /// <summary>A list of condition codes.</summary>
+    /// <summary>
+    /// A list of condition codes. See [Stocks Condition
+    /// Codes](https://massive.com/docs/rest/stocks/market-operations/condition-codes) for what each
+    /// code means.
+    /// </summary>
     [JsonPropertyName("conditions")]
     [JsonConverter(typeof(PooledArrayConverter<int>))]
     public int[]? Conditions { get; init; }

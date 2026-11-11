@@ -30,6 +30,30 @@ Two conventions worth knowing before reading a breaking-change entry:
   provider nothing changes, and `ApiKey` is no longer required when one is set. A new
   `MassiveAuthenticationHandler(Func<string>, MassiveAuthenticationScheme)` constructor carries it
   (D45).
+- **`MassiveDotNet.Rest`** — `PreviousCloseBar.Ticker`, which Massive's description now declares.
+  The previous close response always carried it; the SDK now binds it.
+- **`MassiveDotNet.Rest`** — seven optional properties on `OptionsContract` for KPI binary options:
+  `Type`, `UnderlyingType`, `CompanyTicker`, `Metric`, `ReportingPeriod`, `ReportTime` and `Scale`.
+  All are null on a standard contract.
+
+### Changed
+
+- **`MassiveDotNet.Rest`** — **breaking:** `Trade.ParticipantTimestampNanoseconds` is now `long?`
+  and `Trade.ParticipantTimestamp` is now `Instant?`. Massive's description no longer requires the
+  field, and documents that OTC trades reported through the FINRA ORF (exchange 62) omit it. Read as
+  a `long`, a missing value became `0`, so `ParticipantTimestamp` reported a moment in 1970 for those
+  trades. It is now `null`. Code that reads either property needs a null check or `.Value`.
+
+### Removed
+
+- **`MassiveDotNet.Rest`** — **breaking:** `Reference.ListFinancialsAsync` and
+  `Reference.EnumerateFinancialsAsync`, along with `FinancialReport`, `FinancialStatements` and
+  `FinancialDataPoint`. Massive dropped `GET /vX/reference/financials` from its OpenAPI description
+  on 2026-10-14. Both methods were already `[Experimental]` (`MASSIVE0001`) because of the route's
+  `vX` segment. The v1 statement endpoints cover the same ground: `ListBalanceSheetsAsync`,
+  `ListIncomeStatementsAsync` and `ListCashFlowStatementsAsync`, plus `ListRatiosAsync` for ratios.
+  This is the sanctioned description-side removal (D21): the map rows, the generated code and the
+  coverage baseline (60 to 59) go in one change.
 
 ### Fixed
 

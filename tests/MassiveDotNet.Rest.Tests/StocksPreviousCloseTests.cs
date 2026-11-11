@@ -50,6 +50,7 @@ public sealed class StocksPreviousCloseTests
         }
 
         PreviousCloseBar bar = Assert.Single(bars);
+        Assert.Equal("AAPL", bar.Ticker);
         Assert.Equal(115.55, bar.Open);
         Assert.Equal(117.59, bar.High);
         Assert.Equal(114.13, bar.Low);
