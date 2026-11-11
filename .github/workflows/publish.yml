@@ -85,11 +85,18 @@ jobs:
       # For a workflow_run the default ref is master's tip, which may already be a later commit than
       # the one CI tested. head_sha is that commit. For a release it is null and the default, the
       # tag, is right.
-      - uses: actions/checkout@v7
+      #
+      # Semgrep's workflow-run-target-code-checkout rule flags this step, because checking out a
+      # triggering run's head_sha is how a fork's pull request gets its code run with this job's
+      # privileges. The job's `if:` is the answer: a workflow_run reaches this step only when it
+      # succeeded, ran on a push, and came from this repository, so head_sha is a commit CI passed
+      # on this repository's master and never a fork's.
+      # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
@@ -196,7 +203,7 @@ jobs:
 
       # Requested immediately before the push: the key it returns is valid for one hour.
       - name: NuGet login (OIDC Trusted Publishing)
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: login
         with:
           user: jerbersoft
