@@ -82,4 +82,41 @@ public sealed partial record OptionsContract
     [JsonPropertyName("additional_underlyings")]
     [JsonConverter(typeof(PooledArrayConverter<AdditionalUnderlying>))]
     public AdditionalUnderlying[]? AdditionalUnderlyings { get; init; }
+
+    /// <summary>KPI binary options only. The ticker of the company the KPI belongs to, like NFLX.</summary>
+    [JsonPropertyName("company_ticker")]
+    public string? CompanyTicker { get; init; }
+
+    /// <summary>KPI binary options only. The KPI the contract settles on, like "Earnings Per Share ($/share)".</summary>
+    [JsonPropertyName("metric")]
+    public string? Metric { get; init; }
+
+    /// <summary>
+    /// KPI binary options only. AM if the company reports before the market opens, PM if after it
+    /// closes.
+    /// </summary>
+    [JsonPropertyName("report_time")]
+    public string? ReportTime { get; init; }
+
+    /// <summary>KPI binary options only. The fiscal period the KPI is for, like 2026Q3.</summary>
+    [JsonPropertyName("reporting_period")]
+    public string? ReportingPeriod { get; init; }
+
+    /// <summary>
+    /// KPI binary options only. The KPI value divided by scale gives the strike price, like 1000000000
+    /// for a KPI in billions. A negative scale means an inverted KPI, like Loss Per Share.
+    /// </summary>
+    [JsonPropertyName("scale")]
+    public int? Scale { get; init; }
+
+    /// <summary>
+    /// The type of option contract: standard or binary. It can be missing, for example on contracts
+    /// listed before this field was added, so a missing type says nothing about the contract.
+    /// </summary>
+    [JsonPropertyName("type")]
+    public string? Type { get; init; }
+
+    /// <summary>What the contract is based on. For now only set on KPI binary options, as kpi.</summary>
+    [JsonPropertyName("underlying_type")]
+    public string? UnderlyingType { get; init; }
 }

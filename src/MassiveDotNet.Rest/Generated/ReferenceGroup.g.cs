@@ -353,13 +353,17 @@ public readonly partial struct ReferenceGroup
     /// </remarks>
     /// <param name="ticker">Specify a case-sensitive ticker symbol. For example, AAPL represents Apple Inc.</param>
     /// <param name="date">
-    /// Specify a point in time to get information about the ticker available on that date. When
-    /// retrieving information from SEC filings, we compare this date with the period of report date on
-    /// the SEC filing. For example, consider an SEC filing submitted by AAPL on 2019-07-31, with a
-    /// period of report date ending on 2019-06-29. That means that the filing was submitted on
-    /// 2019-07-31, but the filing was created based on information from 2019-06-29. If you were to
-    /// query for AAPL details on 2019-06-29, the ticker details would include information from the SEC
-    /// filing. Defaults to the most recent available date.
+    /// Specify a point in time to get information about the ticker available on that date. Fields that
+    /// describe the security, including name, type, primary_exchange and list_date, reflect the
+    /// security trading under this ticker on that date. For example, ASND returns type ADRC and
+    /// list_date 2015-01-28 for 2026-04-17, and type CS and list_date 2026-04-20 from 2026-04-20, when
+    /// its American Depositary Shares were exchanged for ordinary shares. Some fields may be empty for
+    /// older dates. When retrieving information from SEC filings, we compare this date with the period
+    /// of report date on the SEC filing. For example, consider an SEC filing submitted by AAPL on
+    /// 2019-07-31, with a period of report date ending on 2019-06-29. That means that the filing was
+    /// submitted on 2019-07-31, but the filing was created based on information from 2019-06-29. If you
+    /// were to query for AAPL details on 2019-06-29, the ticker details would include information from
+    /// the SEC filing. Defaults to the most recent available date.
     /// </param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The <c>results</c> object from the response.</returns>
@@ -3804,191 +3808,6 @@ public readonly partial struct ReferenceGroup
         // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
         // reports the same thing rather than promising a page that is never fetched.
         return new MassivePage<RiskFactorTaxonomyEntry>(
-            response?.Results,
-            !string.IsNullOrWhiteSpace(response?.NextUrl),
-            response?.RequestId);
-    }
-
-    /// <summary>
-    /// Retrieves financial statements derived from SEC filings, filtered by company, by filing and
-    /// report dates, and by timeframe, enumerating every page as a single lazy sequence.
-    /// </summary>
-    /// <remarks>
-    /// Walks every page, requesting the next only once the previous one has been consumed. Use <see
-    /// cref="ListFinancialsAsync"/> to retrieve a single page instead. <paramref name="limit"/> sizes
-    /// each page rather than the traversal, so lowering it issues more requests rather than returning
-    /// fewer items; bound the sequence with <c>Take</c> instead. The route's <c>vX</c> segment marks it
-    /// experimental (decision D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and
-    /// defaults to no constraint. <paramref name="timeframe"/> is <c>annual</c>, <c>quarterly</c>, or
-    /// <c>ttm</c>. <paramref name="includeSources"/> asks for the <see
-    /// cref="FinancialDataPoint.XPath"/> and <see cref="FinancialDataPoint.Formula"/> of every data
-    /// point. <paramref name="companyNameSearch"/> is a text search where <paramref
-    /// name="companyName"/> is an exact match; both render under the description's wire names.
-    /// </remarks>
-    /// <param name="ticker">Query by company ticker.</param>
-    /// <param name="cik">Query by central index key (CIK) Number</param>
-    /// <param name="companyName">Query by company name.</param>
-    /// <param name="sic">Query by standard industrial classification (SIC)</param>
-    /// <param name="filingDate">
-    /// Query by the date when the filing with financials data was filed in YYYY-MM-DD format. Best used
-    /// when querying over date ranges to find financials based on filings that happen in a time period.
-    /// Examples: To get financials based on filings that have happened after January 1, 2009 use the
-    /// query param filing_date.gte=2009-01-01 To get financials based on filings that happened in the
-    /// year 2009 use the query params filing_date.gte=2009-01-01&amp;filing_date.lt=2010-01-01. Accepts
-    /// an exact value or a range.
-    /// </param>
-    /// <param name="periodOfReportDate">
-    /// The period of report for the filing with financials data in YYYY-MM-DD format. Accepts an exact
-    /// value or a range.
-    /// </param>
-    /// <param name="timeframe">
-    /// Query by timeframe. Annual financials originate from 10-K filings, and quarterly financials
-    /// originate from 10-Q filings. Note: Most companies do not file quarterly reports for Q4 and
-    /// instead include those financials in their annual report, so some companies my not return
-    /// quarterly financials for Q4
-    /// </param>
-    /// <param name="includeSources">
-    /// Whether or not to include the xpath and formula attributes for each financial data point. See
-    /// the xpath and formula response attributes for more info. False by default.
-    /// </param>
-    /// <param name="companyNameSearch">Search by company_name.</param>
-    /// <param name="order">Order results based on the sort field.</param>
-    /// <param name="limit">Limit the number of results returned, default is 10 and max is 100.</param>
-    /// <param name="sort">Sort field used for ordering.</param>
-    /// <param name="cancellationToken">A token to cancel the traversal.</param>
-    /// <returns>Every <c>results</c> item across every page.</returns>
-    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
-    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
-    public IAsyncEnumerable<FinancialReport> EnumerateFinancialsAsync(
-        string? ticker = null,
-        string? cik = null,
-        string? companyName = null,
-        string? sic = null,
-        RangeFilter<LocalDate>? filingDate = null,
-        RangeFilter<LocalDate>? periodOfReportDate = null,
-        string? timeframe = null,
-        bool? includeSources = null,
-        string? companyNameSearch = null,
-        SortOrder? order = null,
-        int? limit = null,
-        string? sort = null,
-        CancellationToken cancellationToken = default)
-    {
-        string requestUri = BuildListFinancialsUri(ticker, cik, companyName, sic, filingDate, periodOfReportDate, timeframe, includeSources, companyNameSearch, order, limit, sort);
-        return _transport.EnumerateAsync<ListFinancialsResponse, FinancialReport>(
-            requestUri, MassiveRestJsonContext.Default.ListFinancialsResponse, cancellationToken);
-    }
-
-    /// <summary>
-    /// Retrieves financial statements derived from SEC filings, filtered by company, by filing and
-    /// report dates, and by timeframe.
-    /// </summary>
-    /// <remarks>
-    /// Returns the first page only. Use <see cref="EnumerateFinancialsAsync"/> to walk every page
-    /// without handling cursors yourself. The route's <c>vX</c> segment marks it experimental (decision
-    /// D18); opt in with <c>MASSIVE0001</c>. Every filter is optional and defaults to no constraint.
-    /// <paramref name="timeframe"/> is <c>annual</c>, <c>quarterly</c>, or <c>ttm</c>. <paramref
-    /// name="includeSources"/> asks for the <see cref="FinancialDataPoint.XPath"/> and <see
-    /// cref="FinancialDataPoint.Formula"/> of every data point. <paramref name="companyNameSearch"/> is
-    /// a text search where <paramref name="companyName"/> is an exact match; both render under the
-    /// description's wire names.
-    /// </remarks>
-    /// <param name="ticker">Query by company ticker.</param>
-    /// <param name="cik">Query by central index key (CIK) Number</param>
-    /// <param name="companyName">Query by company name.</param>
-    /// <param name="sic">Query by standard industrial classification (SIC)</param>
-    /// <param name="filingDate">
-    /// Query by the date when the filing with financials data was filed in YYYY-MM-DD format. Best used
-    /// when querying over date ranges to find financials based on filings that happen in a time period.
-    /// Examples: To get financials based on filings that have happened after January 1, 2009 use the
-    /// query param filing_date.gte=2009-01-01 To get financials based on filings that happened in the
-    /// year 2009 use the query params filing_date.gte=2009-01-01&amp;filing_date.lt=2010-01-01. Accepts
-    /// an exact value or a range.
-    /// </param>
-    /// <param name="periodOfReportDate">
-    /// The period of report for the filing with financials data in YYYY-MM-DD format. Accepts an exact
-    /// value or a range.
-    /// </param>
-    /// <param name="timeframe">
-    /// Query by timeframe. Annual financials originate from 10-K filings, and quarterly financials
-    /// originate from 10-Q filings. Note: Most companies do not file quarterly reports for Q4 and
-    /// instead include those financials in their annual report, so some companies my not return
-    /// quarterly financials for Q4
-    /// </param>
-    /// <param name="includeSources">
-    /// Whether or not to include the xpath and formula attributes for each financial data point. See
-    /// the xpath and formula response attributes for more info. False by default.
-    /// </param>
-    /// <param name="companyNameSearch">Search by company_name.</param>
-    /// <param name="order">Order results based on the sort field.</param>
-    /// <param name="limit">Limit the number of results returned, default is 10 and max is 100.</param>
-    /// <param name="sort">Sort field used for ordering.</param>
-    /// <param name="cancellationToken">A token to cancel the request.</param>
-    /// <returns>A single page of <c>results</c>, reporting whether more exist.</returns>
-    /// <exception cref="MassiveApiException">The server responded with an error status.</exception>
-    [Experimental("MASSIVE0001", Message = "Massive marks this operation experimental: it may change or be removed without notice. Suppress MASSIVE0001 to opt in.")]
-    public Task<MassivePage<FinancialReport>> ListFinancialsAsync(
-        string? ticker = null,
-        string? cik = null,
-        string? companyName = null,
-        string? sic = null,
-        RangeFilter<LocalDate>? filingDate = null,
-        RangeFilter<LocalDate>? periodOfReportDate = null,
-        string? timeframe = null,
-        bool? includeSources = null,
-        string? companyNameSearch = null,
-        SortOrder? order = null,
-        int? limit = null,
-        string? sort = null,
-        CancellationToken cancellationToken = default)
-    {
-        string requestUri = BuildListFinancialsUri(ticker, cik, companyName, sic, filingDate, periodOfReportDate, timeframe, includeSources, companyNameSearch, order, limit, sort);
-        return SendListFinancialsAsync(requestUri, cancellationToken);
-    }
-
-    private static string BuildListFinancialsUri(
-        string? ticker,
-        string? cik,
-        string? companyName,
-        string? sic,
-        RangeFilter<LocalDate>? filingDate,
-        RangeFilter<LocalDate>? periodOfReportDate,
-        string? timeframe,
-        bool? includeSources,
-        string? companyNameSearch,
-        SortOrder? order,
-        int? limit,
-        string? sort)
-    {
-        RequestUriBuilder builder = new(stackalloc char[256]);
-
-        builder.AppendPathLiteral("/vX/reference/financials");
-
-        builder.AppendQuery("ticker", ticker);
-        builder.AppendQuery("cik", cik);
-        builder.AppendQuery("company_name", companyName);
-        builder.AppendQuery("sic", sic);
-        builder.AppendQuery("filing_date", filingDate);
-        builder.AppendQuery("period_of_report_date", periodOfReportDate);
-        builder.AppendQuery("timeframe", timeframe);
-        builder.AppendQuery("include_sources", includeSources);
-        builder.AppendQuery("company_name.search", companyNameSearch);
-        builder.AppendQuery("order", order?.ToWireValue());
-        builder.AppendQuery("limit", limit);
-        builder.AppendQuery("sort", sort);
-
-        return builder.ToUriString();
-    }
-
-    private async Task<MassivePage<FinancialReport>> SendListFinancialsAsync(string requestUri, CancellationToken cancellationToken)
-    {
-        ListFinancialsResponse? response = await _transport
-            .GetAsync(requestUri, MassiveRestJsonContext.Default.ListFinancialsResponse, cancellationToken)
-            .ConfigureAwait(false);
-
-        // A blank next_url is not a cursor. EnumerateAsync stops on one, so this
-        // reports the same thing rather than promising a page that is never fetched.
-        return new MassivePage<FinancialReport>(
             response?.Results,
             !string.IsNullOrWhiteSpace(response?.NextUrl),
             response?.RequestId);

@@ -34,6 +34,7 @@ public sealed class StocksBarsLiveTests : LiveApiTest
         PreviousCloseBar[] bars = await Client.Stocks.ListPreviousCloseAsync("AAPL", cancellationToken: Ct);
 
         PreviousCloseBar bar = Assert.Single(bars);
+        Assert.Equal("AAPL", bar.Ticker);
         Assert.True(bar.Volume > 0, "A trading day should report volume.");
         Assert.True(bar.High >= bar.Low, $"High {bar.High} was below low {bar.Low}.");
 

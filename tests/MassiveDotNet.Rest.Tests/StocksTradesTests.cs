@@ -124,6 +124,51 @@ public sealed class StocksTradesTests
         Assert.Equal("3", Assert.Single(page.Results).TradeId);
     }
 
+    /// <summary>
+    /// An OTC trade reported through the FINRA ORF (exchange 62) carries no participant timestamp,
+    /// which the description stopped requiring in the 2026-11-11 sync. Absent must read as null,
+    /// not as zero: a zero would convert to the Unix epoch and look like a real moment in 1970.
+    /// </summary>
+    [Fact]
+    public async Task ReadsAnAbsentParticipantTimestampAsNullRatherThanTheEpoch()
+    {
+        const string OtcTrade = """
+            {
+              "request_id": "4c1f0e8a2b7d4e9f8a6b5c3d2e1f0a9b",
+              "results": [
+                {
+                  "decimal_size": "25.0",
+                  "exchange": 62,
+                  "id": "7",
+                  "price": 0.4125,
+                  "sequence_number": 2210,
+                  "sip_timestamp": 1517562000016040000,
+                  "size": 25,
+                  "tape": 3
+                }
+              ],
+              "status": "OK"
+            }
+            """;
+
+        StubHandler handler = new(OtcTrade);
+        (MassiveRestClient client, MassiveHttpTransport transport) = Create(handler);
+
+        MassivePage<Trade> page;
+
+        using (client)
+        using (transport)
+        {
+            page = await client.Stocks.ListTradesAsync("AAPL", cancellationToken: Ct);
+        }
+
+        Trade trade = Assert.Single(page.Results);
+        Assert.Equal(62, trade.ExchangeId);
+        Assert.Null(trade.ParticipantTimestampNanoseconds);
+        Assert.Null(trade.ParticipantTimestamp);
+        Assert.Equal(NodaConstants.UnixEpoch + Duration.FromNanoseconds(1517562000016040000), trade.SipTimestamp);
+    }
+
     [Fact]
     public async Task EnumerateCrossesThePageBoundaryFollowingTheCursorVerbatim()
     {
