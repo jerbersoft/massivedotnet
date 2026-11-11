@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using NodaTime;
 using Xunit;
 
 namespace MassiveDotNet.WebSocket.Tests;
@@ -171,5 +172,81 @@ public class MassiveStreamClientTests
         // The client's own DisposeAsync must still be harmless once every stream it tracked is
         // already gone -- an empty list disposes nothing, rather than erroring.
         await client.DisposeAsync();
+    }
+
+    // #91: ConnectAsync opens the socket before the handshake that can refuse it, and a connect
+    // that throws never becomes a stream or reaches _streams -- so before the fix nothing ever
+    // disposed it, and a consumer retrying a refused key leaked one socket per attempt. The
+    // exception must also arrive unchanged: disposing must not replace it, or lose ServerMessage.
+    [Fact]
+    public async Task ARefusedKeyDisposesTheSocketTheConnectOpened()
+    {
+        await using MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = "k" });
+
+        FakeWebSocket socket = new();
+        socket.EnqueueText(Connected);
+        socket.EnqueueText("""[{"ev":"status","status":"auth_failed","message":"authentication failed"}]""");
+
+        MassiveStreamAuthenticationException error = await Assert.ThrowsAsync<MassiveStreamAuthenticationException>(
+            async () => await client.ConnectStocksAsync(() => socket, TestContext.Current.CancellationToken));
+
+        Assert.Equal("authentication failed", error.ServerMessage);
+        Assert.Equal(1, socket.DisposeCount);
+        Assert.Equal(0, client.StreamCount);
+    }
+
+    // The worse of #91's cases: a load balancer that accepts the connection while the backend is
+    // down never answers, so each timed-out attempt held a live connection until the GC got to it.
+    // Nothing is queued, so the handshake's first read waits out HandshakeTimeout.
+    [Fact]
+    public async Task AHandshakeThatTimesOutDisposesTheSocketTheConnectOpened()
+    {
+        await using MassiveStreamClient client = new(new MassiveStreamOptions
+        {
+            ApiKey = "k",
+            HandshakeTimeout = Duration.FromMilliseconds(200),
+        });
+
+        FakeWebSocket socket = new();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await client.ConnectStocksAsync(() => socket, TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, socket.DisposeCount);
+        Assert.Equal(0, client.StreamCount);
+    }
+
+    // The third way the handshake can refuse: a first status other than `connected`.
+    [Fact]
+    public async Task AnUnexpectedFirstStatusDisposesTheSocketTheConnectOpened()
+    {
+        await using MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = "k" });
+
+        FakeWebSocket socket = new();
+        socket.EnqueueText("""[{"ev":"status","status":"disconnected","message":"go away"}]""");
+
+        await Assert.ThrowsAsync<MassiveStreamException>(
+            async () => await client.ConnectStocksAsync(() => socket, TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, socket.DisposeCount);
+        Assert.Equal(0, client.StreamCount);
+    }
+
+    // The fix must not reach the success path: a stream that connected owns its socket until the
+    // stream itself is disposed, and is disposed exactly once then.
+    [Fact]
+    public async Task ASuccessfulConnectKeepsItsSocketUntilTheStreamIsDisposed()
+    {
+        await using MassiveStreamClient client = new(new MassiveStreamOptions { ApiKey = "k" });
+
+        FakeWebSocket socket = ConnectedSocket();
+        MassiveStockStream stream = await client.ConnectStocksAsync(() => socket, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, socket.DisposeCount);
+        Assert.Equal(WebSocketState.Open, socket.State);
+
+        await stream.DisposeAsync();
+
+        Assert.Equal(1, socket.DisposeCount);
     }
 }

@@ -64,6 +64,14 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
     /// </summary>
     public int CloseSentCountAtDispose { get; private set; }
 
+    /// <summary>How many times <see cref="DisposeAsync"/> ran.</summary>
+    /// <remarks>
+    /// <see cref="State"/> reads <see cref="WebSocketState.Closed"/> after disposal too, but it is
+    /// not proof of it: a test asserting the SDK let go of a socket needs the call itself counted,
+    /// not a state another path could also have produced.
+    /// </remarks>
+    public int DisposeCount { get; private set; }
+
     /// <summary>
     /// When set, <see cref="CloseOutputAsync"/> records the attempt and then throws, standing in for
     /// a socket that will not accept a close frame.
@@ -486,6 +494,7 @@ internal sealed class FakeWebSocket : IMassiveWebSocket
 
     public ValueTask DisposeAsync()
     {
+        DisposeCount++;
         CloseSentCountAtDispose = CloseSentCount;
         State = WebSocketState.Closed;
         _inbound.Writer.TryComplete();

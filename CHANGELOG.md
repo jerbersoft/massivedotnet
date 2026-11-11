@@ -68,6 +68,13 @@ Two conventions worth knowing before reading a breaking-change entry:
   be: `Timeout` bounds every attempt and backoff of a call together. That is now stated on
   `MassiveClientOptions.Timeout`, `MassiveRetryOptions` and the handler, along with the one other
   failure the handler cannot reach, a connection that breaks while a body is being read (D44).
+- **`MassiveDotNet.WebSocket`** — a `ConnectStocksAsync` that fails now closes the socket it
+  opened (#91). The socket opens before the handshake, and a failed handshake never produced a
+  stream, so nothing disposed it. The handshake can fail on a refused key, a handshake timeout, an
+  unexpected first status, or a socket that never connected. A consumer retrying a refused key
+  leaked one socket per attempt, and a timed-out attempt could hold a live connection until the
+  garbage collector reclaimed it. The exception the caller sees is unchanged, including
+  `MassiveStreamAuthenticationException.ServerMessage`.
 
 ## [0.4.1] — 2026-09-24
 

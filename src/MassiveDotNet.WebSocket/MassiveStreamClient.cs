@@ -49,6 +49,10 @@ public sealed class MassiveStreamClient : IAsyncDisposable
     /// <summary>Opens an authenticated stock stream.</summary>
     /// <param name="cancellationToken">Cancels the handshake.</param>
     /// <returns>The connected stream.</returns>
+    /// <remarks>
+    /// A connect that fails closes the socket it opened before throwing, so a caller retrying a
+    /// refused key or an unanswered handshake holds no socket per attempt.
+    /// </remarks>
     /// <exception cref="MassiveStreamAuthenticationException">
     /// The key was refused, or the plan does not include WebSocket access for this market. The
     /// server's own message is on <see cref="MassiveStreamAuthenticationException.ServerMessage"/>.
@@ -69,7 +73,22 @@ public sealed class MassiveStreamClient : IAsyncDisposable
 
         MassiveStreamConnection connection = new(_options, MassiveMarket.Stocks, factory, _clock);
 
-        await connection.ConnectAsync(cancellationToken);
+        // ConnectAsync opens the socket before the handshake that can refuse it, so a refused key,
+        // a handshake timeout, or an unexpected first status leaves an opened socket behind (#91).
+        // Until StartReading below, nothing else holds this connection -- it is not yet a stream
+        // and not in _streams -- so this is the only place that can dispose it. DisposeAsync copes
+        // with a read loop that never started and swallows its own close failure, so the caller
+        // still sees the handshake's exception unchanged, ServerMessage and all.
+        try
+        {
+            await connection.ConnectAsync(cancellationToken);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
+
         connection.StartReading();
 
         // F4 (Task 12 review round 1): the stream calls Unregister on itself, once, at the end of
