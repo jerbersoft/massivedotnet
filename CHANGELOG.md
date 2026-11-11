@@ -75,6 +75,12 @@ Two conventions worth knowing before reading a breaking-change entry:
   leaked one socket per attempt, and a timed-out attempt could hold a live connection until the
   garbage collector reclaimed it. The exception the caller sees is unchanged, including
   `MassiveStreamAuthenticationException.ServerMessage`.
+- **`MassiveDotNet.WebSocket`** — `ConditionSet.AsSpan` can no longer read past the eight codes
+  it holds inline (#128). Copying a struct is not atomic, so a `ConditionSet` read from a field
+  another thread was overwriting could pair an inline set with the count of a longer, spilled one,
+  and the span then covered memory beyond the buffer, returning values that were never condition
+  codes. It now throws `ArgumentOutOfRangeException` instead, and so does the indexer. No value
+  the SDK builds itself is affected: the constructor always spills a set longer than eight.
 
 ## [0.4.1] — 2026-09-24
 

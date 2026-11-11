@@ -97,12 +97,26 @@ public readonly struct ConditionSet : IEquatable<ConditionSet>
     /// this method exists to route around.
     /// </para>
     /// </remarks>
-    public ReadOnlySpan<int> AsSpan() =>
-        _overflow is { } overflow
-            ? overflow.AsSpan(0, Count)
-            : MemoryMarshal.CreateReadOnlySpan(
-                in Unsafe.As<Buffer, int>(ref Unsafe.AsRef(in _inline)),
-                Count);
+    public ReadOnlySpan<int> AsSpan()
+    {
+        if (_overflow is { } overflow)
+        {
+            return overflow.AsSpan(0, Count);
+        }
+
+        // CreateReadOnlySpan does not check its length, so it is handed the buffer's own size, which
+        // cannot reach past it, and Count is applied by a checked slice. The constructor never pairs
+        // a null _overflow with a Count above InlineCapacity, but a torn read can: copying a struct
+        // is not atomic, so a value read while another thread overwrites it can take _overflow from
+        // an inline set and Count from a spilled one. The slice turns that into an out-of-range
+        // exception rather than a read past the buffer, in Release as well as Debug (#128).
+        // nosemgrep: csharp.lang.security.memory.memory-marshal-create-span.memory-marshal-create-span
+        ReadOnlySpan<int> buffer = MemoryMarshal.CreateReadOnlySpan(
+            in Unsafe.As<Buffer, int>(ref Unsafe.AsRef(in _inline)),
+            InlineCapacity);
+
+        return buffer[..Count];
+    }
 
     /// <summary>Whether this set holds the same codes, in the same order, as <paramref name="other"/>.</summary>
     /// <param name="other">The set to compare against.</param>
