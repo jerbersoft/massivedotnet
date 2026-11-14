@@ -116,7 +116,10 @@ public sealed partial record OptionsContract
     [JsonPropertyName("type")]
     public string? Type { get; init; }
 
-    /// <summary>What the contract is based on. For now only set on KPI binary options, as kpi.</summary>
+    /// <summary>
+    /// What the contract is based on: kpi on Cboe KPI binary options, equity on NYSE American equity
+    /// binary options (roots that start with B1). Missing on other contracts for now.
+    /// </summary>
     [JsonPropertyName("underlying_type")]
     public string? UnderlyingType { get; init; }
 }
