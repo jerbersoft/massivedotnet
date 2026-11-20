@@ -113,4 +113,12 @@ public sealed partial record ThirteenFHolding
     /// <summary>Number of shares with no voting authority.</summary>
     [JsonPropertyName("voting_authority_none")]
     public long? VotingAuthorityNone { get; init; }
+
+    /// <summary>
+    /// Name of the institutional investment manager filing the report, as reported on the filing's
+    /// cover page. Null for older text-format filings (before mid-2013), which do not report it in a
+    /// structured field.
+    /// </summary>
+    [JsonPropertyName("filer_name")]
+    public string? FilerName { get; init; }
 }
