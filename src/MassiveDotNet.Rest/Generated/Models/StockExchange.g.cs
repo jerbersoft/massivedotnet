@@ -46,7 +46,7 @@ public sealed partial record StockExchange
 
     /// <summary>Geographic location code.</summary>
     [JsonPropertyName("locale")]
-    public string? Locale { get; init; }
+    public required string Locale { get; init; }
 
     /// <summary>
     /// Market Identifier Code (MIC) - ISO 10383 standard four-character code for the market (may be

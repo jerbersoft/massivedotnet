@@ -56,4 +56,8 @@ public sealed partial record MarketStatus
     /// <summary>Contains the status of various index groups (e.g., MSCI, FTSE Russell).</summary>
     [JsonPropertyName("indicesGroups")]
     public MarketStatusIndexGroups? IndexGroups { get; init; }
+
+    /// <summary>Whether or not the market is in overnight hours (9:00 PM to 4:00 AM ET).</summary>
+    [JsonPropertyName("overnight")]
+    public bool? Overnight { get; init; }
 }
